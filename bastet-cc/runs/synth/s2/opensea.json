@@ -1,0 +1,61 @@
+{
+ "tag": "Opensea",
+ "mode": "s2",
+ "detector": {
+  "name": "Opensea-Rental-Order-Validation-Bypass",
+  "vulnerability_knowledge": "OpenSea Seaport integration contracts often implement rental order lifecycle functions (start, stop, fulfill) that validate order parameters but fail to verify the order's actual existence in storage or its fulfillment state. The `stopRent` function validates only `orderType`, `endTimestamp`, and `lender` via `_validateRentalCanBeStoped`, but does not check that the order hash exists in `STORE` or that the order was previously fulfilled via `addRentals`. This allows any address claiming to be the lender to invoke `stopRent` on arbitrary order data, triggering `_reclaimRentedItems` and `ESCRW.settlePayment` to transfer assets and funds for non-existent orders. Similarly, `_rentFromZone` processes Seaport offer/consideration items without validating that the order hash is unique or that extra ERC20 tokens (tips) are absent, enabling malicious tokens that revert on transfer to cause DoS during `ESCRW.increaseDeposit` or settlement. Cross-chain approval lookups also break when `contractAddress` is encoded as a 20-byte EVM address in `_getIsContractCallApprovedWithMintKey`, failing for non-EVM source addresses (e.g., bech32, ed25519).",
+  "checks": [
+   "In `stopRent`, verify that `_deriveRentalOrderHash(order)` exists in `STORE` before proceeding with `_reclaimRentedItems` and `ESCRW.settlePayment`.",
+   "In `stopRent`, ensure the caller (`msg.sender`) matches `order.lender` or is authorized via `onlyLender` modifier, not just validated via `_validateRentalCanBeStoped`.",
+   "In `_rentFromZone`, after `_convertToItems`, iterate `items` and revert if any `item.isERC20()` token is not in an allowlist or has known transfer-revert behavior (e.g., fee-on-transfer, rebasing).",
+   "In `_rentFromZone`, validate that `seaportPayload.offer` and `seaportPayload.consideration` contain no extra items beyond expected rental and payment items (no tips).",
+   "In `_getIsContractCallApprovedWithMintKey`, replace `address contractAddress` with `bytes contractAddress` and encode dynamically to support non-EVM address formats.",
+   "In `stopRent`, confirm `order.seaportOrderHash` matches the hash of the fulfilled Seaport order stored during `_rentFromZone` to prevent replay with fabricated orders.",
+   "In `_rentFromZone`, before `STORE.addRentals`, check that `orderHash` does not already exist to prevent duplicate rental initialization.",
+   "In `stopRent`, after `_reclaimRentedItems`, verify that all rental items were actually transferred back to the lender by checking token balances or transfer events."
+  ],
+  "incorrect_example": {
+   "code": "function stopRent(RentalOrder calldata order) external {\n    _validateRentalCanBeStoped(order.orderType, order.endTimestamp, order.lender);\n    bytes memory rentalAssetUpdates = new bytes(0);\n    for (uint256 i; i < order.items.length; ++i) {\n        if (order.items[i].isRental()) {\n            _insert(rentalAssetUpdates, order.items[i].toRentalId(order.rentalWallet), order.items[i].amount);\n        }\n    }\n    if (order.hooks.length > 0) {\n        _removeHooks(order.hooks, order.items, order.rentalWallet);\n    }\n    _reclaimRentedItems(order);\n    ESCRW.settlePayment(order);\n    STORE.removeRentals(_deriveRentalOrderHash(order), _convertToStatic(rentalAssetUpdates));\n    _emitRentalOrderStopped(order.seaportOrderHash, msg.sender);\n}",
+   "explanation": "Missing storage existence check for order hash and lender authorization allows arbitrary order stops and asset theft."
+  },
+  "correct_example": {
+   "code": "function stopRent(RentalOrder calldata order) external {\n    _validateRentalCanBeStoped(order.orderType, order.endTimestamp, order.lender);\n    require(msg.sender == order.lender, \"Only lender can stop\");\n    bytes32 orderHash = _deriveRentalOrderHash(order);\n    require(STORE.rentalExists(orderHash), \"Order not fulfilled\");\n    bytes memory rentalAssetUpdates = new bytes(0);\n    for (uint256 i; i < order.items.length; ++i) {\n        if (order.items[i].isRental()) {\n            _insert(rentalAssetUpdates, order.items[i].toRentalId(order.rentalWallet), order.items[i].amount);\n        }\n    }\n    if (order.hooks.length > 0) {\n        _removeHooks(order.hooks, order.items, order.rentalWallet);\n    }\n    _reclaimRentedItems(order);\n    ESCRW.settlePayment(order);\n    STORE.removeRentals(orderHash, _convertToStatic(rentalAssetUpdates));\n    _emitRentalOrderStopped(order.seaportOrderHash, msg.sender);\n}",
+   "explanation": "Added lender authorization check and storage existence verification before processing stop rental."
+  },
+  "routing_hint_candidates": [
+   "stopRent",
+   "_validateRentalCanBeStoped",
+   "_deriveRentalOrderHash",
+   "STORE.removeRentals",
+   "STORE.rentalExists",
+   "_reclaimRentedItems",
+   "ESCRW.settlePayment",
+   "_rentFromZone",
+   "_convertToItems",
+   "seaportPayload.offer",
+   "seaportPayload.consideration",
+   "ESCRW.increaseDeposit",
+   "_getIsContractCallApprovedWithMintKey",
+   "PREFIX_CONTRACT_CALL_APPROVED_WITH_MINT",
+   "RentalOrder",
+   "seaportOrderHash",
+   "rentalWallet",
+   "orderType",
+   "lender",
+   "renter",
+   "hooks",
+   "_addHooks",
+   "_removeHooks",
+   "block.timestamp",
+   "payload.metadata.rentDuration"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "469",
+  "296",
+  "464"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

@@ -1,0 +1,73 @@
+{
+ "tag": "Governance",
+ "mode": "s2",
+ "detector": {
+  "name": "Governance",
+  "vulnerability_knowledge": "Governance vulnerabilities arise when voting power, proposal lifecycle, or member management logic contains design flaws that allow manipulation. Common mechanisms include: (1) Flash-loan or instant token acquisition to inflate voting weight at snapshot time, because snapshots use current balances instead of historical checkpoints. (2) Missing access control on parameter setters (e.g., quorum thresholds, voting periods) that can be changed mid-vote, altering the outcome retroactively. (3) Proposal activation or execution logic that lacks rate limiting, spam protection, or proper state transitions, enabling denial-of-service via dummy proposals or re-entrancy during execution. (4) Vote recording that transfers tokens into the contract and prevents later balance changes, but allows reclaiming votes in the same transaction before activation, breaking accounting invariants. (5) Member management that permits re-adding previously removed addresses without governance approval. (6) Threshold comparisons using strict inequality (>) instead of >=, allowing cancellation or execution at exact boundary values. (7) External calls in execution paths that omit `value` forwarding despite payable validation, causing silent failures. (8) Unbounded parameter setters (e.g., percentage cast to uint8 without 0-100 check) that break downstream math.",
+  "checks": [
+   "Verify that voting power snapshots use historical checkpoints (e.g., ERC20Votes.getPastVotes) instead of current balances to prevent flash-loan manipulation.",
+   "Ensure all governance parameter setters (quorum, thresholds, durations) validate that no active proposals exist before applying changes.",
+   "Confirm proposal activation requires a minimum time delay or endorsement history to prevent spam activation and GRACE_PERIOD lockout abuse.",
+   "Check that vote recording does not transfer tokens into the contract unless a matching reclaim mechanism enforces one-vote-per-token and prevents same-transaction vote-and-reclaim.",
+   "Validate that reclaimVotes or similar functions block reclaiming for proposals that have been activated in the current transaction or block.",
+   "Ensure member addition functions check a removal registry or require DAO vote before re-adding previously expelled addresses.",
+   "Verify threshold comparisons use >= for minimum voting power checks and <= for maximum bounds to avoid off-by-one errors at exact boundary values.",
+   "Confirm that payable execution functions forward msg.value via {value: ...} in low-level calls when the calldata includes a value field."
+  ],
+  "incorrect_example": {
+   "code": "contract Governance {\n    ERC20Votes public token;\n    mapping(uint256 => mapping(address => uint256)) public userVotes;\n    uint256 public activeProposalId;\n    uint256 public votingPeriod = 7 days;\n    \n    function vote(uint256 proposalId, bool support) external {\n        require(proposalId == activeProposalId, \"not active\");\n        uint256 weight = token.balanceOf(msg.sender); // current balance, no snapshot\n        require(userVotes[proposalId][msg.sender] == 0, \"already voted\");\n        userVotes[proposalId][msg.sender] = weight;\n        if (support) yesVotes[proposalId] += weight; else noVotes[proposalId] += weight;\n        token.transferFrom(msg.sender, address(this), weight);\n    }\n    \n    function reclaimVotes(uint256 proposalId) external {\n        require(proposalId != activeProposalId, \"active\");\n        uint256 weight = userVotes[proposalId][msg.sender];\n        require(weight > 0, \"none\");\n        userVotes[proposalId][msg.sender] = 0;\n        token.transfer(msg.sender, weight);\n    }\n    \n    function setVotingPeriod(uint256 newPeriod) external onlyOwner {\n        votingPeriod = newPeriod; // no active proposal check\n    }\n    \n    function addMember(address member) external onlyRole(MEMBER_ROLE) {\n        members.push(member); // no removal registry check\n    }\n}",
+   "explanation": "Uses current token balance for voting weight (flash-loan vulnerable), transfers tokens in on vote but allows reclaim before activation in same tx, changes voting period mid-vote, and re-adds members without checking removal history."
+  },
+  "correct_example": {
+   "code": "contract GovernanceFixed {\n    ERC20Votes public token;\n    mapping(uint256 => mapping(address => uint256)) public userVotes;\n    uint256 public activeProposalId;\n    uint256 public votingPeriod = 7 days;\n    mapping(address => bool) public removedMembers;\n    \n    function vote(uint256 proposalId, bool support) external {\n        require(proposalId == activeProposalId, \"not active\");\n        uint256 snapshot = proposalSnapshots[proposalId];\n        uint256 weight = token.getPastVotes(msg.sender, snapshot);\n        require(userVotes[proposalId][msg.sender] == 0, \"already voted\");\n        userVotes[proposalId][msg.sender] = weight;\n        if (support) yesVotes[proposalId] += weight; else noVotes[proposalId] += weight;\n    }\n    \n    function reclaimVotes(uint256 proposalId) external {\n        require(proposalId != activeProposalId, \"active\");\n        require(block.number > activationBlock[proposalId], \"same block\");\n        uint256 weight = userVotes[proposalId][msg.sender];\n        require(weight > 0, \"none\");\n        userVotes[proposalId][msg.sender] = 0;\n    }\n    \n    function setVotingPeriod(uint256 newPeriod) external onlyOwner {\n        require(activeProposalId == 0, \"active proposal exists\");\n        votingPeriod = newPeriod;\n    }\n    \n    function addMember(address member) external onlyRole(MEMBER_ROLE) {\n        require(!removedMembers[member], \"previously removed\");\n        members.push(member);\n    }\n}",
+   "explanation": "Uses historical checkpoint for voting weight, prevents mid-vote parameter changes, blocks same-block vote reclaim, and checks removal registry before re-adding members."
+  },
+  "routing_hint_candidates": [
+   "getPastVotes",
+   "proposalSnapshots",
+   "activationBlock",
+   "activeProposalId",
+   "votingPeriod",
+   "removedMembers",
+   "userVotesForProposal",
+   "actionApprovalSupply",
+   "actionDisapprovalSupply",
+   "validateActionCreation",
+   "reclaimVotes",
+   "setFullWeightDuration",
+   "fullWeightDuration",
+   "activateProposal",
+   "ENDORSEMENT_THRESHOLD",
+   "GRACE_PERIOD",
+   "executeAction",
+   "executor.execute",
+   "setMinimumBidIncrement",
+   "getApprovalQuantityAt",
+   "forceApprovalRole",
+   "addMember",
+   "_addMemberToCohortArray",
+   "cancel",
+   "proposalThreshold",
+   "getVotes",
+   "proposal.proposer",
+   "proposalHasBeenActivated",
+   "totalEndorsementsForProposal",
+   "VOTES.totalSupply"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "406",
+  "181",
+  "182",
+  "327",
+  "185",
+  "407",
+  "212",
+  "405",
+  "330",
+  "211"
+ ],
+ "exclude_repo": "2c2d03025183",
+ "error": null
+}

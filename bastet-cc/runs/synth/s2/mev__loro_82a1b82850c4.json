@@ -1,0 +1,67 @@
+{
+ "tag": "MEV",
+ "mode": "s2",
+ "detector": {
+  "name": "MEV-Front-Run-And-Execution-Order-Dependency",
+  "vulnerability_knowledge": "MEV vulnerabilities arise when a contract's correctness depends on the relative ordering of transactions within a block, allowing block producers or searchers to extract value by front-running, back-running, or sandwiching user transactions. Common patterns include: (1) reading mutable state (e.g., configuration flags, oracle prices, TVL calculations) without atomic validation, enabling an attacker to change that state between the user's transaction submission and execution; (2) performing external calls or balance checks before state changes (checks-effects-interactions violation), letting an attacker manipulate balances or prices in the interim; (3) omitting slippage limits, deadlines, or minimum output amounts on swaps/withdrawals, so a front-runner can move prices against the user; (4) calculating entitlements (shares, rewards, TVL) based on stale or incomplete on-chain data (e.g., ignoring uncollected fees, using spot prices without TWAP), creating arbitrage windows. The root cause is execution-order dependency: the same function call produces different outcomes depending on what transactions precede it in the block.",
+  "checks": [
+   "Function reads a storage variable (e.g., config.onlyFees, positionConfigs[tokenId]) that can be changed by another transaction before a critical calculation, without re-validating or snapshotting the value at the start of execution.",
+   "Withdrawal or redemption calculates user entitlement (_amount) and burns shares before verifying the vault holds sufficient underlying tokens, allowing a front-runner to drain the token balance so the user receives less or nothing.",
+   "External call to a controller/strategy (e.g., _controller.withdraw) is made to fetch funds, but the return value or post-call balance delta is not strictly enforced; the code silently accepts a shortfall (_diff < _toWithdraw) and reduces the user's payout.",
+   "TVL or pricing function (tvl(), invariant()) computes value from on-chain state (position liquidity, pool reserves) but omits accrued but uncollected components (fees owed, rewards), systematically understating value and creating arbitrage for depositors/withdrawers who act on the stale number.",
+   "Swap or router interaction lacks a user-supplied deadline parameter or uses type(uint256).max, permitting the transaction to be delayed and executed at an adverse price.",
+   "Slippage protection is missing or uses a hard-coded zero minimum output (amountOutMin == 0), so a front-runner can sandwich the swap and force the user to accept arbitrarily bad rates.",
+   "Reward or fee calculation branches on a mutable config flag (config.onlyFees) read late in the function after external calls, allowing the flag to be flipped by a front-run transaction and changing the economic basis of the reward.",
+   "Invariant or boundary checks (e.g., scale1 > 2 * upperBound) create hard cliffs in the state space that liquidity providers can front-run by positioning just below the threshold and exiting before the boundary is crossed."
+  ],
+  "incorrect_example": {
+   "code": "function withdraw(uint256 _shares, address _output) public {\n    uint256 _amount = (balance().mul(_shares)).div(totalSupply());\n    _burn(msg.sender, _shares); // burns before ensuring funds exist\n    uint256 _balance = IERC20(_output).balanceOf(address(this));\n    if (_balance < _amount) {\n        IController(manager.controllers(address(this))).withdraw(_output, _amount - _balance);\n        // no verification that withdraw succeeded\n    }\n    IERC20(_output).safeTransfer(msg.sender, _amount); // may revert or send less\n}",
+   "explanation": "Shares are burned before confirming the vault holds or can retrieve the underlying tokens, and the external withdraw call's success is not verified, enabling a front-runner to drain the token and leave the user with a failed transfer or reduced payout."
+  },
+  "correct_example": {
+   "code": "function withdraw(uint256 _shares, address _output, uint256 _minAmount, uint256 _deadline) public {\n    require(block.timestamp <= _deadline, \"expired\");\n    uint256 _amount = (balance().mul(_shares)).div(totalSupply());\n    require(_amount >= _minAmount, \"slippage\");\n    uint256 _balanceBefore = IERC20(_output).balanceOf(address(this));\n    if (_balanceBefore < _amount) {\n        IController(manager.controllers(address(this))).withdraw(_output, _amount - _balanceBefore);\n        uint256 _balanceAfter = IERC20(_output).balanceOf(address(this));\n        require(_balanceAfter - _balanceBefore >= _amount - _balanceBefore, \"withdraw failed\");\n    }\n    _burn(msg.sender, _shares);\n    IERC20(_output).safeTransfer(msg.sender, _amount);\n}",
+   "explanation": "Adds deadline and minimum-amount parameters, verifies the controller withdraw actually increased the vault balance by the required amount, and only burns shares after funds are confirmed available."
+  },
+  "routing_hint_candidates": [
+   "withdraw",
+   "execute",
+   "tvl",
+   "invariant",
+   "positionConfigs",
+   "onlyFees",
+   "withdrawalProtectionFee",
+   "manager.controllers",
+   "_controller.withdraw",
+   "nonfungiblePositionManager.positions",
+   "tokensOwed0",
+   "tokensOwed1",
+   "getPositionValue",
+   "slot0",
+   "sqrtPriceX96",
+   "tickLower",
+   "tickUpper",
+   "liquidity",
+   "_routerSwap",
+   "swapExactTokensForTokens",
+   "amountOutMin",
+   "deadline",
+   "maxTWAPTickDifference",
+   "rewardX64",
+   "maxRewardX64",
+   "upperBound",
+   "scale1",
+   "Q64",
+   "FullMath.mulDiv"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "37",
+  "363",
+  "57",
+  "29",
+  "242"
+ ],
+ "exclude_repo": "82a1b82850c4",
+ "error": null
+}

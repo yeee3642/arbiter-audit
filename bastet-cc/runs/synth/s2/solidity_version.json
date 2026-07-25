@@ -1,0 +1,46 @@
+{
+ "tag": "Solidity Version",
+ "mode": "s2b",
+ "detector": {
+  "name": "Solidity Version",
+  "vulnerability_knowledge": "Solidity compiler versions and optimizer settings can introduce subtle behavioral changes that break security assumptions. Between 0.4.x and 0.8.x, integer overflow/underflow semantics shifted from wrapping to reverting, meaning contracts compiled with older versions silently wrap while newer ones revert, altering control flow in arithmetic-heavy logic. The optimizer (enabled via `--optimize` and `--optimize-runs`) has historically miscompiled specific patterns: versions 0.5.0-0.5.7 mishandled `bytes` memory cleanup leading to dirty higher-order bytes, 0.6.0-0.6.2 incorrectly optimized `keccak256` on empty byte arrays, and 0.8.13-0.8.16 introduced a Yul optimizer bug that corrupted memory when using inline assembly with `mstore`/`mload` sequences. Contracts using `abi.encodePacked` with dynamic types (e.g., `string`, `bytes`) are vulnerable to hash collisions across versions due to padding differences. Auditors must verify the exact compiler version and optimizer settings in `hardhat.config.js`, `foundry.toml`, or `pragma` directives, then cross-reference known bug lists (e.g., Solidity blog security alerts) to determine if deployed bytecode exhibits affected patterns.",
+  "checks": [
+   "Contract uses `pragma solidity ^0.4.x` or `^0.5.x` without explicit overflow checks (e.g., `SafeMath`) on arithmetic operations involving user-controlled values.",
+   "Optimizer enabled with `runs >= 200` on compiler versions 0.5.0-0.5.7 and contract uses `bytes` memory variables returned from external calls or `abi.decode`.",
+   "Contract compiled with 0.6.0-0.6.2 and computes `keccak256(\"\")` or `keccak256(bytes(0))` for critical logic (e.g., merkle roots, commitment schemes).",
+   "Inline assembly block contains `mstore` followed by `mload` at overlapping offsets and compiler version is 0.8.13-0.8.16 with optimizer enabled.",
+   "`abi.encodePacked` used with multiple dynamic-length arguments (e.g., `abi.encodePacked(userInput, anotherString)`) for cryptographic hashing or signature verification.",
+   "Contract relies on `address(this).balance` or `selfbalance` for invariant checks but compiled with 0.7.0-0.7.5 where `SELFBALANCE` opcode misbehaves under certain optimizer settings.",
+   "Uses `try/catch` external call error handling compiled with 0.6.0-0.6.11 where revert data decoding can corrupt memory under optimizer.",
+   "Declares `immutable` variables initialized from constructor arguments but compiled with 0.6.5-0.6.8 where immutable evaluation order bug causes wrong values under optimizer."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.5.7;\n\ncontract VulnerableBytes {\n    bytes public data;\n    \n    function setData(bytes calldata _data) external {\n        data = _data;\n    }\n    \n    function getHash() external view returns (bytes32) {\n        // Optimizer bug in 0.5.0-0.5.7: dirty higher-order bytes in memory\n        // cause keccak256 to hash stale memory beyond actual length\n        return keccak256(data);\n    }\n}",
+   "explanation": "Compiler 0.5.7 with optimizer enabled fails to zero-pad `bytes` memory before hashing, causing `keccak256` to include uninitialized memory bytes, breaking hash consistency."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract FixedBytes {\n    bytes public data;\n    \n    function setData(bytes calldata _data) external {\n        data = _data;\n    }\n    \n    function getHash() external view returns (bytes32) {\n        // 0.8.20 includes fix for bytes memory cleaning; optimizer safe\n        return keccak256(data);\n    }\n}",
+   "explanation": "Upgrading to 0.8.20 resolves the optimizer bug; `bytes` memory is properly cleaned before hashing, ensuring deterministic results."
+  },
+  "routing_hint_candidates": [
+   "optimizer.enabled",
+   "optimizer.runs",
+   "immutable",
+   "try",
+   "catch",
+   "selfbalance",
+   "SafeMath",
+   "verbatim",
+   "yul",
+   "evm.version",
+   "london",
+   "paris",
+   "shanghai",
+   "cancun"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [],
+ "exclude_repo": null,
+ "error": null
+}

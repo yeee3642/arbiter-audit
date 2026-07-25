@@ -1,0 +1,61 @@
+{
+ "tag": "Replay Attack",
+ "mode": "s2b",
+ "detector": {
+  "name": "Replay Attack",
+  "vulnerability_knowledge": "A replay attack occurs when an attacker resubmits a previously valid signed message, transaction, or data payload to execute the same action multiple times. In Solidity, this commonly manifests in signature-based voting (e.g., EIP-712 `castVoteBySig`) where the signed payload lacks a nonce or epoch, allowing the same signature to be submitted repeatedly. It also appears in token-handling logic that assumes non-replayable transfers (e.g., `transferFrom` without checking a nonce or deadline), enabling an attacker to re-execute a permit or deposit. The core issue is missing freshness guarantees: no nonce, no timestamp/deadline, no epoch, and no state update that invalidates the used payload. Attackers exploit this to concentrate votes, drain allowances, or duplicate state changes.",
+  "checks": [
+   "Signature verification function (e.g., `castVoteBySig`, `permit`, `executeMetaTransaction`) does not include a nonce, epoch, or block deadline in the signed digest.",
+   "Contract stores no mapping (e.g., `usedNonces[address][uint256]` or `usedSignatures[bytes32]`) to mark a signature as consumed after successful execution.",
+   "State-changing function callable via signature lacks a `require(!used[hash], \"replay\")` guard before applying effects.",
+   "Signed payload omits `block.number`, `block.timestamp`, or a monotonically increasing counter, making it valid indefinitely.",
+   "Function accepts an EIP-712 `domainSeparator` that does not incorporate a chain ID or contract address, enabling cross-chain or cross-contract replay.",
+   "Permit-like approval (`permit`, `eip2612Permit`) does not increment a per-owner nonce after successful `transferFrom`.",
+   "Meta-transaction executor (`executeMetaTransaction`) does not verify a relayer-submitted nonce against a stored `nonces[signer]`.",
+   "Voting or governance action (`castVoteBySig`, `delegateBySig`) lacks a proposal ID or snapshot ID in the signed data, allowing reuse across proposals."
+  ],
+  "incorrect_example": {
+   "code": "contract Vote {\n    mapping(address => uint256) public weights;\n    mapping(address => bool) public voted;\n    \n    function castVoteBySig(address voter, uint256 candidate, uint8 v, bytes32 r, bytes32 s) external {\n        bytes32 digest = keccak256(abi.encodePacked(voter, candidate)); // @audit no nonce, no deadline\n        address recovered = ecrecover(digest, v, r, s);\n        require(recovered == voter, \"invalid sig\");\n        require(!voted[voter], \"already voted\");\n        weights[candidate] += 1;\n        voted[voter] = true;\n    }\n}",
+   "explanation": "The signed digest excludes a nonce or timestamp, so the same signature can be replayed to vote multiple times; `voted` mapping only prevents the same voter from voting again, not the same signature from being reused by a relayer."
+  },
+  "correct_example": {
+   "code": "contract Vote {\n    mapping(address => uint256) public weights;\n    mapping(address => bool) public voted;\n    mapping(address => uint256) public nonces;\n    \n    function castVoteBySig(address voter, uint256 candidate, uint256 nonce, uint8 v, bytes32 r, bytes32 s) external {\n        bytes32 digest = keccak256(abi.encodePacked(voter, candidate, nonce, block.chainid, address(this)));\n        address recovered = ecrecover(digest, v, r, s);\n        require(recovered == voter, \"invalid sig\");\n        require(nonce == nonces[voter], \"invalid nonce\");\n        require(!voted[voter], \"already voted\");\n        nonces[voter]++;\n        weights[candidate] += 1;\n        voted[voter] = true;\n    }\n}",
+   "explanation": "The digest now includes a per-voter nonce, chain ID, and contract address; the function enforces nonce equality and increments it, preventing replay of the same signature."
+  },
+  "routing_hint_candidates": [
+   "castVoteBySig",
+   "permit",
+   "eip2612Permit",
+   "executeMetaTransaction",
+   "delegateBySig",
+   "nonces",
+   "usedSignatures",
+   "domainSeparator",
+   "EIP712Domain",
+   "chainId",
+   "block.chainid",
+   "nonce",
+   "deadline",
+   "v",
+   "r",
+   "s",
+   "ecrecover",
+   "keccak256",
+   "abi.encodePacked",
+   "voted",
+   "weights",
+   "candidate",
+   "relayer",
+   "metaTransaction",
+   "signature",
+   "digest",
+   "replay"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "483"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

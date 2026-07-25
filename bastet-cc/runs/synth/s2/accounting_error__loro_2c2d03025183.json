@@ -1,0 +1,73 @@
+{
+ "tag": "Accounting Error",
+ "mode": "s2",
+ "detector": {
+  "name": "Accounting Error",
+  "vulnerability_knowledge": "Accounting errors occur when a protocol's internal bookkeeping diverges from the actual on-chain asset movements or economic reality. Common root causes include: (1) assuming `transferFrom`/`safeTransfer` moves exactly the requested amount, which fails for fee-on-transfer or rebasing tokens where the received balance delta is smaller (or larger) than the argument; (2) updating state variables before or after external calls in an order that allows reentrancy or double-counting; (3) using stale or inflated denominators such as `totalSupply()` that includes burned or non-voting tokens when computing quotas, rewards, or fees; (4) applying formulas that reference the wrong basis (e.g., minting performance fees on total supply instead of realized profit) or skipping required conversions (e.g., returning stETH-denominated prices where WETH is expected); (5) trusting external contract balances without verifying they match the pool's ideal ratios, leading to value loss on deposits. Each of these creates a gap between recorded shares/entitlements and real value, enabling theft, unfair reward distribution, or protocol insolvency.",
+  "checks": [
+   "Verify that every ERC20 `transferFrom`, `safeTransfer`, or `burnFrom` call is followed by a balance delta check (`balanceAfter - balanceBefore`) instead of trusting the input `amount` parameter, especially for tokens not vetted as standard ERC20.",
+   "Ensure state updates (e.g., `totalSupply`, user balances, reward indexes) happen *after* the corresponding asset transfer succeeds, and that no external call intervenes between the transfer and the state write.",
+   "Confirm that denominators used in reward/fee/quorum calculations (e.g., `totalSupply()`, `baseSupply`) exclude burned tokens, tokens held by non-participating contracts, or other non-eligible holdings.",
+   "Check that performance/management fee formulas mint shares based on *profit* (delta between current NAV and high-water mark) multiplied by the fee rate, not on raw `baseSupply` or `minLpPriceFactor` alone.",
+   "Validate that price oracles return values in the exact unit expected by the caller (e.g., WETH per share, not stETH per share) and that any required conversion (Curve pool, wrapper contract) is applied.",
+   "Ensure multi-asset deposits (e.g., `add_liquidity`) compute and enforce the pool's ideal token ratios before depositing, rather than blindly sending the full contract balance of each asset.",
+   "For rebasing tokens, confirm that locked or staked amounts are read dynamically at withdrawal time (via `balanceOf`) rather than cached at deposit time.",
+   "Verify that approval mappings or nonces used for withdrawal/loan authorization are scoped to the specific operation (e.g., separate `withdrawApproval` vs `loanApproval`) so one cannot consume the other."
+  ],
+  "incorrect_example": {
+   "code": "function deposit(uint256 amount) external {\n    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);\n    // @audit assumes full amount received; fails for fee-on-transfer\n    shares[msg.sender] += amount;\n    totalShares += amount;\n}",
+   "explanation": "The contract credits `amount` shares without measuring the actual tokens received, so fee-on-transfer tokens cause an accounting shortfall."
+  },
+  "correct_example": {
+   "code": "function deposit(uint256 amount) external {\n    uint256 balBefore = IERC20(token).balanceOf(address(this));\n    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);\n    uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;\n    shares[msg.sender] += received;\n    totalShares += received;\n}",
+   "explanation": "Measuring the real balance delta ensures shares match assets actually received, fixing fee-on-transfer and rebasing discrepancies."
+  },
+  "routing_hint_candidates": [
+   "withdrawReserves",
+   "_checkApproval",
+   "withdrawApproval",
+   "rewardsPerToken",
+   "_updateRewardsPerToken",
+   "_totalSupply",
+   "lastUpdated",
+   "deploy",
+   "TimeswapV2Option",
+   "_burnTokenFrom",
+   "tokenAddresses",
+   "TokenType",
+   "price",
+   "IWstETH",
+   "getStETHByWstETH",
+   "_chargeFees",
+   "minLpPriceFactor",
+   "DENOMINATOR",
+   "_lpPriceHighWaterMarks",
+   "execute",
+   "_decreaseFullLiquidityAndCollect",
+   "feeAmount",
+   "decreaseLiquidityReturn",
+   "quorum",
+   "totalSupply",
+   "quorumThresholdBps",
+   "_addLiquidity",
+   "stableSwap3Pool",
+   "add_liquidity",
+   "expressExecuteWithToken"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "198",
+  "18",
+  "251",
+  "119",
+  "134",
+  "56",
+  "357",
+  "216",
+  "34",
+  "387"
+ ],
+ "exclude_repo": "2c2d03025183",
+ "error": null
+}

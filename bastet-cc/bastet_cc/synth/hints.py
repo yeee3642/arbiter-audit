@@ -127,10 +127,42 @@ def _df(hint: str, file_sets: dict[str, list[set[str]]], repos: set[str] | None 
     return hit, total, repo_hits
 
 
+def _evidence_candidates(localized: list[tuple[str, set[str]]],
+                         file_sets: dict[str, list[set[str]]],
+                         n_files: int) -> list[str]:
+    """Identifiers taken from the tag's own localized vulnerable functions.
+
+    Fourth source, reached only when the model's candidates cannot satisfy the 80%
+    coverage requirement (four tags hit exactly 0.00 without it). These are real by
+    construction -- they were read out of the vulnerable code -- so only the
+    discrimination cut applies. Breadth is the ranking key and, where the tag has
+    two or more positive repos, also a filter: an identifier seen in one repo's
+    vulnerable functions is that repo's private vocabulary, and buying train
+    coverage with it is exactly the overfit LORO would then punish.
+    """
+    repos_with: dict[str, set[str]] = {}
+    for repo, idents in localized:
+        for ident in idents:
+            repos_with.setdefault(ident, set()).add(repo)
+    n_repos = len({r for r, _ in localized})
+    min_repos = 2 if n_repos >= 2 else 1
+    scored = []
+    for ident, repos in repos_with.items():
+        if len(repos) < min_repos:
+            continue
+        df, _, _ = _df(ident, file_sets)
+        if df == 0 or df / n_files > MAX_DF_RATIO:
+            continue
+        scored.append((-len(repos), df, ident))
+    scored.sort()
+    return [ident for _, _, ident in scored]
+
+
 def validate_hints(tag: str, candidates: list[str],
                    file_sets: dict[str, list[set[str]]],
                    pos_repos: list[str],
-                   localized_ident_sets: list[set[str]]) -> dict:
+                   localized_ident_sets: list[set[str]],
+                   localized_repos: list[str] | None = None) -> dict:
     """Run the S3 elimination ladder over one tag's candidates.
 
     Returns {kept, rejected: {hint: reason}, coverage, single_repo_hints,
@@ -206,11 +238,25 @@ def validate_hints(tag: str, candidates: list[str],
     # top-8 slate instead of the bare minimum.
     floor = MIN_HINTS if localized_ident_sets else TOP_HINTS
 
+    if localized_repos is not None and len(localized_repos) == len(localized_ident_sets):
+        pool += [h for h in _evidence_candidates(
+            list(zip(localized_repos, localized_ident_sets)), file_sets, n_files)
+            if h not in kept and h not in pool]
+
     backfilled: list[str] = []
     cov = coverage(kept)
     while (cov < COVERAGE_TARGET or len(kept) < floor) and pool \
             and len(kept) < MAX_HINTS:
-        h = pool.pop(0)
+        # Greedy on the objective the step exists for: when the target is coverage,
+        # spend the slot on whichever candidate covers the most still-uncovered
+        # evidence, not on whoever happens to be next in the queue. Pool order
+        # breaks ties, so a run stays deterministic and cleaner hints still win.
+        if cov < COVERAGE_TARGET:
+            gains = [(coverage(kept + [h]), -i) for i, h in enumerate(pool)]
+            best = max(range(len(pool)), key=lambda i: gains[i])
+            h = pool.pop(best if gains[best][0] > cov else 0)
+        else:
+            h = pool.pop(0)
         kept.append(h)
         backfilled.append(h)
         cov = coverage(kept)

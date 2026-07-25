@@ -1,0 +1,62 @@
+{
+ "tag": "TWAP",
+ "mode": "s2b",
+ "detector": {
+  "name": "TWAP-MissingTimeWeighting",
+  "vulnerability_knowledge": "A Time-Weighted Average Price (TWAP) must weight each price observation by the duration it was valid. The canonical Uniswap V2/V3 pattern stores cumulative prices (priceCumulativeLast) that increase by price * elapsedSeconds each block. To compute a TWAP over a window, the caller reads the cumulative value at the start and end of the window, subtracts them, and divides by the elapsed time. A common flaw is averaging raw price observations (e.g., from slot0 or an array of snapshots) without multiplying each by the time delta since the previous observation. This produces a simple arithmetic mean that can be manipulated by concentrating trades in a single block or by an attacker sandwiching the observation window. Another flaw is using a fixed-length observation array but dividing by the array length instead of the actual time span, which breaks when blocks are skipped or timestamps are non-uniform. Always verify that the computation uses (cumulativeEnd - cumulativeStart) / (timestampEnd - timestampStart) or an equivalent time-weighted accumulator, and that the window duration is enforced (e.g., require(period > 0 && period <= MAX_WINDOW)).",
+  "checks": [
+   "The contract reads price observations (e.g., from slot0, observe(), or a custom array) but computes the average by summing prices and dividing by the number of observations without multiplying each price by its time delta.",
+   "The TWAP window duration is not validated: missing require(period > 0) or require(period <= MAX_ALLOWED_WINDOW), allowing zero-length or excessively long windows that return stale or zero-initialized data.",
+   "The contract uses a single spot price (slot0.sqrtPriceX96 or reserves) directly instead of a time-weighted cumulative value, effectively using a spot price as TWAP.",
+   "When calling Uniswap V3's observe() with an array of secondsAgo, the contract does not verify that the returned tickCumulatives correspond to the requested timestamps (e.g., zero-initialized slots for future timestamps or uninitialized pools).",
+   "The TWAP calculation divides by a constant (e.g., number of observations) instead of the actual elapsed time (timestampEnd - timestampStart), breaking when block intervals vary.",
+   "The contract relies on a low-liquidity pool or a pool with zero liquidity for TWAP without checking liquidity > 0 or totalValueLocked thresholds, making the TWAP manipulable.",
+   "The contract uses a custom observation ring buffer but fails to update the cumulative price accumulator on every swap/sync event, leaving gaps in the time-weighted series.",
+   "The contract does not handle negative tick values or rounding direction correctly when converting tickCumulative to price (e.g., using integer division that truncates toward zero instead of rounding)."
+  ],
+  "incorrect_example": {
+   "code": "contract BadTWAP {\n    IUniswapV3Pool immutable pool;\n    uint256 constant WINDOW = 30 minutes;\n\n    function getTwap() external view returns (uint256) {\n        (int56 tickCumulative, ) = pool.observe(uint32[](WINDOW));\n        // @audit divides by window length in seconds, not by actual elapsed time\n        // @audit does not weight each observation by time delta\n        return uint256(int256(tickCumulative) / int256(WINDOW));\n    }\n}",
+   "explanation": "The code calls observe() with a single secondsAgo value equal to the window length, receives a single cumulative tick, and divides by the window length. This ignores the starting cumulative value, so the result is not a time-weighted average over the window."
+  },
+  "correct_example": {
+   "code": "contract GoodTWAP {\n    IUniswapV3Pool immutable pool;\n    uint256 constant MAX_WINDOW = 30 minutes;\n\n    function getTwap(uint256 period) external view returns (uint256) {\n        require(period > 0 && period <= MAX_WINDOW, \"invalid window\");\n        uint32[] memory secondsAgos = new uint32[](2);\n        secondsAgos[0] = uint32(period);\n        secondsAgos[1] = 0;\n        (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);\n        // tickCumulatives[0] = cumulative at start, [1] = cumulative at end\n        int256 delta = int256(tickCumulatives[1]) - int256(tickCumulatives[0]);\n        // @audit divide by actual elapsed time (period)\n        int256 avgTick = delta / int256(period);\n        return uint256(avgTick);\n    }\n}",
+   "explanation": "The fix requests two observations (start and end of window), subtracts the cumulative ticks, and divides by the actual elapsed period, producing a correct time-weighted average tick."
+  },
+  "routing_hint_candidates": [
+   "observe",
+   "slot0",
+   "tickCumulative",
+   "priceCumulativeLast",
+   "secondsAgo",
+   "sqrtPriceX96",
+   "liquidity",
+   "tick",
+   "UniswapV3Pool",
+   "UniswapV2Pair",
+   "cumulative",
+   "timeWeightedAveragePrice",
+   "TWAP",
+   "period",
+   "window",
+   "MAX_WINDOW",
+   "stale",
+   "zeroInitialized",
+   "negativeTick",
+   "rounding",
+   "manipulation",
+   "lowLiquidity",
+   "totalValueLocked",
+   "heartbeat",
+   "updateInterval",
+   "priceFeed",
+   "latestRoundData",
+   "updatedAt"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "179"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

@@ -1,0 +1,57 @@
+{
+ "tag": "DAO",
+ "mode": "s2",
+ "detector": {
+  "name": "DAO-Governance-Logic-Flaws",
+  "vulnerability_knowledge": "DAO governance contracts coordinate voting power, proposal lifecycle, and membership changes. A common flaw is using strict inequality (>) instead of >= when comparing a proposer's current voting weight against the proposal threshold, which incorrectly permits cancellation when voting power exactly equals the threshold. Membership management often lacks validation that an address being added was not previously removed by governance, allowing re-addition of voted-out members. Swapping members between cohorts without checking for ongoing elections can let a removed member be re-elected into another cohort while the original cohort still exists. Proposal threshold calculations using integer division (totalSupply * proposalThresholdBps / 10000) round down to zero when the product is less than 10000, effectively allowing any token holder to create proposals regardless of intended minimum voting power.",
+  "checks": [
+   "In proposal cancellation logic, verify the voting power comparison uses >= against the proposal threshold, not >.",
+   "In member addition functions, ensure a check prevents re-adding addresses that were removed by a prior governance vote (e.g., via a removedMembers mapping or event log).",
+   "In member swap functions, confirm an election state guard (e.g., require(!electionInProgress)) prevents swaps during active voting periods.",
+   "In proposalThreshold() or similar view functions, check that the multiplication totalSupply * proposalThresholdBps cannot underflow the denominator 10000; if it can, enforce a minimum threshold of 1 or revert.",
+   "In proposal creation, validate that the proposer's voting power at snapshot block meets or exceeds the threshold using >=.",
+   "In proposal execution, ensure state transitions (Pending -> Active -> Succeeded/Defeated -> Executed) are enforced and cannot be skipped or repeated.",
+   "In quorum calculation, verify that integer division does not round down to zero when total votes are low; apply a minimum quorum floor if necessary.",
+   "In timelock or queueing logic, confirm that only proposals in the correct state (e.g., Succeeded) can be queued and that cancellation respects the same state machine."
+  ],
+  "incorrect_example": {
+   "code": "function cancel(bytes32 _proposalId) external {\n    Proposal memory proposal = proposals[_proposalId];\n    if (msg.sender != proposal.proposer && getVotes(proposal.proposer, block.timestamp - 1) > proposal.proposalThreshold)\n        revert INVALID_CANCEL();\n    proposals[_proposalId].canceled = true;\n    emit ProposalCanceled(_proposalId);\n}\n\nfunction addMember(address _newMember, Cohort _cohort) external onlyRole(MEMBER_ADDER_ROLE) {\n    _addMemberToCohortArray(_newMember, _cohort);\n    _scheduleUpdate();\n    emit MemberAdded(_newMember, _cohort);\n}\n\nfunction _swapMembers(address _addressToRemove, address _addressToAdd) internal returns (Cohort) {\n    Cohort cohort = _removeMemberFromCohortArray(_addressToRemove);\n    _addMemberToCohortArray(_addressToAdd, cohort);\n    _scheduleUpdate();\n    return cohort;\n}\n\nfunction proposalThreshold() public view returns (uint256) {\n    unchecked {\n        return (settings.token.totalSupply() * settings.proposalThresholdBps) / 10_000;\n    }\n}",
+   "explanation": "The cancel function uses > instead of >= for voting power check; addMember lacks a removed-member guard; _swapMembers does not block swaps during elections; proposalThreshold rounds down to zero when totalSupply * bps < 10000."
+  },
+  "correct_example": {
+   "code": "function cancel(bytes32 _proposalId) external {\n    Proposal memory proposal = proposals[_proposalId];\n    if (msg.sender != proposal.proposer && getVotes(proposal.proposer, block.timestamp - 1) >= proposal.proposalThreshold)\n        revert INVALID_CANCEL();\n    proposals[_proposalId].canceled = true;\n    emit ProposalCanceled(_proposalId);\n}\n\nfunction addMember(address _newMember, Cohort _cohort) external onlyRole(MEMBER_ADDER_ROLE) {\n    require(!removedMembers[_newMember], \"Member previously removed by governance\");\n    _addMemberToCohortArray(_newMember, _cohort);\n    _scheduleUpdate();\n    emit MemberAdded(_newMember, _cohort);\n}\n\nfunction _swapMembers(address _addressToRemove, address _addressToAdd) internal returns (Cohort) {\n    require(!electionInProgress, \"Cannot swap during election\");\n    Cohort cohort = _removeMemberFromCohortArray(_addressToRemove);\n    _addMemberToCohortArray(_addressToAdd, cohort);\n    _scheduleUpdate();\n    return cohort;\n}\n\nfunction proposalThreshold() public view returns (uint256) {\n    uint256 supply = settings.token.totalSupply();\n    uint256 raw = (supply * settings.proposalThresholdBps) / 10_000;\n    return raw == 0 ? 1 : raw;\n}",
+   "explanation": "Cancel uses >= for threshold comparison; addMember checks removedMembers mapping; _swapMembers guards with electionInProgress; proposalThreshold returns at least 1 to avoid zero threshold."
+  },
+  "routing_hint_candidates": [
+   "proposalThreshold",
+   "proposalThresholdBps",
+   "getVotes",
+   "proposal.proposalThreshold",
+   "proposal.proposer",
+   "INVALID_CANCEL",
+   "ProposalCanceled",
+   "addMember",
+   "MEMBER_ADDER_ROLE",
+   "_addMemberToCohortArray",
+   "_removeMemberFromCohortArray",
+   "_swapMembers",
+   "removedMembers",
+   "electionInProgress",
+   "_scheduleUpdate",
+   "Cohort",
+   "settings.token.totalSupply",
+   "settings.treasury.isQueued",
+   "settings.treasury.cancel",
+   "ProposalState.Executed"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "211",
+  "330",
+  "331",
+  "223"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

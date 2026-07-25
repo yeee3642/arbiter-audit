@@ -1,0 +1,73 @@
+{
+ "tag": "Governance",
+ "mode": "s2",
+ "detector": {
+  "name": "Governance",
+  "vulnerability_knowledge": "Governance systems are vulnerable when voting power can be manipulated through flash loans or instant token acquisition, when proposal lifecycle checks use incorrect comparison operators (e.g., `<` instead of `<=` for defeat conditions), when vote reclamation lacks same-transaction reentrancy guards, when member management allows re-adding previously removed addresses without governance approval, when activation thresholds lack spam/rate limiting enabling denial-of-service via dummy proposals, when executable actions omit `msg.value` forwarding despite payable validation, when critical initialization parameters skip zero-address checks, when minting functions lack supply caps allowing arbitrary inflation of voting power, when multisig voting modifiers reset state before external calls enabling reentrancy double-voting, and when parameter setters omit bounds validation (e.g., percentage > 100). These flaws allow attackers to pass malicious proposals, block legitimate ones, drain funds, or permanently corrupt governance state.",
+  "checks": [
+   "Verify voting power snapshots are taken before proposal creation and cannot be manipulated via flash loans or post-snapshot token transfers.",
+   "Ensure proposal defeat/success conditions use correct comparison operators (e.g., `forVotes <= againstVotes` for defeat, not strict `<`).",
+   "Confirm vote reclamation functions block reclaiming votes cast in the same transaction before proposal activation (check `activeProposal.proposalId` timing).",
+   "Validate member addition functions check against a removal registry or require governance approval to prevent re-adding voted-out members.",
+   "Check proposal activation requires minimum endorsement thresholds AND rate limiting (e.g., cooldown, reputation) to prevent spam activation.",
+   "Verify executable action functions forward `msg.value` via `{value: actionInfo.value}` when the action is payable and validates `msg.value == actionInfo.value`.",
+   "Ensure initialization functions validate all critical address parameters (vetoer, treasury, token) against `address(0)`.",
+   "Confirm minting/issuance functions for governance tokens enforce a hard cap on `totalSupply` or require governance approval for inflation."
+  ],
+  "incorrect_example": {
+   "code": "function activateProposal(uint256 proposalId_) external {\n    ProposalMetadata memory proposal = getProposalMetadata[proposalId_];\n    if (msg.sender != proposal.submitter) revert NotAuthorizedToActivateProposal();\n    if (block.timestamp > proposal.submissionTimestamp + ACTIVATION_DEADLINE) revert SubmittedProposalHasExpired();\n    if ((totalEndorsementsForProposal[proposalId_] * 100) < VOTES.totalSupply() * ENDORSEMENT_THRESHOLD) revert NotEnoughEndorsementsToActivateProposal();\n    if (proposalHasBeenActivated[proposalId_]) revert ProposalAlreadyActivated();\n    if (block.timestamp < activeProposal.activationTimestamp + GRACE_PERIOD) revert ActiveProposalNotExpired();\n    activeProposal = ActivatedProposal(proposalId_, block.timestamp);\n    proposalHasBeenActivated[proposalId_] = true;\n    emit ProposalActivated(proposalId_, block.timestamp);\n}",
+   "explanation": "Missing spam protection: any proposal meeting ENDORSEMENT_THRESHOLD becomes sole active proposal, allowing dummy proposals to block legitimate ones via GRACE_PERIOD lockout."
+  },
+  "correct_example": {
+   "code": "function activateProposal(uint256 proposalId_) external {\n    ProposalMetadata memory proposal = getProposalMetadata[proposalId_];\n    if (msg.sender != proposal.submitter) revert NotAuthorizedToActivateProposal();\n    if (block.timestamp > proposal.submissionTimestamp + ACTIVATION_DEADLINE) revert SubmittedProposalHasExpired();\n    if ((totalEndorsementsForProposal[proposalId_] * 100) < VOTES.totalSupply() * ENDORSEMENT_THRESHOLD) revert NotEnoughEndorsementsToActivateProposal();\n    if (proposalHasBeenActivated[proposalId_]) revert ProposalAlreadyActivated();\n    if (block.timestamp < activeProposal.activationTimestamp + GRACE_PERIOD) revert ActiveProposalNotExpired();\n    if (block.timestamp < lastActivationTimestamp + ACTIVATION_COOLDOWN) revert ActivationTooFrequent();\n    if (proposal.submitterReputation < MIN_SUBMITTER_REPUTATION) revert InsufficientReputation();\n    activeProposal = ActivatedProposal(proposalId_, block.timestamp);\n    lastActivationTimestamp = block.timestamp;\n    proposalHasBeenActivated[proposalId_] = true;\n    emit ProposalActivated(proposalId_, block.timestamp);\n}",
+   "explanation": "Added ACTIVATION_COOLDOWN and MIN_SUBMITTER_REPUTATION checks to prevent spam activation and denial-of-service via dummy proposals."
+  },
+  "routing_hint_candidates": [
+   "actionApprovalSupply",
+   "actionDisapprovalSupply",
+   "validateActionCreation",
+   "getRoleSupplyAsNumberOfHolders",
+   "proposal.forVotes",
+   "proposal.againstVotes",
+   "proposal.quorumVotes",
+   "proposal.voteStart",
+   "proposal.voteEnd",
+   "proposal.executed",
+   "proposal.canceled",
+   "proposal.vetoed",
+   "reclaimVotes",
+   "userVotesForProposal",
+   "activeProposal.proposalId",
+   "tokenClaimsForProposal",
+   "VOTES.transferFrom",
+   "addMember",
+   "_addMemberToCohortArray",
+   "MEMBER_ADDER_ROLE",
+   "activateProposal",
+   "ENDORSEMENT_THRESHOLD",
+   "GRACE_PERIOD",
+   "activeProposal.activationTimestamp",
+   "executeAction",
+   "executor.execute",
+   "actionInfo.value",
+   "msg.value",
+   "initialize",
+   "settings.vetoer"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "406",
+  "234",
+  "182",
+  "330",
+  "185",
+  "407",
+  "217",
+  "188",
+  "294",
+  "212"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

@@ -1,0 +1,61 @@
+{
+ "tag": "Upgradeable",
+ "mode": "s2",
+ "detector": {
+  "name": "Upgradeable-Diamond-Cut-Calldata-Mismatch",
+  "vulnerability_knowledge": "In EIP-2535 Diamond upgrade patterns, a governance proposal typically stores a hash of the intended diamond cut (facet cuts + init calldata) during a notice period. The execution function must verify that the calldata supplied at execution time matches the originally proposed calldata by recomputing the hash and comparing it to the stored proposal hash. If the execution function only checks the hash but then passes attacker-controlled calldata to `diamondCut` without ensuring it is the exact same calldata that was hashed, a compromised governor key can substitute malicious facet cuts or init addresses after the notice period expires. The vulnerability arises because the hash validation uses the function parameters (`_diamondCut.facetCuts`, `_diamondCut.initAddress`) but the subsequent `Diamond.diamondCut(_diamondCut)` call uses the entire `_diamondCut` struct, which may contain additional fields (e.g., `initCalldata`) not covered by the hash, or the caller can simply pass a different struct that happens to hash to the same value if the hash construction is incomplete.",
+  "checks": [
+   "Locate functions named `executeDiamondCutProposal`, `executeUpgrade`, or similar that accept a `DiamondCutData` or equivalent struct parameter.",
+   "Verify that the stored proposal hash is computed over the exact same fields that are later passed to the low-level `diamondCut` function (typically `facetCuts`, `initAddress`, and `initCalldata`).",
+   "Ensure the execution function recomputes `keccak256(abi.encode(...))` using the calldata fields from the function parameter and compares it to the stored `proposedDiamondCutHash`.",
+   "Confirm that no additional fields in the struct (e.g., `initCalldata`) are omitted from the hash but used in the `diamondCut` call.",
+   "Check that the function resets or deletes the stored proposal (`_resetProposal`) only after successful validation to prevent replay.",
+   "Validate that access control (`onlyGovernor`, `onlyOwner`, timelock) restricts who can call the execution function.",
+   "Ensure the contract enforces a notice period (`block.timestamp >= proposedTimestamp + NOTICE_PERIOD`) or emergency council approval before execution.",
+   "Verify that the diamond is not frozen (`isFrozen`) unless emergency approvals are met."
+  ],
+  "incorrect_example": {
+   "code": "function executeDiamondCutProposal(Diamond.DiamondCutData calldata _diamondCut) external onlyGovernor {\n    Diamond.DiamondStorage storage ds = Diamond.getDiamondStorage();\n    require(block.timestamp >= s.proposedDiamondCutTimestamp + UPGRADE_NOTICE_PERIOD, \"notice\");\n    require(s.proposedDiamondCutHash == keccak256(abi.encode(_diamondCut.facetCuts, _diamondCut.initAddress)), \"hash\");\n    _resetProposal();\n    Diamond.diamondCut(_diamondCut); // _diamondCut.initCalldata not covered by hash\n}",
+   "explanation": "The hash validation omits `initCalldata` from the encoded fields, allowing a governor to change the initialization calldata after the proposal is approved."
+  },
+  "correct_example": {
+   "code": "function executeDiamondCutProposal(Diamond.DiamondCutData calldata _diamondCut) external onlyGovernor {\n    Diamond.DiamondStorage storage ds = Diamond.getDiamondStorage();\n    require(block.timestamp >= s.proposedDiamondCutTimestamp + UPGRADE_NOTICE_PERIOD, \"notice\");\n    bytes32 expectedHash = keccak256(abi.encode(_diamondCut.facetCuts, _diamondCut.initAddress, _diamondCut.initCalldata));\n    require(s.proposedDiamondCutHash == expectedHash, \"hash\");\n    _resetProposal();\n    Diamond.diamondCut(_diamondCut);\n}",
+   "explanation": "The hash now covers all three fields (`facetCuts`, `initAddress`, `initCalldata`) that `diamondCut` consumes, preventing calldata substitution."
+  },
+  "routing_hint_candidates": [
+   "executeDiamondCutProposal",
+   "DiamondCutData",
+   "facetCuts",
+   "initAddress",
+   "initCalldata",
+   "proposedDiamondCutHash",
+   "proposedDiamondCutTimestamp",
+   "UPGRADE_NOTICE_PERIOD",
+   "diamondCut",
+   "Diamond.diamondCut",
+   "Diamond.getDiamondStorage",
+   "Diamond.DiamondStorage",
+   "onlyGovernor",
+   "_resetProposal",
+   "isFrozen",
+   "SECURITY_COUNCIL_APPROVALS_FOR_EMERGENCY_UPGRADE",
+   "securityCouncilEmergencyApprovals",
+   "DiamondCutProposalExecution",
+   "Unfreeze",
+   "lastDiamondFreezeTimestamp",
+   "abi.encode",
+   "keccak256",
+   "block.timestamp",
+   "require",
+   "calldata"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "235",
+  "480",
+  "477"
+ ],
+ "exclude_repo": "966f040d9bc8",
+ "error": null
+}
