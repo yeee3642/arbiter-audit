@@ -1,0 +1,1569 @@
+{
+ "Accounting Error": {
+  "tag": "Accounting Error",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "19000d572f72",
+    "variant_id": "synth__accounting_error__gate_19000d572f72",
+    "mode": "s2",
+    "hints": [
+     "totalAssets",
+     "exchangeRate",
+     "accrue",
+     "totalBorrows",
+     "commandId",
+     "expressExecuteWithToken",
+     "parameter",
+     "auction",
+     "gateway",
+     "safeCall",
+     "withdrawReserves",
+     "shares",
+     "SafeERC20",
+     "_burn"
+    ],
+    "hit": true,
+    "n_pos_tasks": 8,
+    "n_pos_findings": 1,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "1aee004bafff": true
+    },
+    "n_calls": 11
+   },
+   {
+    "repo": "289d8258d7b3",
+    "variant_id": "synth__accounting_error__gate_289d8258d7b3",
+    "mode": "s2",
+    "hints": [
+     "totalAssets",
+     "exchangeRate",
+     "accrue",
+     "totalBorrows",
+     "validateOrder",
+     "orderHash",
+     "shares",
+     "IERC20.transferFrom",
+     "_burn",
+     "price",
+     "delta",
+     "harvest",
+     "add_liquidity",
+     "lastUpdated"
+    ],
+    "hit": true,
+    "n_pos_tasks": 1,
+    "n_pos_findings": 6,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "1aee004bafff": false
+    },
+    "n_calls": 4
+   },
+   {
+    "repo": "29aba850d512",
+    "variant_id": "synth__accounting_error__gate_29aba850d512",
+    "mode": "s2",
+    "hints": [
+     "totalAssets",
+     "exchangeRate",
+     "accrue",
+     "totalBorrows",
+     "expressExecuteWithToken",
+     "parameter",
+     "gateway",
+     "auction",
+     "calc_token_amount",
+     "Withdrawal",
+     "IERC20.transferFrom",
+     "SafeERC20",
+     "_burn",
+     "add_liquidity"
+    ],
+    "hit": false,
+    "n_pos_tasks": 3,
+    "n_pos_findings": 0,
+    "probe_hit": true,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": false
+    },
+    "n_calls": 8
+   },
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__accounting_error__gate_2c2d03025183",
+    "mode": "s2",
+    "hints": [
+     "totalAssets",
+     "exchangeRate",
+     "accrue",
+     "totalBorrows",
+     "burnFrom",
+     "add_liquidity",
+     "shares",
+     "SafeERC20",
+     "payload",
+     "_burn",
+     "protocolFee",
+     "_updateRewardsPerToken",
+     "quorum",
+     "Withdrawal"
+    ],
+    "hit": true,
+    "n_pos_tasks": 21,
+    "n_pos_findings": 6,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": true
+    },
+    "n_calls": 29
+   },
+   {
+    "repo": "37dd0c2e7de6",
+    "variant_id": "synth__accounting_error__gate_37dd0c2e7de6",
+    "mode": "s2",
+    "hints": [
+     "totalAssets",
+     "exchangeRate",
+     "accrue",
+     "totalBorrows",
+     "burnFrom",
+     "totalShares",
+     "shares",
+     "SafeERC20",
+     "payload",
+     "_burn",
+     "deploy",
+     "add_liquidity",
+     "minPriceD18",
+     "_updateGlobalExchangeRate"
+    ],
+    "hit": true,
+    "n_pos_tasks": 5,
+    "n_pos_findings": 5,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": true
+    },
+    "n_calls": 10
+   }
+  ],
+  "hit_mean": 0.8,
+  "fp_mean": 0.5,
+  "routed_zero": 0,
+  "probe_hit_mean": 1.0,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 62
+ },
+ "Governance": {
+  "tag": "Governance",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "1150ac69e096",
+    "variant_id": "synth__governance__gate_1150ac69e096_r1",
+    "mode": "s2",
+    "hints": [
+     "propose",
+     "castVote",
+     "quorum",
+     "timelock",
+     "votingPower",
+     "mintTo",
+     "hashProposal",
+     "proposalThreshold",
+     "executeProposal",
+     "hasVoted",
+     "againstVotes",
+     "activeProposal",
+     "votingPeriod"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "19000d572f72": false,
+     "22ad8fd6e044": false
+    },
+    "n_calls": 1
+   },
+   {
+    "repo": "1aee004bafff",
+    "variant_id": "synth__governance__gate_1aee004bafff_r1",
+    "mode": "s2",
+    "hints": [
+     "propose",
+     "castVote",
+     "quorum",
+     "timelock",
+     "votingPower",
+     "executeAction",
+     "executeProposal",
+     "ProposalExecuted",
+     "activeProposal",
+     "proposal",
+     "hasVoted",
+     "validateActionCreation",
+     "endorseProposal"
+    ],
+    "hit": true,
+    "n_pos_tasks": 15,
+    "n_pos_findings": 2,
+    "probe_hit": null,
+    "neg": {
+     "19000d572f72": false,
+     "22ad8fd6e044": false
+    },
+    "n_calls": 15
+   },
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__governance__gate_2c2d03025183_r1",
+    "mode": "s2",
+    "hints": [
+     "propose",
+     "castVote",
+     "quorum",
+     "timelock",
+     "votingPower",
+     "votingPeriod",
+     "executeAction",
+     "executor",
+     "execute",
+     "activeProposal",
+     "proposal",
+     "validateActionCreation",
+     "forceApprovalRole"
+    ],
+    "hit": true,
+    "n_pos_tasks": 10,
+    "n_pos_findings": 2,
+    "probe_hit": null,
+    "neg": {
+     "19000d572f72": false,
+     "22ad8fd6e044": false
+    },
+    "n_calls": 16
+   },
+   {
+    "repo": "70080e8fc005",
+    "variant_id": "synth__governance__gate_70080e8fc005_r1",
+    "mode": "s2",
+    "hints": [
+     "propose",
+     "castVote",
+     "quorum",
+     "timelock",
+     "votingPower",
+     "executeAction",
+     "hasVoted",
+     "activeProposal",
+     "approvalRole",
+     "fullWeightDuration"
+    ],
+    "hit": true,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 2,
+    "probe_hit": null,
+    "neg": {
+     "19000d572f72": false,
+     "22ad8fd6e044": false
+    },
+    "n_calls": 2
+   },
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__governance__gate_82a1b82850c4_r1",
+    "mode": "s2",
+    "hints": [
+     "propose",
+     "castVote",
+     "quorum",
+     "timelock",
+     "votingPower",
+     "hashProposal",
+     "proposalId",
+     "proposalThreshold",
+     "votingPeriod",
+     "getPastVotes",
+     "execute",
+     "cancel",
+     "hasVoted",
+     "canceled"
+    ],
+    "hit": true,
+    "n_pos_tasks": 1,
+    "n_pos_findings": 3,
+    "probe_hit": null,
+    "neg": {
+     "19000d572f72": false,
+     "22ad8fd6e044": false
+    },
+    "n_calls": 7
+   }
+  ],
+  "hit_mean": 0.8,
+  "fp_mean": 0.0,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": true,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Returns the holder's token quantity instead of a fixed 1 vote per holder, causing multi-token holders to count as multiple votes against a quorum threshold based on holder count.):\n```solidity\nfunction getApprovalQuantityAt(address policyholder, uint8 role, uint256 timestamp) external view returns (uint128) {\n    if (role != approvalRole && !forceApprovalRole[role]) return 0;\n    uint128 quantity = policy.getPastQuantity(policyholder, role, timestamp);\n    return quantity > 0 && forceApprovalRole[role] ? type(uint128).max : quantity;\n  }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Function is external with no access control, allowing anyone to call it after action creation to overwrite actionApprovalSupply and actionDisapprovalSupply storage values.):\n```solidity\nfunction validateActionCreation(ActionInfo calldata actionInfo) external {\n    LlamaPolicy llamaPolicy = policy; // Reduce SLOADs.\n    uint256 approvalPolicySupply = llamaPolicy.getRoleSupplyAsNumberOfHolders(approvalRole);\n    if (approvalPolicySupply == 0) revert RoleHasZeroSupply(approvalRole);\n\n    uint256 disapprovalPolicySupply = llamaPolicy.getRoleSupplyAsNumberOfHolders(disapprovalRole);\n    if (disapprovalPolicySupply == 0) revert RoleHasZeroSupply(disapprovalRole);\n\n    // Save off the supplies to use for checking quorum.\n    actionApprovalSupply[actionInfo.id] = approvalPolicySupply;\n    actionDisapprovalSupply[actionInfo.id] = disapprovalPolicySupply;\n  }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The modifier resets voting.voteCount to 0 and clears hasVoted flags before executing the external call via _;, allowing signers who already voted in the same transaction to vote again if the external call reenters the same function.):\n```solidity\nmodifier onlySigners() {\n        if (!signers.isSigner[msg.sender]) revert NotSigner();\n\n        bytes32 topic = keccak256(msg.data);\n        Voting storage voting = votingPerTopic[signerEpoch][topic];\n\n        // Check that signer has not voted, then record that they have voted.\n        if (voting.hasVoted[msg.sender]) revert AlreadyVoted();\n\n        voting.hasVoted[msg.sender] = true;\n\n        // Determine the new vote count.\n        uint256 voteCount = voting.voteCount + 1;\n\n        // Do not proceed with operation execution if insufficient votes.\n        if (voteCount < signers.threshold) {\n            // Save updated vote count.\n            voting.voteCount = voteCount;\n            return;\n        }\n\n        // Clear vote count and voted booleans.\n        voting.voteCount = 0;\n\n        uint256 count = signers.accounts.length;\n\n        for (uint256 i; i < count; ++i) {\n            voting.hasVoted[signers.accounts[i]] = false;\n        }\n\n        emit MultisigOperationExecuted(topic);\n\n        _;\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: When a proposal fails execution due to insufficient net votes, activeProposal is not reset to zero, leaving the proposal stuck as active and blocking new proposals from activating while votes remain locked in the contract.):\n```solidity\nfunction executeProposal() external {\n        uint256 netVotes = yesVotesForProposal[activeProposal.proposalId] -\n            noVotesForProposal[activeProposal.proposalId];\n        if (netVotes * 100 < VOTES.totalSupply() * EXECUTION_THRESHOLD) {\n            revert NotEnoughVotesToExecute();\n        }\n\n        if (block.timestamp < activeProposal.activationTimestamp + EXECUTION_TIMELOCK) {\n            revert ExecutionTimelockStillActive();\n        }\n\n        Instruction[] memory instructions = INSTR.getInstructions(activeProposal.proposalId);\n\n        for (uint256 step; step < instructions.length; ) {\n            kernel.executeAction(instructions[step].action, instructions[step].target);\n            unchecked {\n                ++step;\n            }\n        }\n\n        emit ProposalExecuted(activeProposal.proposalId);\n\n        // deactivate the active proposal\n        activeProposal = ActivatedProposal(0, 0);\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function records endorsement weight as the caller's current VOTES.balanceOf(msg.sender) without preventing the same tokens from being transferred and reused to endorse the same proposal again, allowing double-counting in totalEndorsementsForProposal.):\n```solidity\nfunction endorseProposal(uint256 proposalId_) external {\n        uint256 userVotes = VOTES.balanceOf(msg.sender);\n\n        if (proposalId_ == 0) {\n            revert CannotEndorseNullProposal();\n        }\n\n        Instruction[] memory instructions = INSTR.getInstructions(proposalId_);\n        if (instructions.length == 0) {\n            revert CannotEndorseInvalidProposal();\n        }\n\n        // undo any previous endorsement the user made on these instructions\n        uint256 previousEndorsement = userEndorsementsForProposal[proposalId_][msg.sender];\n        totalEndorsementsForProposal[proposalId_] -= previousEndorsement;\n\n        // reapply user endorsements with most up-to-date votes\n        userEndorsementsForProposal[proposalId_][msg.sender] = userVotes;\n        totalEndorsementsForProposal[proposalId_] += userVotes;\n\n        emit ProposalEndorsed(proposalId_, msg.sender, userVotes);\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 41
+ },
+ "Cross-Chain": {
+  "tag": "Cross-Chain",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "19000d572f72",
+    "variant_id": "synth__cross_chain__gate_19000d572f72",
+    "mode": "s2",
+    "hints": [
+     "chainId",
+     "sourceAddress",
+     "sourceChain",
+     "commandId",
+     "destinationChain",
+     "payloadHash",
+     "executeWithToken",
+     "_setExpressExecutorWithToken",
+     "gateway"
+    ],
+    "hit": true,
+    "n_pos_tasks": 5,
+    "n_pos_findings": 10,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": true
+    },
+    "n_calls": 7
+   },
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__cross_chain__gate_2c2d03025183",
+    "mode": "s2",
+    "hints": [
+     "chainId",
+     "commandId",
+     "sourceChain",
+     "payloadHash",
+     "destinationChain",
+     "callContractWithToken",
+     "tokenManagerType",
+     "setTrustedAddress",
+     "validTokenManagerAddress"
+    ],
+    "hit": true,
+    "n_pos_tasks": 25,
+    "n_pos_findings": 28,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": true
+    },
+    "n_calls": 27
+   },
+   {
+    "repo": "b78ed0629056",
+    "variant_id": "synth__cross_chain__gate_b78ed0629056",
+    "mode": "s2",
+    "hints": [
+     "chainId",
+     "sourceChain",
+     "sourceAddress",
+     "commandId",
+     "payloadHash",
+     "destinationChain",
+     "callContract",
+     "ContractCallWithToken",
+     "callContractWithToken"
+    ],
+    "hit": true,
+    "n_pos_tasks": 25,
+    "n_pos_findings": 134,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "1aee004bafff": false
+    },
+    "n_calls": 27
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.333,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 61
+ },
+ "MEV": {
+  "tag": "MEV",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "289d8258d7b3",
+    "variant_id": "synth__mev__gate_289d8258d7b3",
+    "mode": "s2",
+    "hints": [
+     "deadline",
+     "minAmountOut",
+     "manager",
+     "mulDiv",
+     "tokensOwed0",
+     "tokensOwed1",
+     "FullMath",
+     "sqrtPriceX96"
+    ],
+    "hit": false,
+    "n_pos_tasks": 9,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 11
+   },
+   {
+    "repo": "50015cf871a0",
+    "variant_id": "synth__mev__gate_50015cf871a0",
+    "mode": "s2",
+    "hints": [
+     "deadline",
+     "minAmountOut",
+     "swap",
+     "collect",
+     "liquidity",
+     "positions",
+     "tickLower",
+     "tickUpper",
+     "_burn"
+    ],
+    "hit": true,
+    "n_pos_tasks": 6,
+    "n_pos_findings": 10,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 11
+   },
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__mev__gate_82a1b82850c4",
+    "mode": "s2",
+    "hints": [
+     "deadline",
+     "minAmountOut",
+     "sqrtPriceX96",
+     "positions",
+     "liquidity",
+     "tokensOwed0",
+     "tokensOwed1",
+     "slot0",
+     "mulDiv",
+     "FullMath",
+     "withdrawalProtectionFee"
+    ],
+    "hit": true,
+    "n_pos_tasks": 3,
+    "n_pos_findings": 5,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 5
+   },
+   {
+    "repo": "d5aa11e316e7",
+    "variant_id": "synth__mev__gate_d5aa11e316e7",
+    "mode": "s2",
+    "hints": [
+     "deadline",
+     "minAmountOut",
+     "mulDiv",
+     "positions",
+     "tokensOwed0",
+     "tokensOwed1",
+     "FullMath",
+     "LiquidityAmounts",
+     "_checkApproval"
+    ],
+    "hit": false,
+    "n_pos_tasks": 1,
+    "n_pos_findings": 0,
+    "probe_hit": true,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": true
+    },
+    "n_calls": 3
+   },
+   {
+    "repo": "e68d196f2fbd",
+    "variant_id": "synth__mev__gate_e68d196f2fbd",
+    "mode": "s2",
+    "hints": [
+     "deadline",
+     "minAmountOut",
+     "tokensOwed0",
+     "tokensOwed1",
+     "tickLower",
+     "tickUpper",
+     "swap",
+     "tokenId",
+     "withdrawalProtectionFee"
+    ],
+    "hit": true,
+    "n_pos_tasks": 13,
+    "n_pos_findings": 11,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 18
+   }
+  ],
+  "hit_mean": 0.6,
+  "fp_mean": 0.1,
+  "routed_zero": 0,
+  "probe_hit_mean": 0.5,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 48
+ },
+ "Upgradeable": {
+  "tag": "Upgradeable",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "1aee004bafff",
+    "variant_id": "synth__upgradeable__gate_1aee004bafff",
+    "mode": "s2",
+    "hints": [
+     "initializer",
+     "_authorizeUpgrade",
+     "upgradeTo",
+     "UUPSUpgradeable",
+     "diamondCut",
+     "admin",
+     "delegatecall",
+     "FacetCut",
+     "executeDiamondCutProposal",
+     "proposedDiamondCutHash",
+     "proposedDiamondCutTimestamp",
+     "securityCouncilEmergencyApprovals",
+     "onlyGovernor",
+     "__Ownable_init_unchained"
+    ],
+    "hit": true,
+    "n_pos_tasks": 17,
+    "n_pos_findings": 9,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": true
+    },
+    "n_calls": 25
+   },
+   {
+    "repo": "966f040d9bc8",
+    "variant_id": "synth__upgradeable__gate_966f040d9bc8",
+    "mode": "s2",
+    "hints": [
+     "initializer",
+     "_authorizeUpgrade",
+     "upgradeTo",
+     "UUPSUpgradeable",
+     "DiamondCutData",
+     "DiamondStorage",
+     "Diamond.getDiamondStorage",
+     "FacetCut",
+     "diamondCut",
+     "Diamond.diamondCut",
+     "diamondCutStorage",
+     "diamondStorage.isFrozen",
+     "executeDiamondCutProposal",
+     "facetCuts"
+    ],
+    "hit": false,
+    "n_pos_tasks": 1,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 7
+   },
+   {
+    "repo": "a8a9998bfe4a",
+    "variant_id": "synth__upgradeable__gate_a8a9998bfe4a",
+    "mode": "s2",
+    "hints": [
+     "initializer",
+     "_authorizeUpgrade",
+     "upgradeTo",
+     "UUPSUpgradeable",
+     "data.length",
+     "diamondCut",
+     "settlePayment"
+    ],
+    "hit": true,
+    "n_pos_tasks": 15,
+    "n_pos_findings": 10,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": false
+    },
+    "n_calls": 22
+   },
+   {
+    "repo": "bb9c2df58c59",
+    "variant_id": "synth__upgradeable__gate_bb9c2df58c59",
+    "mode": "s2",
+    "hints": [
+     "initializer",
+     "_authorizeUpgrade",
+     "upgradeTo",
+     "UUPSUpgradeable",
+     "onlyAdmin",
+     "admin",
+     "transferOwnership",
+     "ProxyAdmin",
+     "TransparentUpgradeableProxy",
+     "__Ownable_init_unchained",
+     "__ReentrancyGuard_init_unchained",
+     "upgradeToAndCall",
+     "implementation",
+     "Diamond"
+    ],
+    "hit": true,
+    "n_pos_tasks": 7,
+    "n_pos_findings": 6,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": true
+    },
+    "n_calls": 19
+   },
+   {
+    "repo": "fccd852beaa3",
+    "variant_id": "synth__upgradeable__gate_fccd852beaa3",
+    "mode": "s2b",
+    "hints": [
+     "initializer",
+     "_authorizeUpgrade",
+     "upgradeTo",
+     "UUPSUpgradeable",
+     "diamondCut"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": false
+    },
+    "n_calls": 6
+   }
+  ],
+  "hit_mean": 0.6,
+  "fp_mean": 0.5,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 79
+ },
+ "Liquidation": {
+  "tag": "Liquidation",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "289d8258d7b3",
+    "variant_id": "synth__liquidation__gate_289d8258d7b3",
+    "mode": "s2",
+    "hints": [
+     "liquidate",
+     "healthFactor",
+     "collateralFactor",
+     "seize",
+     "repay",
+     "id2asset",
+     "dyad",
+     "CrTooHigh",
+     "LIQUIDATION_REWARD",
+     "MIN_COLLATERIZATION_RATIO",
+     "cappedCr",
+     "collatRatio",
+     "isValidDNft",
+     "vaultsKerosene"
+    ],
+    "hit": true,
+    "n_pos_tasks": 3,
+    "n_pos_findings": 13,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 3
+   },
+   {
+    "repo": "57feee7d5701",
+    "variant_id": "synth__liquidation__gate_57feee7d5701",
+    "mode": "s2",
+    "hints": [
+     "liquidate",
+     "healthFactor",
+     "collateralFactor",
+     "seize",
+     "repay",
+     "NotLiquidatable",
+     "DebtChanged",
+     "FlashCallbackData",
+     "MAX_LIQUIDATION_PENALTY_X32",
+     "MIN_LIQUIDATION_PENALTY_X32",
+     "Q32",
+     "TransformNotAllowed",
+     "_calculateLiquidation"
+    ],
+    "hit": true,
+    "n_pos_tasks": 1,
+    "n_pos_findings": 1,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 1
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 4
+ },
+ "Pause": {
+  "tag": "Pause",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "22ad8fd6e044",
+    "variant_id": "synth__pause__gate_22ad8fd6e044",
+    "mode": "s2",
+    "hints": [
+     "pause",
+     "unpause",
+     "whenNotPaused",
+     "whenPaused",
+     "Pausable",
+     "auction.settled",
+     "auction.tokenId",
+     "IVault",
+     "ownerOf",
+     "vaults",
+     "isActive",
+     "transferOwnership"
+    ],
+    "hit": false,
+    "n_pos_tasks": 13,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 21
+   },
+   {
+    "repo": "289d8258d7b3",
+    "variant_id": "synth__pause__gate_289d8258d7b3",
+    "mode": "s2",
+    "hints": [
+     "pause",
+     "unpause",
+     "whenNotPaused",
+     "whenPaused",
+     "Pausable",
+     "auction",
+     "removeFollower",
+     "highestBid",
+     "highestBidder",
+     "tokenId",
+     "Unpaused",
+     "endTime"
+    ],
+    "hit": true,
+    "n_pos_tasks": 9,
+    "n_pos_findings": 7,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": false
+    },
+    "n_calls": 13
+   },
+   {
+    "repo": "70080e8fc005",
+    "variant_id": "synth__pause__gate_70080e8fc005",
+    "mode": "s2b",
+    "hints": [
+     "pause",
+     "unpause",
+     "whenNotPaused",
+     "whenPaused",
+     "Pausable",
+     "unfollow",
+     "removeFollower",
+     "withdrawLeftoverBalances",
+     "active"
+    ],
+    "hit": true,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 1,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 2
+   }
+  ],
+  "hit_mean": 0.667,
+  "fp_mean": 0.167,
+  "routed_zero": 0,
+  "probe_hit_mean": 0.0,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 36
+ },
+ "Replay Attack": {
+  "tag": "Replay Attack",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "1aee004bafff",
+    "variant_id": "synth__replay_attack__gate_1aee004bafff_r1",
+    "mode": "s2b",
+    "hints": [
+     "nonce",
+     "nonces",
+     "ecrecover",
+     "DOMAIN_SEPARATOR",
+     "signature",
+     "expiration",
+     "block.chainid",
+     "digest",
+     "checkAfterExecution"
+    ],
+    "hit": false,
+    "n_pos_tasks": 3,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": true
+    },
+    "n_calls": 13
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 1.0,
+  "routed_zero": 0,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Function reverts unconditionally without implementing EIP-712 signature verification, leaving the intended castVoteWithReasonAndParamsBySig functionality absent and any future implementation at risk of missing nonce in signed payload.):\n```solidity\nfunction castVoteBySig(uint256, uint8, uint8, bytes32, bytes32)\n        public\n        virtual\n        override\n        returns (uint256)\n    {\n        revert CastVoteDisabled();\n    }\n```\nRevise the checks so this is caught.",
+   "FALSE POSITIVE. Your detector wrongly flagged this function (its claim: The nonce is consumed by _useNonce during digest computation (L730), but the signature verification occurs after this consumption (L286-L288). If the signature is invalid, the nonce is still increment):\n```solidity\nfunction createActionBySig(\n    address policyholder,\n    uint8 role,\n    ILlamaStrategy strategy,\n    address target,\n    uint256 value,\n    bytes calldata data,\n    string memory description,\n    uint8 v,\n    bytes32 r,\n    bytes32 s\n  ) external returns (uint256 actionId) {\n    bytes32 digest = _getCreateActionTypedDataHash(policyholder, role, strategy, target, value, data, description);\n    address signer = ecrecover(digest, v, r, s);\n    if (signer == address(0) || signer != policyholder) revert InvalidSignature();\n    actionId = _createAction(signer, role, strategy, target, value, data, description);\n  }\n```\nTighten the checks so safe code like this is not reported.",
+   "FALSE POSITIVE. Your detector wrongly flagged this function (its claim: The function uses _getCastApprovalTypedDataHash which likely consumes a nonce via _useNonce, but the nonce is tied to the function selector (msg.sig). Since different functions have different selector):\n```solidity\nfunction castApprovalBySig(\n    address policyholder,\n    uint8 role,\n    ActionInfo calldata actionInfo,\n    string calldata reason,\n    uint8 v,\n    bytes32 r,\n    bytes32 s\n  ) external {\n    bytes32 digest = _getCastApprovalTypedDataHash(policyholder, role, actionInfo, reason);\n    address signer = ecrecover(digest, v, r, s);\n    if (signer == address(0) || signer != policyholder) revert InvalidSignature();\n    return _castApproval(signer, role, actionInfo, reason);\n  }\n```\nTighten the checks so safe code like this is not reported."
+  ],
+  "n_calls": 13
+ },
+ "Uniswap": {
+  "tag": "Uniswap",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "289d8258d7b3",
+    "variant_id": "synth__uniswap__gate_289d8258d7b3",
+    "mode": "s2b",
+    "hints": [
+     "swapExactTokensForTokens",
+     "getAmountsOut",
+     "IUniswapV2Router02",
+     "slot0",
+     "sqrtPriceX96",
+     "amount0",
+     "amount1",
+     "pairFor",
+     "liquidity",
+     "tickSpacing",
+     "collect",
+     "PoolKey",
+     "exactOutput"
+    ],
+    "hit": true,
+    "n_pos_tasks": 8,
+    "n_pos_findings": 24,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 9
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 9
+ },
+ "DAO": {
+  "tag": "DAO",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "1aee004bafff",
+    "variant_id": "synth__dao__gate_1aee004bafff",
+    "mode": "s2b",
+    "hints": [
+     "propose",
+     "quorum",
+     "shares",
+     "delegate",
+     "getVotes",
+     "cancel",
+     "governor",
+     "votingDelay",
+     "votingPeriod",
+     "snapshot",
+     "proposalId"
+    ],
+    "hit": true,
+    "n_pos_tasks": 21,
+    "n_pos_findings": 4,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 21
+   },
+   {
+    "repo": "70080e8fc005",
+    "variant_id": "synth__dao__gate_70080e8fc005",
+    "mode": "s2b",
+    "hints": [
+     "propose",
+     "quorum",
+     "shares",
+     "delegate",
+     "removeMember",
+     "replaceCohort",
+     "addMember",
+     "securityCouncil",
+     "timelock",
+     "proposalThreshold",
+     "cohortMembers",
+     "_addMemberToCohortArray"
+    ],
+    "hit": false,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 3
+   }
+  ],
+  "hit_mean": 0.5,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": 0.0,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 24
+ },
+ "EIP712": {
+  "tag": "EIP712",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "1aee004bafff",
+    "variant_id": "synth__eip712__gate_1aee004bafff_r1",
+    "mode": "s2",
+    "hints": [
+     "DOMAIN_SEPARATOR",
+     "_hashTypedDataV4",
+     "EIP712",
+     "hashStruct",
+     "ecrecover",
+     "EIP712Signature",
+     "Typehash",
+     "_calculateDigest",
+     "_validateRecoveredAddress",
+     "signer",
+     "signature",
+     "nonces",
+     "domainSeparator",
+     "recover"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": true
+    },
+    "n_calls": 6
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 1.0,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Function reverts unconditionally without implementing EIP-712 signature verification, leaving the intended castVoteWithReasonAndParamsBySig functionality absent and any future implementation at risk of missing nonce in signed payload.):\n```solidity\nfunction castVoteBySig(uint256, uint8, uint8, bytes32, bytes32)\n        public\n        virtual\n        override\n        returns (uint256)\n    {\n        revert CastVoteDisabled();\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 6
+ },
+ "ERC1155": {
+  "tag": "ERC1155",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "e269b2c934ee",
+    "variant_id": "synth__erc1155__gate_e269b2c934ee_r1",
+    "mode": "s2",
+    "hints": [
+     "onERC1155Received",
+     "onERC1155BatchReceived",
+     "safeBatchTransferFrom",
+     "uri",
+     "hooks",
+     "_deriveOrderMetadataHash",
+     "rentDuration",
+     "rentalId",
+     "_deriveHookHash",
+     "_loadValueFromCalldata",
+     "e1155_safe_transfer_from_selector",
+     "emittedExtraData",
+     "ERC1155"
+    ],
+    "hit": false,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 4
+   },
+   {
+    "repo": "fccd852beaa3",
+    "variant_id": "synth__erc1155__gate_fccd852beaa3_r1",
+    "mode": "s2",
+    "hints": [
+     "onERC1155Received",
+     "onERC1155BatchReceived",
+     "safeBatchTransferFrom",
+     "uri",
+     "ReentrancyGuard",
+     "_addTokenEnumeration",
+     "_removeTokenEnumeration",
+     "_addTokenToAllTokensEnumeration",
+     "_addTokenToOwnerEnumeration",
+     "_allTokens",
+     "_allTokensIndex",
+     "_idTotalSupply"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 2
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.0,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function adds a tokenId to the global enumeration array when _idTotalSupply[id] == 0, but does not verify that the tokenId is not already present in _allTokens, allowing duplicate entries if the same tokenId is minted again after being burned.):\n```solidity\nfunction _addTokenEnumeration(address from, address to, uint256 id, uint256 amount) internal {\n        if (from == address(0)) {\n            if (_idTotalSupply[id] == 0 && _additionalConditionAddTokenToAllTokensEnumeration(id)) _addTokenToAllTokensEnumeration(id);\n            _idTotalSupply[id] += amount;\n        }\n\n        if (to != address(0) && to != from) {\n            if (balanceOf(to, id) == 0 && _additionalConditionAddTokenToOwnerEnumeration(to, id)) _addTokenToOwnerEnumeration(to, id);\n        }\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The condition `_idTotalSupply[id] == 0` checks the supply before adding the minted amount, so a token that already has supply > 0 will not be added to _allTokens even if it was previously removed when supply hit zero.):\n```solidity\nfunction _addTokenEnumeration(address from, address to, uint256 id, uint256 amount) internal {\n        if (from == address(0)) {\n            if (_idTotalSupply[id] == 0 && _additionalConditionAddTokenToAllTokensEnumeration(id)) _addTokenToAllTokensEnumeration(id);\n            _idTotalSupply[id] += amount;\n        }\n\n        if (to != address(0) && to != from) {\n            if (balanceOf(to, id) == 0 && _additionalConditionAddTokenToOwnerEnumeration(to, id)) _addTokenToOwnerEnumeration(to, id);\n        }\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Transfers ERC1155 tokens via safeTransferFrom before updating rental state, allowing reentrancy through onERC1155Receive callback):\n```solidity\nfunction reclaimRentalOrder(RentalOrder calldata rentalOrder) external {\n        // This contract address must be in the context of another address.\n        if (address(this) == original) {\n            revert Errors.ReclaimerPackage_OnlyDelegateCallAllowed();\n        }\n\n        // Only the rental wallet specified in the order can be the address that\n        // initates the reclaim. In the context of a delegate call, address(this)\n        // will be the safe.\n        if (address(this) != rentalOrder.rentalWallet) {\n            revert Errors.ReclaimerPackage_OnlyRentalSafeAllowed(\n                rentalOrder.rentalWallet\n            );\n        }\n\n        // Get a count for the number of items.\n        uint256 itemCount = rentalOrder.items.length;\n\n        // Transfer each item if it is a rented asset.\n        for (uint256 i = 0; i < itemCount; ++i) {\n            Item memory item = rentalOrder.items[i];\n\n            // Check if the item is an ERC721.\n            if (item.itemType == ItemType.ERC721)\n                _transferERC721(item, rentalOrder.lender);\n\n            // check if the item is an ERC1155.\n            if (item.itemType == ItemType.ERC1155)\n                _transferERC1155(item, rentalOrder.lender);\n        }\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The constant gnosis_safe_disable_module_offset is used to load the module address from calldata, but it points to the prevModule parameter (first parameter) instead of the module parameter (second parameter) in the disableModule function signature.):\n```solidity\nfunction _checkTransaction(address from, address to, bytes memory data) private view {\n        bytes4 selector;\n\n        // Load in the function selector.\n        assembly {\n            selector := mload(add(data, 0x20))\n        }\n\n        if (selector == e721_safe_transfer_from_1_selector) {\n            // Load the token ID from calldata.\n            uint256 tokenId = uint256(\n                _loadValueFromCalldata(data, e721_safe_transfer_from_1_token_id_offset)\n            );\n\n            // Check if the selector is allowed.\n            _revertSelectorOnActiveRental(selector, from, to, tokenId);\n        } else if (selector == e721_safe_transfer_from_2_selector) {\n            // Load the token ID from calldata.\n            uint256 tokenId = uint256(\n                _loadValueFromCalldata(data, e721_safe_transfer_from_2_token_id_offset)\n            );\n\n            // Check if the selector is allowed.\n            _revertSelectorOnActiveRental(selector, from, to, tokenId);\n        } else if (selector == e721_transfer_from_selector) {\n            // Load the token ID from calldata.\n            uint256 tokenId = uint256(\n                _loadValueFromCalldata(data, e721_transfer_from_token_id_offset)\n            );\n\n            // Check if the selector is allowed.\n            _revertSelectorOnActiveRental(selector, from, to, tokenId);\n        } else if (selector == e721_approve_selector) {\n            // Load the token ID from calldata.\n            uint256 tokenId = uint256(\n                _loadValueFromCalldata(data, e721_approve_token_id_offset)\n            );\n\n            // Check if the selector is allowed.\n            _revertSelectorOnActiveRental(selector, from, to, tokenId);\n        } else if (selector == e1155_safe_transfer_from_selector) {\n            // Load the token ID from calldata.\n            uint256 tokenId = uint256(\n                _loadValueFromCalldata(data, e1155_safe_transfer_from_token_id_offset)\n            );\n\n            // Check if the selector is allowed.\n            _revertSelectorOnActiveRental(selector, from, to, tokenId);\n        } else if (selector == gnosis_safe_enable_module_selector) {\n            // Load the extension address from calldata.\n            address extension = address(\n                uint160(\n                    uint256(\n                        _loadValueFromCalldata(data, gnosis_safe_enable_module_offset)\n                    )\n                )\n            );\n\n            // Check if the extension is whitelisted.\n            _revertNonWhitelistedExtension(extension);\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 6
+ },
+ "ERC777": {
+  "tag": "ERC777",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__erc777__gate_2c2d03025183_r1",
+    "mode": "s2",
+    "hints": [
+     "tokensReceived",
+     "callback",
+     "hookOnStop",
+     "removeRentals",
+     "reserveDebt",
+     "settlePayment",
+     "withdrawReserves",
+     "hook",
+     "onStop"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": true,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 1
+   },
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__erc777__gate_82a1b82850c4_r1",
+    "mode": "s2",
+    "hints": [
+     "tokensReceived",
+     "_deriveRentalOrderHash",
+     "_giveToken",
+     "hookOnStop",
+     "removeRentals",
+     "settlePayment",
+     "IHook",
+     "isCommandExecuted",
+     "_reclaimRentedItems"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": true,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": true
+    },
+    "n_calls": 5
+   },
+   {
+    "repo": "fccd852beaa3",
+    "variant_id": "synth__erc777__gate_fccd852beaa3_r1",
+    "mode": "s2",
+    "hints": [
+     "tokensReceived",
+     "_giveToken",
+     "flowLimit",
+     "reserveDebt",
+     "withdrawReserves",
+     "isCommandExecuted",
+     "_setExpressExecutorWithToken",
+     "giveToken",
+     "prevBalance"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 5
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.167,
+  "routed_zero": 3,
+  "probe_hit_mean": 0.667,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Transfers tokens from the executor to the contract before calling the unprotected virtual _executeWithToken, allowing reentrancy into executeWithToken which pays out the executor again for the same commandId.):\n```solidity\nfunction expressExecuteWithToken(\n        bytes32 commandId,\n        string calldata sourceChain,\n        string calldata sourceAddress,\n        bytes calldata payload,\n        string calldata symbol,\n        uint256 amount\n    ) external payable virtual {\n        if (gateway.isCommandExecuted(commandId)) revert AlreadyExecuted();\n\n        address expressExecutor = msg.sender;\n\n        {\n            (address tokenAddress, uint256 value) = contractCallWithTokenValue(sourceChain, sourceAddress, payload, symbol, amount);\n            _transferFromExecutor(expressExecutor, tokenAddress, value);\n        }\n\n        {\n            address gatewayToken = gateway.tokenAddresses(symbol);\n            IERC20(gatewayToken).safeTransferFrom(expressExecutor, address(this), amount);\n        }\n\n        bytes32 payloadHash = keccak256(payload);\n\n        _setExpressExecutorWithToken(commandId, sourceChain, sourceAddress, payloadHash, symbol, amount, expressExecutor);\n\n        _executeWithToken(sourceChain, sourceAddress, payload, symbol, amount);\n\n        emit ExpressExecutedWithToken(commandId, sourceChain, sourceAddress, payloadHash, symbol, amount, expressExecutor);\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function calls _giveToken which may trigger an ERC777 tokensReceived callback before updating flow accounting via _addFlowIn, allowing reentrant manipulation of the returned amount.):\n```solidity\nfunction giveToken(address destinationAddress, uint256 amount) external onlyService returns (uint256) {\n        amount = _giveToken(destinationAddress, amount);\n        _addFlowIn(amount);\n        return amount;\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function measures received amount by comparing token balance before and after safeTransferFrom, but an ERC777 tokensToSend hook can reenter Operator.swap which calls TRSRY.withdrawReserves, altering the balance mid-execution and inflating the calculated received amount.):\n```solidity\nfunction repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {\n        if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();\n\n        // Deposit from caller first (to handle nonstandard token transfers)\n        uint256 prevBalance = token_.balanceOf(address(this));\n        token_.safeTransferFrom(msg.sender, address(this), amount_);\n\n        uint256 received = token_.balanceOf(address(this)) - prevBalance;\n\n        // Subtract debt from caller\n        reserveDebt[token_][msg.sender] -= received;\n        totalDebt[token_] -= received;\n\n        emit DebtRepaid(token_, msg.sender, received);\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function checks STORE.hookOnStop(target) before calling onStop, but there is no mechanism to disable hooks after rental creation, so if hookOnStop returns false for a previously enabled hook, stopRent reverts with Errors.Shared_DisabledHook, locking assets and funds.):\n```solidity\nfunction _removeHooks(\n        Hook[] calldata hooks,\n        Item[] calldata rentalItems,\n        address rentalWallet\n    ) internal {\n        // Define hook target, item index, and item.\n        address target;\n        uint256 itemIndex;\n        Item memory item;\n\n        // Loop through each hook in the payload.\n        for (uint256 i = 0; i < hooks.length; ++i) {\n            // Get the hook address.\n            target = hooks[i].target;\n\n            // Check that the hook is reNFT-approved to execute on rental stop.\n            if (!STORE.hookOnStop(target)) {\n                revert Errors.Shared_DisabledHook(target);\n            }\n\n            // Get the rental item index for this hook.\n            itemIndex = hooks[i].itemIndex;\n\n            // Get the rental item for this hook.\n            item = rentalItems[itemIndex];\n\n            // Make sure the item is a rented item.\n            if (!item.isRental()) {\n                revert Errors.Shared_NonRentalHookItem(itemIndex);\n            }\n\n            // Call the hook with data about the rented item.\n            try\n                IHook(target).onStop(\n                    rentalWallet,\n                    item.token,\n                    item.identifier,\n                    item.amount,\n                    hooks[i].extraData\n                )\n            {} catch Error(string memory revertReason) {\n                // Revert with reason given.\n                revert Errors.Shared_HookFailString(revertReason);\n            } catch Panic(uint256 errorCode) {\n                // Convert solidity panic code to string.\n                string memory stringErrorCode = LibString.toString(errorCode);\n\n                // Revert with panic code.\n                revert Errors.Shared_HookFailString(\n                    string.concat(\"Hook reverted: Panic code \", stringErrorCode)\n                );\n            } catch (bytes memory revertData) {\n                // Fallback to an error that returns the byte data.\n                revert Errors.Shared_HookFailBytes(revertData);\n            }\n        }\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Calls ESCRW.settlePayment (which transfers ERC777 tokens to lender/renter via _safeTransfer) before STORE.removeRentals, allowing a malicious renter to revert in tokensReceived() hook and permanently lock lender assets by preventing rental cleanup.):\n```solidity\nfunction stopRent(RentalOrder calldata order) external {\n        // Check that the rental can be stopped.\n        _validateRentalCanBeStoped(order.orderType, order.endTimestamp, order.lender);\n\n        // Create an accumulator which will hold all of the rental asset updates, consisting of IDs and\n        // the rented amount. From this point on, new memory cannot be safely allocated until the\n        // accumulator no longer needs to include elements.\n        bytes memory rentalAssetUpdates = new bytes(0);\n\n        // Check if each item in the order is a rental. If so, then generate the rental asset update.\n        // Memory will become safe again after this block.\n        for (uint256 i; i < order.items.length; ++i) {\n            if (order.items[i].isRental()) {\n                // Insert the rental asset update into the dynamic array.\n                _insert(\n                    rentalAssetUpdates,\n                    order.items[i].toRentalId(order.rentalWallet),\n                    order.items[i].amount\n                );\n            }\n        }\n\n        // Interaction: process hooks so they no longer exist for the renter.\n        if (order.hooks.length > 0) {\n            _removeHooks(order.hooks, order.items, order.rentalWallet);\n        }\n\n        // Interaction: Transfer rentals from the renter back to lender.\n        _reclaimRentedItems(order);\n\n        // Interaction: Transfer ERC20 payments from the escrow contract to the respective recipients.\n        ESCRW.settlePayment(order);\n\n        // Interaction: Remove rentals from storage by computing the order hash.\n        STORE.removeRentals(\n            _deriveRentalOrderHash(order),\n            _convertToStatic(rentalAssetUpdates)\n        );\n\n        // Emit rental order stopped.\n        _emitRentalOrderStopped(order.seaportOrderHash, msg.sender);\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 11
+ },
+ "Bridge": {
+  "tag": "Bridge",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "668a8ea1ed7c",
+    "variant_id": "synth__bridge__gate_668a8ea1ed7c_r1",
+    "mode": "s2b",
+    "hints": [
+     "finalizeWithdrawal",
+     "l1Token",
+     "l2Token",
+     "MerkleProof",
+     "Pausable",
+     "ReentrancyGuard",
+     "destinationChainId",
+     "messageHash"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 1
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.0,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function uses a hardcoded PREDICATE_ADDRESS constant for token approvals and deposits instead of dynamically resolving the correct predicate address based on the token type.):\n```solidity\nfunction transferERCToBridge(IERC20 token) internal {\n        //zero out approvals\n        token.forceApprove(PREDICATE_ADDRESS, 0);\n        // increase approval to necessary amount\n        token.safeIncreaseAllowance(\n            PREDICATE_ADDRESS,\n            token.balanceOf(address(this))\n        );\n        //deposit\n        POS_BRIDGE.depositFor(\n            address(this),\n            address(token),\n            abi.encodePacked(token.balanceOf(address(this)))\n        );\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 1
+ },
+ "Opensea": {
+  "tag": "Opensea",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__opensea__gate_2c2d03025183_r1",
+    "mode": "s2b",
+    "hints": [
+     "rentalWallet",
+     "ItemType",
+     "lender",
+     "consideration",
+     "rentalOrder",
+     "stopRent",
+     "zoneHash",
+     "ERC1155"
+    ],
+    "hit": false,
+    "n_pos_tasks": 0,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 1
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.0,
+  "routed_zero": 1,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function encodes contractAddress as a 20-byte EVM address type, which cannot represent non-EVM chain address formats (e.g., bech32, ed25519 pubkeys) used as sourceAddress on other chains, causing cross-chain approval lookups to fail for non-EVM sources.):\n```solidity\nfunction _getIsContractCallApprovedWithMintKey(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        address contractAddress,\n        bytes32 payloadHash,\n        string memory symbol,\n        uint256 amount\n    ) internal pure returns (bytes32) {\n        return\n            keccak256(\n                abi.encode(\n                    PREFIX_CONTRACT_CALL_APPROVED_WITH_MINT,\n                    commandId,\n                    sourceChain,\n                    sourceAddress,\n                    contractAddress,\n                    payloadHash,\n                    symbol,\n                    amount\n                )\n            );\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 1
+ },
+ "Solmate": {
+  "tag": "Solmate",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__solmate__gate_82a1b82850c4",
+    "mode": "s2b",
+    "hints": [
+     "SafeTransferLib",
+     "safeApprove",
+     "FixedPointMathLib",
+     "createVault",
+     "ERC20"
+    ],
+    "hit": true,
+    "n_pos_tasks": 14,
+    "n_pos_findings": 7,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 17
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 17
+ },
+ "TWAP": {
+  "tag": "TWAP",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__twap__gate_82a1b82850c4",
+    "mode": "s2b",
+    "hints": [
+     "observe",
+     "consult",
+     "twap",
+     "observations",
+     "tickCumulative",
+     "FixedPoint96",
+     "FullMath",
+     "IUniswapV3Pool"
+    ],
+    "hit": true,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 2,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 2
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 2
+ },
+ "Zksync": {
+  "tag": "Zksync",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "bb9c2df58c59",
+    "variant_id": "synth__zksync__gate_bb9c2df58c59_r1",
+    "mode": "s2b",
+    "hints": [
+     "l2TransactionBaseCost",
+     "requestL2Transaction",
+     "ActionExecuted",
+     "ActionInfo",
+     "ReentrancyGuard",
+     "Slot0Changed",
+     "_readSlot0",
+     "delegatecall"
+    ],
+    "hit": false,
+    "n_pos_tasks": 5,
+    "n_pos_findings": 0,
+    "probe_hit": false,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": false
+    },
+    "n_calls": 17
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.5,
+  "routed_zero": 0,
+  "probe_hit_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function computes priority transaction expiration as block.number + PRIORITY_EXPIRATION, where PRIORITY_EXPIRATION is derived from a BLOCK_PERIOD of 13 seconds instead of Ethereum's 12-second PoS block time, causing expiration to occur ~5.5 hours earlier than intended.):\n```solidity\nfunction _requestL2Transaction(\n        address _sender,\n        address _contractL2,\n        uint256 _l2Value,\n        bytes calldata _calldata,\n        uint256 _ergsLimit,\n        bytes[] calldata _factoryDeps\n    ) internal returns (bytes32 canonicalTxHash) {\n        require(_ergsLimit <= PRIORITY_TX_MAX_ERGS_LIMIT, \"ui\");\n        uint64 expirationBlock = uint64(block.number + PRIORITY_EXPIRATION);\n        uint256 txId = s.priorityQueue.getTotalPriorityTxs();\n        // TODO: Restore after stable priority op fee modeling. (SMA-1230)\n        // uint256 baseCost = l2TransactionBaseCost(tx.gasprice, _ergsLimit, uint32(_calldata.length));\n        // uint256 layer2Tip = msg.value - baseCost;\n\n        canonicalTxHash = _writePriorityOp(\n            _sender,\n            txId,\n            _l2Value,\n            _contractL2,\n            _calldata,\n            expirationBlock,\n            _ergsLimit,\n            _factoryDeps\n        );\n    }\n```\nRevise the checks so this is caught.",
+   "FALSE POSITIVE. Your detector wrongly flagged this function (its claim: The payable executeAction function performs an external call via executor.execute without a reentrancy guard. On ZKsync, the 2300 gas stipend is not enforced, so a malicious target contract can re-ent):\n```solidity\nfunction executeAction(ActionInfo calldata actionInfo) external payable {\n    // Initial checks that action is ready to execute.\n    Action storage action = actions[actionInfo.id];\n    ActionState currentState = getActionState(actionInfo);\n\n    if (currentState != ActionState.Queued) revert InvalidActionState(currentState);\n    if (block.timestamp < action.minExecutionTime) revert MinExecutionTimeNotReached();\n    if (msg.value != actionInfo.value) revert IncorrectMsgValue();\n\n    action.executed = true;\n\n    // Check pre-execution action guard.\n    ILlamaActionGuard guard = actionGuard[actionInfo.target][bytes4(actionInfo.data)];\n    if (guard != ILlamaActionGuard(address(0))) guard.validatePreActionExecution(actionInfo);\n\n    // Execute action.\n    (bool success, bytes memory result) =\n      executor.execute(actionInfo.target, actionInfo.value, action.isScript, actionInfo.data);\n\n    if (!success) revert FailedActionExecution(result);\n\n    // Check post-execution action guard.\n    if (guard != ILlamaActionGuard(address(0))) guard.validatePostActionExecution(actionInfo);\n\n    // Action successfully executed.\n    emit ActionExecuted(actionInfo.id, msg.sender, actionInfo.strategy, actionInfo.creator, result);\n  }\n```\nTighten the checks so safe code like this is not reported.",
+   "FALSE POSITIVE. Your detector wrongly flagged this function (its claim: The execute function is payable and forwards msg.value via a low-level call without a reentrancy guard. On ZKsync, the 2300 gas stipend is not enforced, so a malicious target can re-enter the account ):\n```solidity\nfunction execute(address target, bool withDelegatecall, bytes calldata callData)\n    external\n    payable\n    onlyLlama\n    returns (bytes memory)\n  {\n    bool success;\n    bytes memory result;\n\n    if (withDelegatecall) {\n      // Whenever we're executing arbitrary code in the context of this account, we want to ensure\n      // that none of the storage in this contract changes, as this could let someone who sneaks in\n      // a malicious (or buggy) target to take ownership of this contract. Slot 0 contains all\n      // relevant storage variables for security, so we check the value before and after execution\n      // to make sure it's unchanged. The contract name starts in slot 1, but it's not as important\n      // if that's changed (and it can be changed back), so to save gas we don't check the name.\n      // The storage layout of this contract is below:\n      //\n      // | Variable Name | Type    | Slot | Offset | Bytes |\n      // |---------------|---------|------|--------|-------|\n      // | _initialized  | uint8   | 0    | 0      | 1     |\n      // | _initializing | bool    | 0    | 1      | 1     |\n      // | llamaExecutor | address | 0    | 2      | 20    |\n      // | name          | string  | 1    | 0      | 32    |\n\n      bytes32 originalStorage = _readSlot0();\n      (success, result) = target.delegatecall(callData);\n      if (originalStorage != _readSlot0()) revert Slot0Changed();\n    } else {\n      (success, result) = target.call{value: msg.value}(callData);\n    }\n\n    if (!success) revert FailedExecution(result);\n    return result;\n  }\n```\nTighten the checks so safe code like this is not reported."
+  ],
+  "n_calls": 17
+ },
+ "Compound": {
+  "tag": "Compound",
+  "folds": [],
+  "hit_mean": null,
+  "fp_mean": null,
+  "passed": null,
+  "repaired": false,
+  "required_hints": [],
+  "reason": "no positive TRAIN-SYN repos; cannot gate"
+ },
+ "EIP4494": {
+  "tag": "EIP4494",
+  "folds": [],
+  "hit_mean": null,
+  "fp_mean": null,
+  "passed": null,
+  "repaired": false,
+  "required_hints": [],
+  "reason": "no positive TRAIN-SYN repos; cannot gate"
+ },
+ "Gnosis safe": {
+  "tag": "Gnosis safe",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "fccd852beaa3",
+    "variant_id": "synth__gnosis_safe__gate_fccd852beaa3",
+    "mode": "s2b",
+    "hints": [
+     "checkSignatures",
+     "getOwners",
+     "isOwner",
+     "IModule",
+     "checkTransaction",
+     "enableModule",
+     "execTransactionFromModule",
+     "setGuard"
+    ],
+    "hit": true,
+    "n_pos_tasks": 4,
+    "n_pos_findings": 2,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 6
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 0.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": true,
+  "repaired": false,
+  "required_hints": [],
+  "feedback": [],
+  "n_calls": 6
+ },
+ "Re-org Attack": {
+  "tag": "Re-org Attack",
+  "loro": false,
+  "folds": [
+   {
+    "repo": "22ad8fd6e044",
+    "variant_id": "synth__re_org_attack__gate_22ad8fd6e044_r1",
+    "mode": "s2b",
+    "hints": [
+     "blockhash",
+     "block.number",
+     "auction",
+     "block.basefee",
+     "block.coinbase",
+     "block.difficulty",
+     "deadline",
+     "execute"
+    ],
+    "hit": true,
+    "n_pos_tasks": 2,
+    "n_pos_findings": 1,
+    "probe_hit": null,
+    "neg": {
+     "1150ac69e096": true,
+     "19000d572f72": true
+    },
+    "n_calls": 12
+   }
+  ],
+  "hit_mean": 1.0,
+  "fp_mean": 1.0,
+  "routed_zero": 0,
+  "probe_hit_mean": null,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function retrieves publications using a sequential pubId index that can shift during a blockchain re-org, causing the same ID to reference a different publication after chain reorganization.):\n```solidity\nfunction getPublication(uint256 profileId, uint256 pubId)\n        external\n        view\n        override\n        returns (Types.Publication memory)\n    {\n        return _publications[profileId][pubId];\n    }\n```\nRevise the checks so this is caught."
+  ],
+  "n_calls": 12
+ },
+ "Solidity Version": {
+  "tag": "Solidity Version",
+  "folds": [],
+  "hit_mean": null,
+  "fp_mean": null,
+  "passed": null,
+  "repaired": false,
+  "required_hints": [],
+  "reason": "no positive TRAIN-SYN repos; cannot gate"
+ }
+}

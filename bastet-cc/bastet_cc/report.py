@@ -527,12 +527,15 @@ def fig_balance_sensitivity(points, *, sampler_pos_share: float = 0.5,
         ax.plot([share], [f1], marker="o", ms=MARKER_PT + (3 if at_sampler else 0),
                 color=col, markeredgecolor=c["surface"],
                 markeredgewidth=SURFACE_GAP_PT, zorder=6)
-        # Labels hang below-right of their dot, except left of the sampler rule, which
-        # would otherwise be overprinted by the rule and its callout.
-        left = share < sampler_pos_share
+        # The curve is concave, so its whole left arm has empty space above it and none
+        # below: labels for points left of the sampler go up-left, the rest down-right.
+        # ...except a point too close to the y-axis, whose right-aligned label would
+        # run off the plot and collide with the axis ticks.
+        left = sampler_pos_share > share >= 0.15
         ax.annotate(f"{pos}/{neg} → {f1:.3f}", xy=(share, f1),
-                    xytext=(-11, -17) if left else (11, -17),
+                    xytext=(-12, 14) if left else (11, 24 if share < 0.15 else -17),
                     ha="right" if left else "left",
+                    va="top" if share >= sampler_pos_share else "bottom",
                     textcoords="offset points", fontsize=10.5,
                     fontweight="600" if at_sampler else "normal",
                     color=c["primary"] if at_sampler else c["secondary"])
@@ -661,7 +664,7 @@ def fig_cost_ladder(stages, *, latency_s: float, concurrency: int,
         # Stage 1 reads at the top, so row i plots stage -(i+1); the tick labels are
         # reversed with it. (Plotting reversed values against forward labels silently
         # mislabels every rung, which is exactly the bug this ordering removes.)
-        ax.set_ylim(-0.55, len(vals) - 0.05)
+        ax.set_ylim(-0.55, len(vals) - 0.62)
         ax.set_yticks(range(len(vals)))
         ax.set_yticklabels(list(reversed(labels)) if ax is axes[0] else [""] * len(vals),
                            fontsize=10.5, color=c["secondary"])
@@ -699,7 +702,7 @@ def fig_cost_ladder(stages, *, latency_s: float, concurrency: int,
               "Stage 1 is the project's published upstream baseline; stages 2–3 are "
               "measured with routing.broadcast_cost / routing.cost at 4 chars per "
               "token.", y=0.002)
-    fig.subplots_adjust(top=0.80, left=0.20, right=0.975, bottom=0.235, wspace=0.10)
+    fig.subplots_adjust(top=0.855, left=0.20, right=0.975, bottom=0.235, wspace=0.10)
     return save(fig, "fig6_cost_ladder", outdir, mode)
 
 

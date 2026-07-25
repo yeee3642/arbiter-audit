@@ -20,7 +20,7 @@ common words fall back to broadcast rather than silently going dark.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # A hint occurring in more than this share of functions says nothing about which
@@ -42,6 +42,21 @@ class Detector:
     prompt_chars: int
     signature: set[str] | None = None      # discriminating hints, set by fit()
     broadcast: bool = False                # too generic to route
+
+    # Synthesised detectors carry three extra fields; the 56 extracted from upstream
+    # do not, so all three default and `Detector(**row)` keeps working for both.
+    #
+    # required_hints is an AND gate applied before routing's OR: a detector for a
+    # standard nobody implements here (ERC777, Gnosis Safe) matches stray identifiers
+    # in almost any file, and firing it everywhere would spend the routing saving on
+    # noise. routing_hints say "this function might be relevant"; required_hints say
+    # "this file is not even the right kind of contract".
+    required_hints: list[str] = field(default_factory=list)
+
+    # Induced from a single repository, or failed leave-one-repo-out. Kept rather than
+    # dropped so the coverage claim stays honest, but its findings need corroboration.
+    gated: bool = False
+    synthesized: bool = False
 
 
 @dataclass

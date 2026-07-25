@@ -1,8 +1,11 @@
-# Corpus. 6.8 GB of Code4rena repositories and their archives -- fetched, not authored.
-# Provenance and checksums live in data/splits.json; see README for the download URLs.
+# Corpus and labels -- fetched, not authored. The Kaggle competition ran 1 Apr - 1 Jul
+# 2026 and its terms for redistributing the labelled findings are not stated anywhere
+# we could find, so the CSVs stay local and README documents how to fetch them.
+# data/splits.json is ours and is tracked: it holds only repository hashes, no labels,
+# and reproducing any measurement requires the exact partition.
 data/*.zip
+data/*.csv
 data/ex/
-data/dataset.csv
 
 # Upstream Bastet is cloned, not vendored. Our additions to it are mirrored into
 # bastet-cc/scripts/ so they are versioned without carrying someone else's tree.

@@ -218,7 +218,6 @@ def _localization_rate(records: list[dict], tag: str) -> float:
 
 def stage_report(args) -> None:
     import pandas as pd
-    from bastet_cc.tags import explode_labels
 
     splits = load_splits()
     records = load_s1()
@@ -227,18 +226,31 @@ def stage_report(args) -> None:
     synth_index = json.loads((DETECTORS_SYNTH_DIR / "index.json").read_text())
     synth_covered = {t for d in synth_index for t in d["tags"]}
 
-    full = explode_labels(pd.read_csv(DATA_DIR / "train.csv"))
-    pos = full.drop_duplicates(["repo_path", "canonical_tag"])
-    before = pos["canonical_tag"].isin(covered).sum()
-    after = pos["canonical_tag"].isin(covered | synth_covered).sum()
-    print(f"(repo,tag) positives: {len(pos)}  before {before} ({before/len(pos):.1%})"
-          f"  after {after} ({after/len(pos):.1%})")
-    f_before = full["canonical_tag"].isin(covered).sum()
-    f_after = full["canonical_tag"].isin(covered | synth_covered).sum()
-    print(f"(finding,tag) pairs: {len(full)}  before {f_before} "
-          f"({f_before/len(full):.1%})  after {f_after} ({f_after/len(full):.1%})")
+    # Corpus-wide reach comes from splits.json's frozen per_tag_counts, not from
+    # re-reading rows: the counts are split metadata, and this keeps the report
+    # runnable without ever opening a label file.
+    counts = splits["per_tag_counts"]
+    total = sum(sum(v.values()) for v in counts.values())
+    reach = lambda tags: sum(sum(v.values()) for t, v in counts.items() if t in tags)
+    before, after = reach(covered), reach(covered | synth_covered)
+    print(f"(finding,tag) pairs in corpus: {total}  "
+          f"reachable before {before} ({before/total:.1%})  "
+          f"after {after} ({after/total:.1%})")
     print(f"tags with a detector: {len(covered)} -> {len(covered | synth_covered)} "
-          f"of {full['canonical_tag'].nunique()} corpus tags")
+          f"of {len(counts)} corpus tags")
+    syn_total = sum(v.get("train_syn", 0) for v in counts.values())
+    syn_before = sum(v.get("train_syn", 0) for t, v in counts.items() if t in covered)
+    syn_after = sum(v.get("train_syn", 0) for t, v in counts.items()
+                    if t in covered | synth_covered)
+    print(f"TRAIN-SYN only: {syn_total} pairs, before {syn_before} "
+          f"({syn_before/syn_total:.1%}), after {syn_after} ({syn_after/syn_total:.1%})")
+
+    s1_repo_tags = {(r["repo"], t) for r in records for t in r["tags"]}
+    rb = sum(1 for _, t in s1_repo_tags if t in covered)
+    ra = sum(1 for _, t in s1_repo_tags if t in covered | synth_covered)
+    print(f"TRAIN-SYN (repo,tag) positives: {len(s1_repo_tags)}  "
+          f"before {rb} ({rb/len(s1_repo_tags):.1%})  "
+          f"after {ra} ({ra/len(s1_repo_tags):.1%})")
 
     hints = json.loads(S3_PATH.read_text())
     gates = json.loads(S4_PATH.read_text()) if S4_PATH.exists() else {}
@@ -254,11 +266,16 @@ def stage_report(args) -> None:
             "mode": s2.get("mode"),
             "cand": h.get("n_candidates"),
             "kept": len(h.get("kept", [])),
-            "rejected": len(h.get("rejected", {})),
+            "class": len(h.get("class_hints", [])),
+            "cut": len(h.get("rejected", {})),
+            "back": len(h.get("backfilled", [])),
             "cov": h.get("coverage"),
+            "folds": len(g.get("folds", [])),
             "hit": g.get("hit_mean"),
             "fp": g.get("fp_mean"),
+            "rz": g.get("routed_zero"),
             "passed": g.get("passed"),
+            "gated": next((d["gated"] for d in synth_index if t in d["tags"]), None),
         })
     print(pd.DataFrame(rows).to_string(index=False))
 

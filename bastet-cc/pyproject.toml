@@ -1,0 +1,30 @@
+[project]
+name = "bastet-cc"
+version = "0.1.0"
+description = "Routed smart-contract vulnerability detection, and an audit of the benchmark it is scored on"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "AIS3 2026 Team 011" }]
+
+dependencies = [
+    "httpx>=0.27",
+    "matplotlib>=3.8",
+    "pandas>=2.2",
+    "pydantic>=2.7",
+    "scikit-learn>=1.5",
+    "tiktoken>=0.7",
+    "tree-sitter>=0.23",
+    "tree-sitter-solidity>=1.2",
+    "typer>=0.12",
+]
+
+[project.scripts]
+bastet-cc = "bastet_cc.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bastet_cc"]
