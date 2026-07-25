@@ -1,0 +1,67 @@
+{
+ "tag": "Pause",
+ "mode": "s2",
+ "detector": {
+  "name": "Pause",
+  "vulnerability_knowledge": "Pause mechanisms (Pausable, whenPaused/whenNotPaused modifiers) are critical safety controls that halt contract operations during emergencies. Flaws arise when: (1) pause checks are missing on state-changing functions, allowing operations like token transfers, minting, or admin actions to proceed while paused; (2) pause/unpause logic uses incorrect state conditions (e.g., checking `tokenId == 0` to detect first auction) causing re-initialization or orphaned assets; (3) external calls in try/catch blocks catch Out-of-Gas errors via EIP-150 63/64 rule, letting attackers force a pause by starving gas; (4) ownership or vault deactivation checks revert or return stale data during paused states, blocking fund recovery; (5) unpause transitions lack validation, enabling unauthorized role escalation or state corruption. Auditors must verify every external entry point respects pause state, pause triggers are not attacker-controllable via gas manipulation, and pause/unpause transitions preserve invariants.",
+  "checks": [
+   "Verify every public/external state-changing function has `whenNotPaused` (or `whenPaused` for pause-only actions) unless intentionally excluded with a documented reason.",
+   "Check that `pause()`/`unpause()` are protected by correct access control (e.g., `onlyOwner`, `onlyRole`) and not callable via delegatecall or fallback.",
+   "Ensure try/catch blocks around external calls (e.g., `token.mint()`) do not catch generic `Error` or `Panic` that could mask Out-of-Gas; restrict to specific revert reasons or use `revert`/`require` instead.",
+   "Validate pause/unpause state transitions: `unpause()` must not re-initialize state based on fragile conditions like `tokenId == 0`; use a dedicated `initialized` boolean or version counter.",
+   "Confirm that vault/delegate ownership checks (e.g., `vaults[owner]`, `IVault(owner).ownerOf()`) do not revert or return incorrect addresses when the system is paused or vaults are deactivated.",
+   "Check that `removeFollower`, `transfer`, `mint`, `burn`, and similar user-facing functions include `whenNotPaused` if they modify state.",
+   "Ensure events like `Paused`/`Unpaused` are emitted with correct `account` parameter for off-chain monitoring.",
+   "Verify no function allows circumvention of pause via internal calls that bypass modifiers (e.g., internal `_transfer` called from unpaused function but missing pause check)."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/access/Ownable.sol\";\n\ncontract FlawedAuction is Pausable, Ownable {\n    struct Auction { uint256 tokenId; bool settled; }\n    Auction public auction;\n    IERC721 public token;\n\n    function _createAuction() private {\n        try token.mint() returns (uint256 tokenId) {\n            auction.tokenId = tokenId;\n            auction.settled = false;\n        } catch Error(string memory) {\n            _pause(); // catches OOG via 63/64 rule\n        }\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (auction.tokenId == 0) { // tokenId 0 can be valid\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function removeFollower(uint256 followTokenId) external {\n        // missing whenNotPaused\n        _unfollowIfHasFollower(followTokenId);\n    }\n\n    function _unfollowIfHasFollower(uint256) internal {}\n}",
+   "explanation": "The contract catches all errors in try/catch (including Out-of-Gas), uses `tokenId == 0` as initialization flag (tokenId 0 is valid), and omits `whenNotPaused` on `removeFollower`, allowing state changes while paused."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/access/Ownable.sol\";\n\ncontract FixedAuction is Pausable, Ownable {\n    struct Auction { uint256 tokenId; bool settled; }\n    Auction public auction;\n    IERC721 public token;\n    bool public initialized;\n\n    function _createAuction() private {\n        (bool success, bytes memory data) = address(token).call(abi.encodeWithSignature(\"mint()\"));\n        if (!success) {\n            _pause(); // explicit revert check, no catch-all\n        }\n        // decode tokenId from data\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (!initialized) {\n            initialized = true;\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function removeFollower(uint256 followTokenId) external whenNotPaused {\n        _unfollowIfHasFollower(followTokenId);\n    }\n\n    function _unfollowIfHasFollower(uint256) internal {}\n}",
+   "explanation": "Replaces try/catch with low-level call to avoid 63/64 gas trap, uses `initialized` flag instead of `tokenId == 0`, and adds `whenNotPaused` to `removeFollower`."
+  },
+  "routing_hint_candidates": [
+   "_pause",
+   "_unpause",
+   "whenNotPaused",
+   "whenPaused",
+   "Pausable",
+   "paused",
+   "unpause",
+   "pause",
+   "tokenId",
+   "settled",
+   "initialized",
+   "onlyOwner",
+   "removeFollower",
+   "_unfollowIfHasFollower",
+   "ownerOf",
+   "vaults",
+   "IVault",
+   "nonfungiblePositionManager",
+   "positionBalances",
+   "_withdrawBalanceInternal",
+   "withdrawLeftoverBalances",
+   "transferOwnership",
+   "settings",
+   "treasury",
+   "auction",
+   "startTime",
+   "endTime",
+   "highestBid",
+   "highestBidder",
+   "AuctionCreated"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "221",
+  "208",
+  "350",
+  "301"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

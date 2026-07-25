@@ -1,0 +1,68 @@
+{
+ "tag": "ERC1155",
+ "mode": "s2",
+ "detector": {
+  "name": "ERC1155-Standard Compliance and Callback Safety",
+  "vulnerability_knowledge": "ERC1155 contracts must strictly follow the EIP-1155 specification for token transfers, enumeration, and callback handling. The standard requires that `safeTransferFrom` and `safeBatchTransferFrom` invoke `onERC1155Received`/`onERC1155BatchReceived` on the recipient contract after state updates, and that the caller respects the return value to prevent tokens from being locked. Enumeration extensions (`_allTokens`, `_idTotalSupply`) must be kept consistent: a token ID is added to `_allTokens` only when its total supply transitions from 0 to >0, and removed only when it transitions from >0 to 0. Burning and minting logic must evaluate supply conditions against the post-operation state, not the pre-operation state. Reentrancy is a critical risk because `onERC1155Received` gives the recipient control flow before the caller finishes; all internal state changes (balances, allowances, rental records, order status) must be applied before any external call. Calldata decoding for ERC1155 selectors must use correct offsets for `id`, `amount`, and `data` parameters; misaligned offsets cause wrong token IDs or amounts to be validated. Business logic such as rental reclamation or order removal must verify completion conditions (e.g., all rented amounts returned) before mutating storage.",
+  "checks": [
+   "Verify that `safeTransferFrom`/`safeBatchTransferFrom` update balances and allowances before invoking `onERC1155Received`/`onERC1155BatchReceived` on the recipient (Checks-Effects-Interactions).",
+   "Confirm that `_addTokenEnumeration` adds a token ID to `_allTokens` only when `_idTotalSupply[id]` becomes >0 after the mint (post-increment check), not before.",
+   "Confirm that `_removeTokenEnumeration` removes a token ID from `_allTokens` only when `_idTotalSupply[id]` becomes 0 after the burn (post-decrement check), not before.",
+   "Ensure `removeRentals` or similar order-deletion functions verify that all `rentedAssets[rentalId]` amounts are zero before deleting the order from storage.",
+   "Check that calldata decoding for `e1155_safe_transfer_from_selector` uses the correct offset for the `id` parameter (typically 0x64 for `safeTransferFrom(address,address,uint256,uint256,bytes)`), not an ERC721 offset.",
+   "Validate that `reclaimRentalOrder` or similar functions update rental state (e.g., mark items as reclaimed, zero out rented amounts) before calling `_transferERC1155` which triggers `onERC1155Received`.",
+   "Ensure `_checkTransaction` or similar policy functions revert on `setApprovalForAll` selector (0xa22cb465) for both ERC721 and ERC1155, as the selector is shared and can be used to bypass rental guards.",
+   "Verify that `_idTotalSupply` updates are not vulnerable to integer overflow/underflow (use Solidity >=0.8.0 or SafeMath) and that enumeration arrays (`_allTokens`, `_ownedTokens`) have no duplicate entries by checking existence before insertion."
+  ],
+  "incorrect_example": {
+   "code": "function _removeTokenEnumeration(address from, address to, uint256 id, uint256 amount) internal {\n    if (to == address(0)) {\n        // BUG: checks pre-burn supply, so last burn never triggers removal\n        if (_idTotalSupply[id] == 0) _removeTokenFromAllTokensEnumeration(id);\n        _idTotalSupply[id] -= amount;\n    }\n}\n\nfunction reclaimRentalOrder(RentalOrder calldata rentalOrder) external {\n    for (uint256 i = 0; i < rentalOrder.items.length; ++i) {\n        Item memory item = rentalOrder.items[i];\n        if (item.itemType == ItemType.ERC1155) {\n            // BUG: external call before state update -> reentrancy\n            _transferERC1155(item, rentalOrder.lender);\n            // state update missing here\n        }\n    }\n}",
+   "explanation": "The burn enumeration checks supply before decrement, so the final burn never removes the token ID from _allTokens. The rental reclamation transfers tokens via safeTransferFrom before updating internal rental state, allowing reentrancy through onERC1155Received."
+  },
+  "correct_example": {
+   "code": "function _removeTokenEnumeration(address from, address to, uint256 id, uint256 amount) internal {\n    if (to == address(0)) {\n        _idTotalSupply[id] -= amount;\n        // FIX: check post-burn supply\n        if (_idTotalSupply[id] == 0) _removeTokenFromAllTokensEnumeration(id);\n    }\n}\n\nfunction reclaimRentalOrder(RentalOrder calldata rentalOrder) external {\n    for (uint256 i = 0; i < rentalOrder.items.length; ++i) {\n        Item memory item = rentalOrder.items[i];\n        if (item.itemType == ItemType.ERC1155) {\n            // FIX: update state first (CEI)\n            rentedAssets[item.rentalId] = 0;\n            delete rentalOrder.items[i];\n            _transferERC1155(item, rentalOrder.lender);\n        }\n    }\n}",
+   "explanation": "The burn enumeration now decrements supply before checking for zero, correctly removing the token ID when supply hits zero. The rental reclamation clears rented amounts and deletes the item before the external transfer, preventing reentrancy."
+  },
+  "routing_hint_candidates": [
+   "_addTokenEnumeration",
+   "_removeTokenEnumeration",
+   "_addTokenToAllTokensEnumeration",
+   "_removeTokenFromAllTokensEnumeration",
+   "_idTotalSupply",
+   "_allTokens",
+   "_ownedTokens",
+   "onERC1155Received",
+   "onERC1155BatchReceived",
+   "safeTransferFrom",
+   "safeBatchTransferFrom",
+   "e1155_safe_transfer_from_selector",
+   "e1155_safe_batch_transfer_from_selector",
+   "shared_set_approval_for_all_selector",
+   "rentedAssets",
+   "rentalId",
+   "removeRentals",
+   "reclaimRentalOrder",
+   "_transferERC1155",
+   "ItemType",
+   "ERC1155",
+   "_checkTransaction",
+   "_loadValueFromCalldata",
+   "gnosis_safe_disable_module_offset",
+   "_additionalConditionAddTokenToAllTokensEnumeration",
+   "_additionalConditionRemoveTokenFromAllTokensEnumeration",
+   "balanceOf",
+   "RentalAssetUpdate",
+   "RentalOrder"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "468",
+  "471",
+  "247",
+  "250",
+  "466",
+  "249"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

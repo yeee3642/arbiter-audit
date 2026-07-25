@@ -1,0 +1,69 @@
+{
+ "tag": "Liquidation",
+ "mode": "s2",
+ "detector": {
+  "name": "Liquidation",
+  "vulnerability_knowledge": "Liquidation logic in lending and collateral contracts must correctly identify undercollateralized positions, compute the exact collateral share to seize, transfer only the authorized assets, and update all related accounting state atomically. Common flaws include iterating over an incomplete set of collateral vaults (e.g., skipping kerosene or secondary vault arrays), allowing the position owner to call liquidate on themselves to bypass same-block deposit restrictions, burning the full debt instead of a caller-specified partial amount, forgetting to replenish protocol-wide limits such as dailyDebtIncreaseLimitLeft after debt reduction, sending leftover tokens or rewards to msg.sender instead of the recipient parameter, and accepting permit signatures without verifying the permitted token matches the vault's asset. Each of these breaks an invariant: collateral coverage, access control, partial-liquidation support, accounting consistency, recipient correctness, or asset authorization.",
+  "checks": [
+   "Verify that every collateral-holding vault array (e.g., vaults and vaultsKerosene) is iterated when computing and transferring liquidationAssetShare.",
+   "Ensure liquidate() reverts when msg.sender == position owner (or tokenOwner[id]) to prevent self-liquidation bypasses.",
+   "Confirm the function accepts an explicit repayment amount parameter and burns only that amount instead of the full minted debt.",
+   "Check that after debtSharesTotal is decreased, any protocol-wide capacity trackers (e.g., dailyDebtIncreaseLimitLeft) are increased by the repaid asset amount.",
+   "Validate that permit2.permitTransferFrom (or equivalent) is called only after confirming permit.details.token == address(asset) or the vault's underlying token.",
+   "Confirm all leftover token transfers in flash-callback paths use the recipient field from the original params struct, not msg.sender or data.liquidator.",
+   "Ensure liquidation reward / incentive calculations use the correct collateral ratio capping (e.g., max(cr, 1e18)) and that liquidationAssetShare formula matches the whitepaper.",
+   "Verify that the function emits a Liquidate event with all relevant amounts (liquidatorCost, reserveCost, amounts received) for off-chain monitoring."
+  ],
+  "incorrect_example": {
+   "code": "function liquidate(uint id, uint to) external isValidDNft(id) isValidDNft(to) {\n    uint cr = collatRatio(id);\n    if (cr >= MIN_COLLATERIZATION_RATIO) revert CrTooHigh();\n    dyad.burn(id, msg.sender, dyad.mintedDyad(address(this), id));\n\n    uint cappedCr = cr < 1e18 ? 1e18 : cr;\n    uint liquidationEquityShare = (cappedCr - 1e18).mulWadDown(LIQUIDATION_REWARD);\n    uint liquidationAssetShare = (liquidationEquityShare + 1e18).divWadDown(cappedCr);\n\n    uint numberOfVaults = vaults[id].length();\n    for (uint i = 0; i < numberOfVaults; i++) {\n        Vault vault = Vault(vaults[id].at(i));\n        uint collateral = vault.id2asset(id).mulWadUp(liquidationAssetShare);\n        vault.move(id, to, collateral);\n    }\n    emit Liquidate(id, msg.sender, to);\n}",
+   "explanation": "The function iterates only over vaults[id], skipping vaultsKerosene[id], allows self-liquidation, burns the entire debt, and does not update dailyDebtIncreaseLimitLeft."
+  },
+  "correct_example": {
+   "code": "function liquidate(uint id, uint to, uint repayAmount, address recipient) external isValidDNft(id) isValidDNft(to) {\n    if (msg.sender == tokenOwner[id]) revert SelfLiquidation();\n    uint cr = collatRatio(id);\n    if (cr >= MIN_COLLATERIZATION_RATIO) revert CrTooHigh();\n    dyad.burn(id, msg.sender, repayAmount);\n\n    uint cappedCr = cr < 1e18 ? 1e18 : cr;\n    uint liquidationEquityShare = (cappedCr - 1e18).mulWadDown(LIQUIDATION_REWARD);\n    uint liquidationAssetShare = (liquidationEquityShare + 1e18).divWadDown(cappedCr);\n\n    uint totalCollateral = 0;\n    for (uint i = 0; i < vaults[id].length(); i++) {\n        Vault vault = Vault(vaults[id].at(i));\n        totalCollateral += vault.id2asset(id);\n    }\n    for (uint i = 0; i < vaultsKerosene[id].length(); i++) {\n        Vault vault = Vault(vaultsKerosene[id].at(i));\n        totalCollateral += vault.id2asset(id);\n    }\n    for (uint i = 0; i < vaults[id].length(); i++) {\n        Vault vault = Vault(vaults[id].at(i));\n        uint collateral = vault.id2asset(id).mulWadUp(liquidationAssetShare);\n        vault.move(id, to, collateral);\n    }\n    for (uint i = 0; i < vaultsKerosene[id].length(); i++) {\n        Vault vault = Vault(vaultsKerosene[id].at(i));\n        uint collateral = vault.id2asset(id).mulWadUp(liquidationAssetShare);\n        vault.move(id, to, collateral);\n    }\n    dailyDebtIncreaseLimitLeft += repayAmount;\n    emit Liquidate(id, msg.sender, to, recipient, repayAmount);\n}",
+   "explanation": "Iterates both vault arrays, blocks self-liquidation, accepts partial repayAmount, replenishes dailyDebtIncreaseLimitLeft, and uses explicit recipient."
+  },
+  "routing_hint_candidates": [
+   "vaults",
+   "vaultsKerosene",
+   "collatRatio",
+   "MIN_COLLATERIZATION_RATIO",
+   "dyad.mintedDyad",
+   "dyad.burn",
+   "LIQUIDATION_REWARD",
+   "liquidationAssetShare",
+   "vault.move",
+   "id2asset",
+   "tokenOwner",
+   "dailyDebtIncreaseLimitLeft",
+   "debtSharesTotal",
+   "permit2.permitTransferFrom",
+   "ISignatureTransfer.PermitTransferFrom",
+   "permit.details.token",
+   "asset",
+   "uniswapV3FlashCallback",
+   "FlashCallbackData",
+   "data.recipient",
+   "data.liquidator",
+   "_sendPositionValue",
+   "_cleanupLoan",
+   "transformedTokenId",
+   "TransformNotAllowed",
+   "_updateGlobalInterest",
+   "_checkLoanIsHealthy",
+   "_calculateLiquidation",
+   "_handleReserveLiquidation",
+   "LiquidateParams"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "372",
+  "375",
+  "367",
+  "362",
+  "349",
+  "335"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

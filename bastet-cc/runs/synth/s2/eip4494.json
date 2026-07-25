@@ -1,0 +1,60 @@
+{
+ "tag": "EIP4494",
+ "mode": "s2b",
+ "detector": {
+  "name": "EIP4494-Permit-Not-Compliant",
+  "vulnerability_knowledge": "EIP-4494 standardizes the `permit` function for ERC-20 tokens, enabling gasless approvals via EIP-712 signatures. A compliant implementation must: (1) use the exact function signature `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`; (2) construct the EIP-712 domain separator with the correct `name`, `version`, `chainId`, and `verifyingContract` fields; (3) hash the `Permit` struct using the exact type string `Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)`; (4) enforce strictly increasing nonces per owner to prevent replay attacks; (5) validate that `deadline >= block.timestamp`; (6) emit an `Approval(owner, spender, value)` event on success; and (7) revert with a clear error if the signature is invalid, the nonce is stale, or the deadline has passed. Deviations such as custom struct names, missing domain fields, accepting expired deadlines, or failing to increment nonces break composability with wallets and relayers and can lead to signature replay or fund loss.",
+  "checks": [
+   "Function signature matches exactly `permit(address,address,uint256,uint256,uint8,bytes32,bytes32)` with external visibility.",
+   "Domain separator built via `EIP712Domain({name, version, chainId, verifyingContract})` using the token's own `name()`, `version` (usually \"1\"), `block.chainid`, and `address(this)`.",
+   "Struct hash uses keccak256 of `Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)` \u2014 no extra or renamed fields.",
+   "Nonce retrieved from a mapping `nonces[owner]`, compared against the signed nonce, and incremented exactly once on success.",
+   "Deadline checked with `require(deadline >= block.timestamp, \"expired\")` (or equivalent custom error).",
+   "Signature recovered via `ecrecover` using the domain separator and struct hash; revert on mismatch or zero address recovery.",
+   "Emits `Approval(owner, spender, value)` after successful permit.",
+   "Reverts if `spender` is `address(0)` or `value` exceeds `type(uint256).max` (optional but recommended)."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/token/ERC20/ERC20.sol\";\nimport \"@openzeppelin/contracts/utils/cryptography/ECDSA.sol\";\n\ncontract BadPermitToken is ERC20 {\n    mapping(address => uint256) private _nonces;\n    \n    constructor() ERC20(\"BadToken\", \"BTK\") {}\n\n    function permit(\n        address owner,\n        address spender,\n        uint256 value,\n        uint256 deadline,\n        uint8 v,\n        bytes32 r,\n        bytes32 s\n    ) external {\n        // @audit missing deadline check\n        // @audit wrong domain separator: missing version & verifyingContract\n        bytes32 domainSeparator = keccak256(abi.encode(\n            keccak256(\"EIP712Domain(string name,uint256 chainId)\"),\n            keccak256(bytes(name())),\n            block.chainid\n        ));\n        // @audit struct type string uses \"Permit\" but fields reordered\n        bytes32 structHash = keccak256(abi.encode(\n            keccak256(\"Permit(address spender,address owner,uint256 value,uint256 nonce,uint256 deadline)\"),\n            spender,\n            owner,\n            value,\n            _nonces[owner],\n            deadline\n        ));\n        bytes32 digest = keccak256(abi.encodePacked(\"\\x19\\x01\", domainSeparator, structHash));\n        address signer = ECDSA.recover(digest, v, r, s);\n        require(signer == owner, \"invalid sig\");\n        // @audit nonce not incremented\n        _approve(owner, spender, value);\n        // @audit missing Approval event\n    }\n}",
+   "explanation": "Multiple EIP-4494 violations: missing deadline validation, incomplete domain separator (no version/verifyingContract), reordered struct fields, nonce not incremented, and no Approval event emitted."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/token/ERC20/ERC20.sol\";\nimport \"@openzeppelin/contracts/utils/cryptography/ECDSA.sol\";\nimport \"@openzeppelin/contracts/utils/cryptography/EIP712.sol\";\n\ncontract GoodPermitToken is ERC20, EIP712 {\n    mapping(address => uint256) private _nonces;\n    \n    constructor() ERC20(\"GoodToken\", \"GTK\") EIP712(\"GoodToken\", \"1\") {}\n\n    function permit(\n        address owner,\n        address spender,\n        uint256 value,\n        uint256 deadline,\n        uint8 v,\n        bytes32 r,\n        bytes32 s\n    ) external {\n        require(deadline >= block.timestamp, \"EIP4494: expired deadline\");\n        require(spender != address(0), \"EIP4494: zero spender\");\n        \n        bytes32 structHash = keccak256(abi.encode(\n            _PERMIT_TYPEHASH,\n            owner,\n            spender,\n            value,\n            _nonces[owner],\n            deadline\n        ));\n        bytes32 digest = _hashTypedDataV4(structHash);\n        address signer = ECDSA.recover(digest, v, r, s);\n        require(signer == owner, \"EIP4494: invalid signature\");\n        \n        _nonces[owner]++;\n        _approve(owner, spender, value);\n        // _approve emits Approval event\n    }\n\n    bytes32 private constant _PERMIT_TYPEHASH = keccak256(\"Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)\");\n}",
+   "explanation": "Fully EIP-4494 compliant: inherits EIP712 for correct domain separator, uses canonical struct typehash, validates deadline and spender, increments nonce, and relies on _approve to emit Approval."
+  },
+  "routing_hint_candidates": [
+   "permit",
+   "EIP712Domain",
+   "_PERMIT_TYPEHASH",
+   "_hashTypedDataV4",
+   "nonces",
+   "deadline",
+   "block.timestamp",
+   "ecrecover",
+   "ECDSA.recover",
+   "Approval",
+   "_approve",
+   "verifyingContract",
+   "chainId",
+   "version",
+   "name",
+   "keccak256",
+   "abi.encode",
+   "structHash",
+   "domainSeparator",
+   "digest",
+   "signer",
+   "owner",
+   "spender",
+   "value",
+   "nonce",
+   "v",
+   "r",
+   "s"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [],
+ "exclude_repo": null,
+ "error": null
+}

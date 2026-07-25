@@ -1,0 +1,62 @@
+{
+ "tag": "Gnosis safe",
+ "mode": "s2b",
+ "detector": {
+  "name": "Gnosis Safe Extension Missing Authorization",
+  "vulnerability_knowledge": "Gnosis Safe extensions (Guards, Modules, Handlers) must enforce strict authorization and state validation because they control critical wallet operations. A Guard's `checkTransaction` or `checkAfterExecution` is the only barrier preventing unauthorized or malformed transactions from executing. If `setFallbackHandler` lacks validation on the `handler` address, an owner can point the Safe to a malicious contract that drains assets via `fallback()`. Similarly, rental or time-locked modules that call `stopRent()` must handle ERC20 transfer failures gracefully; if a blocklisted recipient causes a revert, the NFT remains locked in the Safe and the rental cannot be closed, violating the invariant that `stopRent` always succeeds. Proper patterns include: validating `handler != address(0)` and `handler.isContract()` in `setFallbackHandler`, using `try/catch` or `safeTransfer` with fallback logic for ERC20 payouts, and ensuring state transitions (e.g., `rentalActive -> false`) occur before external calls to prevent reentrancy or stuck states.",
+  "checks": [
+   "Guard.checkTransaction does not validate calldata selector against an allowlist before returning 0 (allow).",
+   "Module.setFallbackHandler accepts `handler` without checking `handler != address(0)` and `handler.code.length > 0`.",
+   "Handler.enableModule or disableModule lacks `onlyOwner` or `onlyGuard` modifier, allowing arbitrary callers to change module state.",
+   "RentalModule.stopRent transfers ERC20 to `msg.sender` or a stored `renter` without `try/catch` or `SafeERC20.safeTransfer`, so a blocklisted address reverts and bricks the NFT.",
+   "Extension.executeTransaction does not verify `nonce` matches `safe.nonce()` before submitting to the Safe, enabling replay or out-of-order execution.",
+   "Guard.checkAfterExecution does not revert when post-execution invariants (e.g., `rentalEnded == true`) are violated.",
+   "Module.processPayment uses `transfer`/`send` instead of `call` with value check, causing silent failures on certain tokens.",
+   "Configuration setter (e.g., `setGuard`, `setFallbackHandler`) writes new address before emitting event, allowing a brief window where stale config is readable."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IGnosisSafe {\n    function setFallbackHandler(address handler) external;\n    function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes calldata signatures) external returns (bool);\n}\n\ncontract VulnerableRentalGuard {\n    IGnosisSafe public immutable safe;\n    address public fallbackHandler;\n    mapping(uint256 => address) public rentalNftToRenter;\n    mapping(uint256 => bool) public rentalActive;\n\n    constructor(IGnosisSafe _safe) { safe = _safe; }\n\n    // @audit missing validation on handler address\n    function setFallbackHandler(address handler) external {\n        fallbackHandler = handler;\n        safe.setFallbackHandler(handler);\n    }\n\n    // @audit ERC20 transfer reverts if renter is blocklisted, NFT stuck\n    function stopRent(uint256 nftId, IERC20 paymentToken, uint256 amount) external {\n        require(rentalActive[nftId], \"not active\");\n        address renter = rentalNftToRenter[nftId];\n        paymentToken.transfer(renter, amount); // reverts on blocklist\n        rentalActive[nftId] = false;\n        // NFT never returned to owner\n    }\n}\n",
+   "explanation": "setFallbackHandler accepts any address including EOAs or zero address, and stopRent uses bare transfer that reverts on blocklisted recipients, leaving the rental NFT locked in the Safe."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IGnosisSafe {\n    function setFallbackHandler(address handler) external;\n    function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes calldata signatures) external returns (bool);\n}\n\nimport \"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\";\n\ncontract FixedRentalGuard {\n    using SafeERC20 for IERC20;\n    IGnosisSafe public immutable safe;\n    address public fallbackHandler;\n    mapping(uint256 => address) public rentalNftToRenter;\n    mapping(uint256 => bool) public rentalActive;\n\n    constructor(IGnosisSafe _safe) { safe = _safe; }\n\n    function setFallbackHandler(address handler) external {\n        require(handler != address(0), \"zero address\");\n        require(handler.code.length > 0, \"not a contract\");\n        fallbackHandler = handler;\n        safe.setFallbackHandler(handler);\n    }\n\n    function stopRent(uint256 nftId, IERC20 paymentToken, uint256 amount) external {\n        require(rentalActive[nftId], \"not active\");\n        address renter = rentalNftToRenter[nftId];\n        rentalActive[nftId] = false; // state change before external call\n        paymentToken.safeTransfer(renter, amount); // no revert on failure\n        // NFT return logic would follow\n    }\n}\n",
+   "explanation": "setFallbackHandler validates handler is a non-zero contract; stopRent updates state first and uses SafeERC20.safeTransfer which does not revert on blocklisted recipients, preventing stuck NFTs."
+  },
+  "routing_hint_candidates": [
+   "setFallbackHandler",
+   "checkTransaction",
+   "checkAfterExecution",
+   "fallbackHandler",
+   "rentalActive",
+   "rentalNftToRenter",
+   "stopRent",
+   "safeTransfer",
+   "IGnosisSafe",
+   "execTransaction",
+   "enableModule",
+   "disableModule",
+   "Guard",
+   "Module",
+   "Handler",
+   "onlyOwner",
+   "onlyGuard",
+   "nonce",
+   "safeTxGas",
+   "signatures",
+   "blocklisted",
+   "ERC20",
+   "SafeERC20",
+   "code.length",
+   "reentrancy",
+   "invariant",
+   "allowlist"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "465",
+  "486"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

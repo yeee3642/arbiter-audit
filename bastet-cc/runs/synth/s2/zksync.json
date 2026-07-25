@@ -1,0 +1,59 @@
+{
+ "tag": "Zksync",
+ "mode": "s2b",
+ "detector": {
+  "name": "Zksync-Incorrect Block Period Constant",
+  "vulnerability_knowledge": "On zkSync Era, priority operations (L1->L2 transactions) expire after a configurable number of L1 blocks known as the BLOCK_PERIOD. The zkSync system contracts use this constant to calculate the expiration timestamp: `expiration = block.timestamp + BLOCK_PERIOD * 12`. Ethereum's PoS consensus produces a block every 12 seconds (slots), but zkSync's default constant was mistakenly set to 13 seconds. This off-by-one error causes priority transactions to expire roughly 5.5 hours earlier than the intended 7-day window (86400 blocks * 13s = 1123200s vs 86400 * 12s = 1036800s). Contracts that hard-code or inherit this constant for deadline calculations, custom bridge logic, or L1->L2 message expiration will enforce incorrect timeouts, leading to unexpected transaction failures or forced early expirations.",
+  "checks": [
+   "Search for constant or immutable variables named BLOCK_PERIOD, PRIORITY_EXPIRATION_BLOCKS, or similar that are assigned the value 13 (or 13 seconds) instead of 12.",
+   "Verify that any deadline calculation for L1->L2 priority operations multiplies the block period by 12 seconds (e.g., `block.timestamp + BLOCK_PERIOD * 12`) and not by 13.",
+   "Check if the contract imports or inherits from zkSync system interfaces (e.g., `IMailbox`, `IL1Messenger`, `IPriorityQueue`) and uses a local copy of the expiration constant rather than reading the live value from the system contract.",
+   "Look for hard-coded expiration offsets like `7 days` or `604800` seconds used directly for priority operation deadlines without deriving from the canonical 12-second block time.",
+   "Ensure that any custom bridge or message-passing logic that computes `expirationTimestamp` uses `block.timestamp + (priorityExpirationBlocks * 12)` where `priorityExpirationBlocks` matches the zkSync governance parameter (currently 86400).",
+   "Confirm that tests or deployment scripts do not assert an expiration based on a 13-second block assumption (e.g., `assert(expiration == start + 86400 * 13)`).",
+   "Validate that `receive()` or `fallback()` payable functions handling priority operation refunds do not rely on an incorrect expiration constant to reject valid claims.",
+   "Check for any usage of `block.number` instead of `block.timestamp` in expiration logic, as zkSync's L1 block numbers advance every 12 seconds on Ethereum mainnet."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ZkSyncBridge {\n    // @audit incorrect block period: 13 seconds instead of 12\n    uint256 public constant BLOCK_PERIOD = 13;\n    uint256 public constant PRIORITY_EXPIRATION_BLOCKS = 86400; // 7 days\n\n    function calculateExpiration() external view returns (uint256) {\n        // @audit uses 13s per block, expires ~5.5h early\n        return block.timestamp + PRIORITY_EXPIRATION_BLOCKS * BLOCK_PERIOD;\n    }\n\n    function submitPriorityTx(bytes calldata _data) external payable {\n        uint256 expiration = calculateExpiration();\n        // ... submit to zkSync priority queue with expiration\n    }\n}",
+   "explanation": "The contract defines BLOCK_PERIOD as 13 seconds, causing priority operation expiration to be calculated with an incorrect block time and expire 5.5 hours earlier than the intended 7-day window."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ZkSyncBridge {\n    // @audit correct block period: 12 seconds (Ethereum PoS slot time)\n    uint256 public constant BLOCK_PERIOD = 12;\n    uint256 public constant PRIORITY_EXPIRATION_BLOCKS = 86400; // 7 days\n\n    function calculateExpiration() external view returns (uint256) {\n        // @audit uses 12s per block, matches zkSync system contract logic\n        return block.timestamp + PRIORITY_EXPIRATION_BLOCKS * BLOCK_PERIOD;\n    }\n\n    function submitPriorityTx(bytes calldata _data) external payable {\n        uint256 expiration = calculateExpiration();\n        // ... submit to zkSync priority queue with expiration\n    }\n}",
+   "explanation": "The contract uses the correct 12-second block period constant, aligning priority operation expiration with zkSync's system contract behavior and Ethereum's actual PoS block time."
+  },
+  "routing_hint_candidates": [
+   "BLOCK_PERIOD",
+   "PRIORITY_EXPIRATION_BLOCKS",
+   "calculateExpiration",
+   "submitPriorityTx",
+   "priorityExpirationBlocks",
+   "IMailbox",
+   "IL1Messenger",
+   "IPriorityQueue",
+   "L1_TO_L2_GAS_PER_PUBDATA_BYTE",
+   "requestL2Transaction",
+   "finalizeWithdrawal",
+   "priorityQueue",
+   "l1Messenger",
+   "zkSync",
+   "Era",
+   "block.timestamp",
+   "block.number",
+   "expirationTimestamp",
+   "priorityOperation",
+   "l2TxGasLimit",
+   "l2TxGasPerPubdataByte",
+   "factoryDeps",
+   "paymasterParams",
+   "receive",
+   "fallback"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "236"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

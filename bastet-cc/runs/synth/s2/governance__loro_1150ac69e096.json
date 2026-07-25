@@ -1,0 +1,72 @@
+{
+ "tag": "Governance",
+ "mode": "s2",
+ "detector": {
+  "name": "Governance",
+  "vulnerability_knowledge": "Governance systems are vulnerable when voting power snapshots, proposal lifecycle checks, and parameter updates lack proper validation or timing constraints. Flash loans or same-block token acquisition can inflate voting weight if snapshots use the current block instead of a prior block. Proposal IDs derived solely from calldata without a nonce or sender allow front-running and permanent blocking of legitimate proposals. Threshold and quorum values captured at proposal creation must align with the voting snapshot timestamp; using current totalSupply for thresholds while voting power is measured at snapshot-1 enables manipulation. State transitions (Pending, Active, Succeeded, Defeated, Queued, Executed, Expired, Canceled, Vetoed) must use correct comparison operators; off-by-one errors such as `<` instead of `<=` for defeat checks let tied proposals incorrectly succeed. Vote reclamation must bind to a specific proposal ID and prevent reclaiming before the proposal becomes active, otherwise users can vote and reclaim in the same transaction. Member management must track removal history to prevent re-addition of voted-out addresses. Parameter setters (e.g., voting delay, period, quorum, weight duration) must verify no active proposals exist before applying changes. Multi-signature voting modifiers must not reset vote state before the external call, or reentrancy can allow double-voting. Minting of governance tokens must enforce a supply cap to prevent arbitrary inflation of voting power.",
+  "checks": [
+   "Verify that proposal creation snapshots voting power at `block.timestamp - 1` (or a prior block) and that `proposalThreshold` and `quorumVotes` are derived from the same snapshot, not current `totalSupply`.",
+   "Ensure `proposalId` computation includes `msg.sender` and a nonce or `block.number` so identical calldata from different proposers or at different times yields unique IDs.",
+   "Check that the `Defeated` state transition uses `<=` for `forVotes <= againstVotes` (or the documented tie-break rule) and that quorum comparison matches specification.",
+   "Confirm `reclaimVotes` (or similar) rejects calls when `proposalId` equals the currently active proposal AND when the proposal's `voteStart` is in the future, preventing same-transaction vote-and-reclaim.",
+   "Validate that `addMember` (or role assignment) checks a `removedMembers` mapping or equivalent history to block re-addition of previously expelled addresses.",
+   "Ensure parameter setters (`setVotingDelay`, `setVotingPeriod`, `setQuorum`, `setFullWeightDuration`, etc.) revert if any proposal is in `Active` or `Pending` state.",
+   "Inspect multi-sig or committee voting modifiers: vote counting state (`voteCount`, `hasVoted`) must be cleared only after the external call (`_;`) succeeds, not before, to prevent reentrancy double-voting.",
+   "Verify governance token minting functions (`issueVotesTo`, `mint`) enforce a hard `maxSupply` cap or require DAO approval for increases."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract GovernanceFlawed {\n    struct Proposal {\n        uint32 voteStart;\n        uint32 voteEnd;\n        uint32 proposalThreshold;\n        uint32 quorumVotes;\n        uint256 forVotes;\n        uint256 againstVotes;\n        bool executed;\n        bool canceled;\n    }\n    mapping(bytes32 => Proposal) public proposals;\n    uint256 public votingDelay = 1 days;\n    uint256 public votingPeriod = 7 days;\n    IERC20Votes public token;\n    \n    function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (bytes32) {\n        bytes32 proposalId = keccak256(abi.encode(targets, values, calldatas, keccak256(bytes(description))));\n        if (proposals[proposalId].voteStart != 0) revert();\n        // @audit uses current totalSupply for threshold/quorum, but voting power measured at snapshot-1\n        proposals[proposalId] = Proposal({\n            voteStart: uint32(block.timestamp + votingDelay),\n            voteEnd: uint32(block.timestamp + votingDelay + votingPeriod),\n            proposalThreshold: uint32(token.getPastTotalSupply(block.timestamp)),\n            quorumVotes: uint32(token.getPastTotalSupply(block.timestamp) / 10),\n            forVotes: 0,\n            againstVotes: 0,\n            executed: false,\n            canceled: false\n        });\n        return proposalId;\n    }\n    \n    function state(bytes32 proposalId) external view returns (uint8) {\n        Proposal storage p = proposals[proposalId];\n        if (p.voteStart == 0) revert();\n        if (block.timestamp < p.voteStart) return 0; // Pending\n        if (block.timestamp < p.voteEnd) return 1;   // Active\n        // @audit uses < instead of <= for defeat check\n        if (p.forVotes < p.againstVotes || p.forVotes < p.quorumVotes) return 2; // Defeated\n        return 3; // Succeeded\n    }\n    \n    function setVotingDelay(uint256 newDelay) external {\n        votingDelay = newDelay; // @audit no check for active proposals\n    }\n}",
+   "explanation": "Proposal creation uses current totalSupply for threshold/quorum while voting power is snapshotted at voteStart-1; defeat check uses `<` instead of `<=`; setVotingDelay lacks active-proposal guard."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract GovernanceFixed {\n    struct Proposal {\n        uint32 voteStart;\n        uint32 voteEnd;\n        uint32 proposalThreshold;\n        uint32 quorumVotes;\n        uint256 forVotes;\n        uint256 againstVotes;\n        bool executed;\n        bool canceled;\n    }\n    mapping(bytes32 => Proposal) public proposals;\n    uint256 public votingDelay = 1 days;\n    uint256 public votingPeriod = 7 days;\n    IERC20Votes public token;\n    uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18;\n    mapping(address => bool) public removedMembers;\n    \n    function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (bytes32) {\n        bytes32 proposalId = keccak256(abi.encode(msg.sender, block.number, targets, values, calldatas, keccak256(bytes(description))));\n        if (proposals[proposalId].voteStart != 0) revert();\n        uint32 snap = uint32(block.timestamp - 1);\n        uint256 totalSupplyAtSnap = token.getPastTotalSupply(snap);\n        proposals[proposalId] = Proposal({\n            voteStart: uint32(block.timestamp + votingDelay),\n            voteEnd: uint32(block.timestamp + votingDelay + votingPeriod),\n            proposalThreshold: uint32(totalSupplyAtSnap / 100),\n            quorumVotes: uint32(totalSupplyAtSnap / 10),\n            forVotes: 0,\n            againstVotes: 0,\n            executed: false,\n            canceled: false\n        });\n        return proposalId;\n    }\n    \n    function state(bytes32 proposalId) external view returns (uint8) {\n        Proposal storage p = proposals[proposalId];\n        if (p.voteStart == 0) revert();\n        if (block.timestamp < p.voteStart) return 0;\n        if (block.timestamp < p.voteEnd) return 1;\n        // @audit uses <= for tie-break\n        if (p.forVotes <= p.againstVotes || p.forVotes < p.quorumVotes) return 2;\n        return 3;\n    }\n    \n    function setVotingDelay(uint256 newDelay) external {\n        for (bytes32 id : activeProposalIds) {\n            if (block.timestamp >= proposals[id].voteStart && block.timestamp < proposals[id].voteEnd) revert();\n        }\n        votingDelay = newDelay;\n    }\n    \n    function addMember(address member) external {\n        if (removedMembers[member]) revert();\n        // add logic\n    }\n}",
+   "explanation": "Proposal ID includes sender and block.number; threshold/quorum use snapshot at block.timestamp-1; defeat check uses `<=`; setVotingDelay blocks changes during active voting; addMember checks removal history."
+  },
+  "routing_hint_candidates": [
+   "propose",
+   "hashProposal",
+   "proposalThreshold",
+   "quorumVotes",
+   "getVotes",
+   "getPastTotalSupply",
+   "voteStart",
+   "voteEnd",
+   "forVotes",
+   "againstVotes",
+   "quorum",
+   "votingDelay",
+   "votingPeriod",
+   "state",
+   "Defeated",
+   "Succeeded",
+   "reclaimVotes",
+   "activeProposal",
+   "tokenClaimsForProposal",
+   "userVotesForProposal",
+   "addMember",
+   "removedMembers",
+   "MEMBER_ADDER_ROLE",
+   "setVotingDelay",
+   "setVotingPeriod",
+   "setQuorum",
+   "setFullWeightDuration",
+   "fullWeightDuration",
+   "onlySigners",
+   "voteCount"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "234",
+  "182",
+  "330",
+  "220",
+  "225",
+  "180",
+  "294",
+  "188",
+  "327"
+ ],
+ "exclude_repo": "1150ac69e096",
+ "error": null
+}

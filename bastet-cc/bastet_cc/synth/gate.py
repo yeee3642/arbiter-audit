@@ -53,11 +53,21 @@ def negative_repos(records: list[dict], tag: str, train_syn: list[str]) -> list[
     return [r for r in sorted(train_syn) if r not in pos][:N_NEG_REPOS]
 
 
+def _localized(records: list[dict], tag: str, exclude_repo: str | None = None):
+    return [r for r in records if r["localized"] and tag in r["tags"]
+            and r["repo"] != (exclude_repo or "")]
+
+
 def localized_ident_sets(records: list[dict], tag: str,
                          exclude_repo: str | None = None) -> list[set[str]]:
-    return [set(r["identifiers"]) for r in records
-            if r["localized"] and tag in r["tags"]
-            and r["repo"] != (exclude_repo or "")]
+    return [set(r["identifiers"]) for r in _localized(records, tag, exclude_repo)]
+
+
+def localized_repos(records: list[dict], tag: str,
+                    exclude_repo: str | None = None) -> list[str]:
+    """Repo of each entry in `localized_ident_sets`, same order -- S3 needs the
+    attribution to tell class vocabulary from one repo's private vocabulary."""
+    return [r["repo"] for r in _localized(records, tag, exclude_repo)]
 
 
 def register_workdir(workdir: Path) -> None:
@@ -226,7 +236,8 @@ async def _run_folds(tag: str, tagdef: dict, records: list[dict],
         pos_minus = [r for r in tag_positive_repos(records, tag) if r != ri]
         hres = validate_hints(
             tag, cached["detector"]["routing_hint_candidates"], file_sets,
-            pos_minus, localized_ident_sets(records, tag, exclude_repo=ri))
+            pos_minus, localized_ident_sets(records, tag, exclude_repo=ri),
+            localized_repos(records, tag, exclude_repo=ri))
         variant_id = f"{detector_id(tag)}__gate_{ri}{suffix}"
         det = write_variant(variant_id, cached["detector"]["name"] or tag,
                             cached["detector"], hres["kept"], workdir)

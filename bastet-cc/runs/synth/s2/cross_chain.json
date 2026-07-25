@@ -1,0 +1,70 @@
+{
+ "tag": "Cross-Chain",
+ "mode": "s2",
+ "detector": {
+  "name": "Cross-Chain",
+  "vulnerability_knowledge": "Cross-chain protocols must validate that the origin chain of a message matches the expected chain before trusting its data. A common bypass occurs when a contract allows an owner to register a trusted address for any arbitrary chain identifier without verifying that the caller or the message actually originates from that chain, enabling an attacker to spoof messages from a different chain. Asset transfers across chains require strict ordering: tokens must be locked or burned on the source chain only after the destination chain confirms execution, or a reliable refund/re-mint mechanism must exist; burning before the remote call succeeds with no rollback path leads to permanent loss if the destination call reverts. Non-EVM chains use address formats (bech32, ed25519 public keys) that cannot fit into an Ethereum `address` type; encoding such addresses as `address` in hashes or mappings causes lookup failures and broken verification for cross-chain approvals. Token amounts must be normalized to a common decimal base (usually 18 decimals) before being used in cross-chain messages; otherwise, a token with 6 decimals on the source chain and 18 on the destination chain will result in a 10^12 value mismatch. Rebase tokens change total supply over time; recording a static amount at lock time and later transferring that fixed amount without checking the current balance causes underpayment on positive rebase and reverts on negative rebase. Finally, cross-chain messages must include a caller-specified refund address and a deadline/expiration to prevent stuck funds and replay attacks.",
+  "checks": [
+   "Verify that any function registering a trusted address for a chain validates the chain identifier against the actual message origin (e.g., `sourceChain` from the gateway) instead of accepting an arbitrary string.",
+   "Ensure token burn/lock occurs after the destination chain acknowledges execution, or that a refund/re-mint path exists (e.g., a `refundAddress` parameter and a fallback handler) when the remote call fails.",
+   "Check that cross-chain approval hashes and mappings use `bytes` or `string` for source/destination addresses instead of `address` to support non-EVM address formats.",
+   "Confirm that token amounts are normalized to a common decimal base (e.g., 18 decimals) before being included in cross-chain payloads or events.",
+   "Validate that rebase-token handling reads the current balance at execution time rather than trusting a previously recorded amount.",
+   "Require a caller-supplied `refundAddress` parameter in `callContract`/`callContractWithToken` and emit it in the corresponding event instead of defaulting to `msg.sender`.",
+   "Enforce a deadline or expiration timestamp on cross-chain messages and reject execution if `block.timestamp > deadline`.",
+   "Verify that remote deployment or initialization functions (e.g., `_deployRemoteTokenManager`) check the caller is the token owner or an authorized minter before allowing state changes on the destination chain."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CrossChainBridge {\n    mapping(string => string) public trustedAddress;\n    mapping(string => address) public tokenAddresses;\n    \n    function setTrustedAddress(string memory chain, string memory address_) external {\n        trustedAddress[chain] = address_; // @audit no validation that chain matches message origin\n    }\n    \n    function callContractWithToken(\n        string memory destinationChain,\n        string memory destinationContractAddress,\n        bytes memory payload,\n        string memory symbol,\n        uint256 amount\n    ) external {\n        IERC20(tokenAddresses[symbol]).burnFrom(msg.sender, amount); // @audit burn before remote execution, no refund\n        emit ContractCallWithToken(msg.sender, destinationChain, destinationContractAddress, keccak256(payload), payload, symbol, amount); // @audit no refundAddress, no deadline\n    }\n    \n    function _getApprovalHash(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        address contractAddress, // @audit cannot hold non-EVM address\n        bytes32 payloadHash,\n        string memory symbol,\n        uint256 amount // @audit raw amount, no decimal normalization\n    ) internal pure returns (bytes32) {\n        return keccak256(abi.encode(commandId, sourceChain, sourceAddress, contractAddress, payloadHash, symbol, amount));\n    }\n    \n    function executeWithToken(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        bytes memory payload,\n        string memory symbol,\n        uint256 amount // @audit static amount, ignores rebase\n    ) external {\n        IERC20(tokenAddresses[symbol]).safeTransfer(msg.sender, amount); // @audit may revert/underpay on rebase\n    }\n}",
+   "explanation": "The contract allows arbitrary trusted address registration without origin-chain validation, burns tokens before remote execution with no refund path, uses `address` for non-EVM sources, omits decimal normalization, ignores rebase balance changes, and lacks refund address and deadline parameters."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CrossChainBridgeFixed {\n    mapping(string => string) public trustedAddress;\n    mapping(string => address) public tokenAddresses;\n    mapping(string => uint8) public tokenDecimals;\n    \n    function setTrustedAddress(string memory chain, string memory address_, string memory expectedSourceChain) external {\n        require(keccak256(bytes(chain)) == keccak256(bytes(expectedSourceChain)), \"chain mismatch\");\n        trustedAddress[chain] = address_;\n    }\n    \n    function callContractWithToken(\n        string memory destinationChain,\n        string memory destinationContractAddress,\n        bytes memory payload,\n        string memory symbol,\n        uint256 amount,\n        address refundAddress,\n        uint256 deadline\n    ) external {\n        require(block.timestamp <= deadline, \"expired\");\n        uint256 normalized = amount * 10**(18 - tokenDecimals[symbol]);\n        IERC20(tokenAddresses[symbol]).safeTransferFrom(msg.sender, address(this), normalized);\n        emit ContractCallWithToken(refundAddress, destinationChain, destinationContractAddress, keccak256(payload), payload, symbol, normalized, deadline);\n    }\n    \n    function _getApprovalHash(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        bytes memory contractAddress, // bytes supports non-EVM\n        bytes32 payloadHash,\n        string memory symbol,\n        uint256 normalizedAmount\n    ) internal pure returns (bytes32) {\n        return keccak256(abi.encode(commandId, sourceChain, sourceAddress, contractAddress, payloadHash, symbol, normalizedAmount));\n    }\n    \n    function executeWithToken(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        bytes memory payload,\n        string memory symbol,\n        uint256 normalizedAmount\n    ) external {\n        uint256 currentBal = IERC20(tokenAddresses[symbol]).balanceOf(address(this));\n        require(currentBal >= normalizedAmount, \"insufficient balance\");\n        IERC20(tokenAddresses[symbol]).safeTransfer(msg.sender, normalizedAmount);\n    }\n}",
+   "explanation": "The fixed contract validates chain origin on trusted address registration, locks tokens instead of burning before remote execution, includes refundAddress and deadline, uses bytes for non-EVM addresses, normalizes amounts to 18 decimals, and checks current balance at execution for rebase safety."
+  },
+  "routing_hint_candidates": [
+   "setTrustedAddress",
+   "callContractWithToken",
+   "callContract",
+   "_getApprovalHash",
+   "_getIsContractCallApprovedWithMintKey",
+   "expressExecuteWithToken",
+   "_deployRemoteTokenManager",
+   "ContractCallWithToken",
+   "ContractCall",
+   "TokenManagerDeploymentStarted",
+   "gateway",
+   "tokenAddresses",
+   "tokenDecimals",
+   "refundAddress",
+   "deadline",
+   "sourceChain",
+   "destinationChain",
+   "sourceAddress",
+   "destinationContractAddress",
+   "commandId",
+   "payloadHash",
+   "normalizedAmount",
+   "MESSAGE_TYPE_DEPLOY_TOKEN_MANAGER",
+   "IGatewayCaller",
+   "MetadataVersion",
+   "validTokenManagerAddress",
+   "_burnTokenFrom",
+   "_executeWithToken",
+   "_setExpressExecutorWithToken",
+   "AlreadyExecuted"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "388",
+  "296",
+  "292",
+  "386",
+  "116",
+  "387",
+  "295"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

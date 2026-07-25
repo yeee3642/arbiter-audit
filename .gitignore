@@ -18,8 +18,11 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Raw per-call transcripts: large, and they embed contract source and prompts verbatim.
-# The derived measurements in runs/*/ are what the writeup cites, and those are kept.
-runs/**/llm_log.jsonl
-runs/**/results.jsonl
-runs/**/tasks.jsonl
+# Raw per-call transcripts: they embed contract source and prompts verbatim, and grow
+# with every run. The derived measurements beside them are what the writeup cites.
+# Leading **/ matters -- a bare `runs/` anchors to the repository root and silently
+# misses bastet-cc/runs/, which is where these actually live.
+**/runs/**/llm_log.jsonl
+**/runs/**/llm_calls.jsonl
+**/runs/**/results.jsonl
+**/runs/**/tasks.jsonl

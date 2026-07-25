@@ -28,7 +28,8 @@ from bastet_cc.synth import (DATA_DIR, DETECTORS_SYNTH_DIR, PKG_ROOT, TRAIN_EX_D
                              covered_tags, index_train_repos, load_splits,
                              missing_tags, train_syn_frames)
 from bastet_cc.synth.assemble import assemble_all, detector_id
-from bastet_cc.synth.gate import run_s4, tag_positive_repos, localized_ident_sets
+from bastet_cc.synth.gate import (localized_ident_sets, localized_repos, run_s4,
+                                  tag_positive_repos)
 from bastet_cc.synth.hints import build_file_sets, required_hints_for, validate_hints
 from bastet_cc.synth.induce import (induce_tag, load_induction, parse_tag_definitions,
                                     save_induction)
@@ -123,7 +124,8 @@ def stage_s3(args) -> None:
             continue
         pos = tag_positive_repos(records, t)
         res = validate_hints(t, rec["detector"]["routing_hint_candidates"], file_sets,
-                             pos, localized_ident_sets(records, t))
+                             pos, localized_ident_sets(records, t),
+                             localized_repos(records, t))
         res["required_hints"] = required_hints_for(t, file_sets, pos)
         out[t] = res
         print(f"{t:20s} cand={res['n_candidates']:3d} kept={len(res['kept']):2d} "

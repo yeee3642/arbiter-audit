@@ -1,0 +1,64 @@
+{
+ "tag": "Uniswap",
+ "mode": "s2",
+ "detector": {
+  "name": "Uniswap-Integration-Errors",
+  "vulnerability_knowledge": "Uniswap V3 exactOutput path encoding requires the sequence of (token, fee) pairs to be logically reversed, not the raw byte array. Reversing bytes corrupts token addresses and fee tiers, causing swaps to fail or route through unintended pools. The pair address derivation for Uniswap V2 uses CREATE2 with a factory-specific init code hash; hardcoding the canonical hash (e.g., 0xe18a34eb...) breaks pair lookup when the factory deploys with a different bytecode hash. TWAP tick calculation must floor the time-weighted average tick: the correct delta is (tickCumulativeLatest - tickCumulativeOldest) / secondsElapsed. Reversing the subtraction flips the sign, and Solidity's truncating division rounds toward zero instead of flooring for negative values, producing a tick that is too high (less negative) and a sqrtPriceX96 that overstates the price. Missing minimum output validation (amountOutMinimum/amountInMaximum) on router calls allows sandwich attacks and zero-output executions. Slippage protection requires caller-supplied bounds validated against pool state or oracle prices, not hardcoded zeros or type(uint256).max.",
+  "checks": [
+   "Verify exactOutput/exactInput path construction: the path bytes must encode token-fee-token-fee... in the correct logical order; reversing must operate on the sequence of encoded pairs, not on the raw byte array.",
+   "Confirm Uniswap V2 pairFor uses the deployed factory's actual init code hash (retrieved via factory.INIT_CODE_PAIR_HASH() or governance) instead of a hardcoded constant.",
+   "Check TWAP tick calculation: the delta must be (tickCumulatives[latest] - tickCumulatives[oldest]) / elapsedSeconds with proper flooring for negative results (use int24((a - b) / c) only when a >= b; otherwise subtract one before division).",
+   "Ensure all router calls (exactInput, exactOutput, swapExactTokensForTokens, etc.) receive caller-controlled amountOutMinimum/amountInMaximum parameters and that the contract reverts if returned amounts violate these bounds.",
+   "Validate that deadline parameters are caller-supplied and bounded (e.g., block.timestamp + reasonable window), not hardcoded to type(uint256).max or block.timestamp.",
+   "Confirm token approvals are scoped to the router and amount, and that approvals are reset or managed to prevent unlimited spend.",
+   "Check that multihop path encoding (_makeMultihopPath) correctly interleaves token addresses and fee tiers per Uniswap V3 specification (token0, fee, token1, fee, token2...).",
+   "Verify that sqrtPriceX96 derived from TWAP tick is converted to price (priceX96 = sqrtPriceX96^2 / Q96) using FullMath.mulDiv with correct rounding direction for the protocol's use case."
+  ],
+  "incorrect_example": {
+   "code": "function _swapExactOutputMultihop(uint256 amount, address recipient, PathItem[] memory path, Options memory options) internal returns (uint256 amountIn) {\n    address input = path[0].token0;\n    ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({\n        path: _reverseBytes(_makeMultihopPath(path)),\n        recipient: recipient,\n        deadline: options.deadline,\n        amountOut: amount,\n        amountInMaximum: options.limitAmount\n    });\n    IERC20(input).safeTransferFrom(msg.sender, address(this), options.limitAmount);\n    _approveERC20TokenIfNecessary(input, address(swapRouter));\n    amountIn = swapRouter.exactOutput(params);\n    if (amountIn < options.limitAmount)\n        IERC20(input).safeTransferFrom(address(this), recipient, options.limitAmount - amountIn);\n}",
+   "explanation": "Reversing the raw byte array of the encoded path corrupts token/fee ordering; exactOutput expects the logical sequence of (token, fee) pairs reversed, not byte-reversed."
+  },
+  "correct_example": {
+   "code": "function _swapExactOutputMultihop(uint256 amount, address recipient, PathItem[] memory path, Options memory options) internal returns (uint256 amountIn) {\n    address input = path[path.length - 1].token1;\n    bytes memory encodedPath = _makeMultihopPath(path);\n    bytes memory reversedPath = _reversePath(encodedPath); // reverses (token,fee) pair sequence\n    ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({\n        path: reversedPath,\n        recipient: recipient,\n        deadline: options.deadline,\n        amountOut: amount,\n        amountInMaximum: options.limitAmount\n    });\n    IERC20(input).safeTransferFrom(msg.sender, address(this), options.limitAmount);\n    _approveERC20TokenIfNecessary(input, address(swapRouter));\n    amountIn = swapRouter.exactOutput(params);\n    require(amountIn <= options.limitAmount, \"slippage exceeded\");\n    if (amountIn < options.limitAmount)\n        IERC20(input).safeTransferFrom(address(this), recipient, options.limitAmount - amountIn);\n}",
+   "explanation": "Logically reverses the sequence of (token, fee) pairs, uses the correct input token (last token in path), and enforces slippage with require on amountIn."
+  },
+  "routing_hint_candidates": [
+   "_reverseBytes",
+   "_makeMultihopPath",
+   "ExactOutputParams",
+   "exactOutput",
+   "swapRouter",
+   "pairFor",
+   "INIT_CODE_PAIR_HASH",
+   "slot0",
+   "observe",
+   "tickCumulatives",
+   "TickMath.getSqrtRatioAtTick",
+   "FullMath.mulDiv",
+   "Q96",
+   "sqrtPriceX96",
+   "amountInMaximum",
+   "amountOutMinimum",
+   "deadline",
+   "PathItem",
+   "token0",
+   "token1",
+   "fee",
+   "UniswapV2Factory",
+   "UniswapV3Pool",
+   "ISwapRouter",
+   "safeTransferFrom",
+   "_approveERC20TokenIfNecessary",
+   "options.limitAmount",
+   "twapSeconds"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "64",
+  "243",
+  "339"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

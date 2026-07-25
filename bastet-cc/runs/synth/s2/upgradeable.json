@@ -1,0 +1,65 @@
+{
+ "tag": "Upgradeable",
+ "mode": "s2",
+ "detector": {
+  "name": "Upgradeable",
+  "vulnerability_knowledge": "Upgradeable contracts using proxy patterns (Transparent, UUPS, Diamond) or module systems introduce distinct attack surfaces. A flawed upgrade mechanism can allow unauthorized logic replacement, storage layout corruption, or initialization bypass. In Diamond proxies, the execute function must verify that the calldata supplied at execution matches the exact calldata that was proposed and hashed; otherwise a governor with a leaked key can swap in arbitrary facet cuts after the notice period. Initialization routines in upgradeable contracts must call the unchained variant of parent initializers (e.g., `__Ownable_init_unchained`) to avoid resetting inherited state like the owner address. External calls (hook removals, asset transfers, settlement) must occur after all storage mutations (CEI) to prevent reentrancy into upgradeable entry points. Finally, fallback or guard functions that validate calldata must accept zero-length data for native ETH transfers, otherwise legitimate value transfers revert.",
+  "checks": [
+   "In Diamond `executeDiamondCutProposal` or similar, confirm the function hashes the incoming `_diamondCut` calldata and compares it to the stored `proposedDiamondCutHash`; missing this check allows arbitrary calldata execution.",
+   "In any `initialize` function of an upgradeable contract, verify that inherited OpenZeppelin initializers are called with the `_unchained` suffix (e.g., `__Ownable_init_unchained`) so parent state is not reset.",
+   "In functions performing external calls (hook removal, `reclaimRentedItems`, `settlePayment`, etc.), ensure all storage updates (`removeRentals`, state variable writes) occur before the external calls to follow checks-effects-interactions.",
+   "In guard or policy `checkTransaction` functions, verify that a `data.length < 4` check does not revert for empty calldata; native ETH transfers have zero-length data and must be allowed.",
+   "In upgrade authorization logic, confirm that only the intended role (governor, admin, security council) can propose and execute upgrades; look for missing `onlyGovernor`/`onlyAdmin` modifiers or flawed signature verification.",
+   "In proxy admin or Diamond cut functions, check that storage layout compatibility is enforced (e.g., no shifting of state variables, use of storage gaps) to prevent storage collisions after upgrade.",
+   "In initialization functions, ensure the `initializer` modifier (or equivalent reentrancy guard) is present and that the function cannot be called a second time after deployment.",
+   "In Diamond `diamondCut` execution, verify that `initAddress` and `initCalldata` are validated against the proposal to prevent unauthorized initialization logic execution."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol\";\nimport \"@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol\";\n\ncontract FlawedUpgradeable is Initializable, OwnableUpgradeable {\n    function initialize() external initializer {\n        __Ownable_init(); // @audit should be __Ownable_init_unchained\n        // owner remains address(0)\n    }\n\n    function executeDiamondCut(DiamondCutData calldata _cut) external onlyGovernor {\n        require(proposedHash == keccak256(abi.encode(_cut.facetCuts)), \"hash mismatch\");\n        // @audit missing check that _cut.initAddress and _cut.initCalldata match proposal\n        diamondCut(_cut);\n    }\n\n    function stopRent(RentalOrder calldata order) external {\n        _removeHooks(order.hooks, order.items, order.rentalWallet);\n        _reclaimRentedItems(order);\n        ESCROW.settlePayment(order);\n        // @audit storage update after external calls (CEI violation)\n        store.removeRentals(deriveHash(order), updates);\n    }\n\n    function checkTransaction(bytes calldata data) external {\n        if (data.length < 4) revert(\"selector required\"); // @audit reverts on ETH transfer\n    }\n}",
+   "explanation": "The initialize function calls `__Ownable_init()` instead of `__Ownable_init_unchained()`, leaving owner unset; executeDiamondCut validates only facetCuts hash but not initAddress/initCalldata; stopRent performs external calls before storage update enabling reentrancy; checkTransaction rejects zero-length calldata breaking native ETH transfers."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol\";\nimport \"@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol\";\n\ncontract FixedUpgradeable is Initializable, OwnableUpgradeable {\n    function initialize() external initializer {\n        __Ownable_init_unchained(); // @audit correct unchained initializer\n    }\n\n    function executeDiamondCut(DiamondCutData calldata _cut) external onlyGovernor {\n        require(proposedHash == keccak256(abi.encode(_cut.facetCuts, _cut.initAddress, _cut.initCalldata)), \"hash mismatch\");\n        diamondCut(_cut);\n    }\n\n    function stopRent(RentalOrder calldata order) external {\n        store.removeRentals(deriveHash(order), updates); // @audit storage update first\n        _removeHooks(order.hooks, order.items, order.rentalWallet);\n        _reclaimRentedItems(order);\n        ESCROW.settlePayment(order);\n    }\n\n    function checkTransaction(bytes calldata data) external {\n        if (data.length > 0 && data.length < 4) revert(\"selector required\"); // @audit allows empty calldata\n    }\n}",
+   "explanation": "Initialize uses `__Ownable_init_unchained()` preserving owner; executeDiamondCut hashes full calldata including initAddress/initCalldata; stopRent updates storage before external calls following CEI; checkTransaction permits zero-length data for native ETH transfers."
+  },
+  "routing_hint_candidates": [
+   "executeDiamondCutProposal",
+   "proposedDiamondCutHash",
+   "diamondCutStorage",
+   "securityCouncilEmergencyApprovals",
+   "UPGRADE_NOTICE_PERIOD",
+   "diamondCut",
+   "DiamondCutData",
+   "facetCuts",
+   "initAddress",
+   "initCalldata",
+   "__Ownable_init",
+   "__Ownable_init_unchained",
+   "initializer",
+   "stopRent",
+   "removeRentals",
+   "reclaimRentedItems",
+   "settlePayment",
+   "checkTransaction",
+   "data.length",
+   "FunctionSelectorRequired",
+   "onlyGovernor",
+   "onlyAdmin",
+   "storageGap",
+   "diamondStorage",
+   "isFrozen",
+   "proposedDiamondCutTimestamp",
+   "_resetProposal",
+   "DiamondCutProposalExecution"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "235",
+  "480",
+  "45",
+  "477"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

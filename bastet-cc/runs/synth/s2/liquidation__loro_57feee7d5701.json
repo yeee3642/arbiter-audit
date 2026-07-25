@@ -1,0 +1,64 @@
+{
+ "tag": "Liquidation",
+ "mode": "s2",
+ "detector": {
+  "name": "Liquidation-Process Flaws",
+  "vulnerability_knowledge": "Liquidation logic in lending protocols must correctly determine when a position becomes liquidatable, calculate the liquidator's reward and protocol reserve share, update global accounting state, and transfer the correct assets to the correct parties. A division by zero occurs if the collateral factor is zero, making collateralValue zero and causing startLiquidationValue = debt * fullValue / collateralValue to revert. State inconsistencies arise when liquidate() reduces debtSharesTotal but fails to increase dailyDebtIncreaseLimitLeft by the repaid asset amount, unlike _repay(), breaking invariant tracking. Callback handlers that return leftover tokens must respect the recipient parameter supplied by the caller; sending rewards to msg.sender (the flash-loan initiator) instead of params.recipient lets a liquidator steal the reward. Each of these flaws lets positions avoid liquidation, over-liquidates them, or diverts value to the wrong address.",
+  "checks": [
+   "In _calculateLiquidation or equivalent, verify collateralValue (or collateralFactorX32) is checked for zero before any division uses it as denominator.",
+   "In liquidate(), after debtSharesTotal -= debtShares, confirm dailyDebtIncreaseLimitLeft (or analogous capacity tracker) is increased by the asset amount repaid.",
+   "In any flash-callback (e.g., uniswapV3FlashCallback), ensure leftover asset balances are transferred to the recipient address provided in the liquidation params, not to msg.sender or a hard-coded liquidator field.",
+   "Confirm liquidation trigger condition (_checkLoanIsHealthy or similar) uses the same price oracle and collateral factor as borrowing/minting to avoid mismatched valuations.",
+   "Verify liquidation penalty calculation clamps penaltyFractionX96 between MIN_LIQUIDATION_PENALTY_X32 and MAX_LIQUIDATION_PENALTY_X32 and that startLiquidationValue > maxPenaltyValue before subtraction.",
+   "Check that _sendPositionValue or equivalent transfers exactly liquidationValue worth of collateral to the liquidator and returns any remainder to the borrower, with slippage checks against amount0Min/amount1Min.",
+   "Ensure reentrancy guards or checks-effects-interactions ordering protect the liquidate() flow, especially when external calls (permit2, safeTransferFrom, _sendPositionValue) occur before state updates like debtSharesTotal reduction.",
+   "Validate that reserveCost accounting (_handleReserveLiquidation) correctly mints/burns reserve shares and that missing (shortfall) is tracked for socialized loss distribution."
+  ],
+  "incorrect_example": {
+   "code": "function _calculateLiquidation(uint256 debt, uint256 fullValue, uint256 collateralValue) internal pure returns (uint256, uint256, uint256) {\n    uint256 startLiquidationValue = debt * fullValue / collateralValue; // @audit division by zero if collateralValue == 0\n    // ... penalty math ...\n}\n\nfunction liquidate(LiquidateParams calldata params) external {\n    // ... health check ...\n    debtSharesTotal -= loans[params.tokenId].debtShares;\n    // @audit missing: dailyDebtIncreaseLimitLeft += repaidAssetAmount;\n    _sendPositionValue(params.tokenId, liquidationValue, fullValue, feeValue, msg.sender);\n}\n\nfunction uniswapV3FlashCallback(uint256 fee0, uint256 fee1, bytes calldata callbackData) external {\n    FlashCallbackData memory data = abi.decode(callbackData, (FlashCallbackData));\n    // ... swaps ...\n    SafeERC20.safeTransfer(data.asset, data.liquidator, balance); // @audit should use data.recipient\n}",
+   "explanation": "Division by zero when collateral factor is zero; daily debt limit not replenished on liquidation; callback sends rewards to msg.sender instead of params.recipient."
+  },
+  "correct_example": {
+   "code": "function _calculateLiquidation(uint256 debt, uint256 fullValue, uint256 collateralValue) internal pure returns (uint256, uint256, uint256) {\n    if (collateralValue == 0) revert ZeroCollateralFactor();\n    uint256 startLiquidationValue = debt * fullValue / collateralValue;\n    // ... penalty math with bounds checks ...\n}\n\nfunction liquidate(LiquidateParams calldata params) external {\n    // ... health check ...\n    uint256 repaidAssets = _convertToAssets(debtShares, newDebtExchangeRateX96, Math.Rounding.Up);\n    debtSharesTotal -= debtShares;\n    dailyDebtIncreaseLimitLeft += repaidAssets; // restore capacity\n    _sendPositionValue(params.tokenId, liquidationValue, fullValue, feeValue, params.recipient);\n}\n\nfunction uniswapV3FlashCallback(uint256 fee0, uint256 fee1, bytes calldata callbackData) external {\n    FlashCallbackData memory data = abi.decode(callbackData, (FlashCallbackData));\n    // ... swaps ...\n    SafeERC20.safeTransfer(data.asset, data.recipient, balance); // correct recipient\n}",
+   "explanation": "Zero-collateral guard added; daily debt limit replenished; callback respects recipient parameter."
+  },
+  "routing_hint_candidates": [
+   "_calculateLiquidation",
+   "collateralFactorX32",
+   "startLiquidationValue",
+   "MAX_LIQUIDATION_PENALTY_X32",
+   "MIN_LIQUIDATION_PENALTY_X32",
+   "penaltyFractionX96",
+   "liquidationValue",
+   "liquidatorCost",
+   "reserveCost",
+   "_checkLoanIsHealthy",
+   "debtSharesTotal",
+   "dailyDebtIncreaseLimitLeft",
+   "_handleReserveLiquidation",
+   "uniswapV3FlashCallback",
+   "FlashCallbackData",
+   "params.recipient",
+   "data.liquidator",
+   "_sendPositionValue",
+   "amount0Min",
+   "amount1Min",
+   "debtShares",
+   "newDebtExchangeRateX96",
+   "newLendExchangeRateX96",
+   "transformedTokenId",
+   "permit2",
+   "permitTransferFrom",
+   "Q32",
+   "Q96"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "360",
+  "362",
+  "349"
+ ],
+ "exclude_repo": "57feee7d5701",
+ "error": null
+}

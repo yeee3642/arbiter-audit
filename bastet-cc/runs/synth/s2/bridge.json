@@ -1,0 +1,64 @@
+{
+ "tag": "Bridge",
+ "mode": "s2b",
+ "detector": {
+  "name": "Bridge-Hardcoded Predicate Address",
+  "vulnerability_knowledge": "Bridge contracts often rely on predicate contracts to validate and process token deposits or withdrawals across chains. Each token type (ERC20, ERC721, ERC1155, native) typically maps to a specific predicate implementation. When a bridge hardcodes a single predicate address (e.g., `ERC20Predicate`) instead of resolving it dynamically via a registry or mapping keyed by `tokenType`, it cannot handle tokens that require different predicates. This breaks bridging for any token not matching the hardcoded predicate, prevents upgrades or migrations to new predicate versions, and forces governance to redeploy the entire bridge to add support. The correct pattern is a `predicateRegistry` mapping (`tokenType => IPredicate`) that the bridge queries at runtime, with an owner-controlled setter to add or update entries.",
+  "checks": [
+   "Bridge contract stores a single immutable or constant `PREDICATE_ADDRESS` instead of a mapping from `tokenType` to predicate address.",
+   "Deposit or withdrawal functions read the predicate from the hardcoded address without checking `tokenType`.",
+   "No `predicateRegistry` mapping or `IPredicateRegistry` interface is used to resolve predicates dynamically.",
+   "Missing `setPredicate(tokenType, address)` or `registerPredicate(tokenType, address)` function with access control for governance.",
+   "Predicate address is passed as a constructor argument but never exposed for updates, making it immutable post-deployment.",
+   "Functions like `depositERC20`, `depositERC721`, `withdrawERC20` all call the same hardcoded predicate regardless of token standard.",
+   "Event `PredicateRegistered(tokenType, predicate)` is not emitted when predicates are configured.",
+   "Bridge uses `tokenType` enum or uint but does not branch predicate selection based on its value."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IPredicate {\n    function deposit(address token, address user, uint256 amount, bytes calldata data) external;\n}\n\ncontract Bridge {\n    address public immutable PREDICATE_ADDRESS = 0x1234567890123456789012345678901234567890; // ERC20Predicate\n    \n    function depositERC20(address token, uint256 amount, bytes calldata data) external {\n        IPredicate(PREDICATE_ADDRESS).deposit(token, msg.sender, amount, data);\n    }\n    \n    function depositERC721(address token, uint256 tokenId, bytes calldata data) external {\n        IPredicate(PREDICATE_ADDRESS).deposit(token, msg.sender, tokenId, data); // wrong predicate for ERC721\n    }\n}",
+   "explanation": "Bridge hardcodes a single ERC20Predicate address and uses it for both ERC20 and ERC721 deposits, making ERC721 bridging non-functional."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IPredicate {\n    function deposit(address token, address user, uint256 amount, bytes calldata data) external;\n}\n\ncontract Bridge {\n    mapping(uint256 => address) public predicateRegistry; // tokenType => predicate\n    \n    event PredicateRegistered(uint256 indexed tokenType, address indexed predicate);\n    \n    function setPredicate(uint256 tokenType, address predicate) external onlyOwner {\n        predicateRegistry[tokenType] = predicate;\n        emit PredicateRegistered(tokenType, predicate);\n    }\n    \n    function depositERC20(address token, uint256 amount, bytes calldata data) external {\n        address predicate = predicateRegistry[1]; // 1 = ERC20\n        require(predicate != address(0), \"predicate not set\");\n        IPredicate(predicate).deposit(token, msg.sender, amount, data);\n    }\n    \n    function depositERC721(address token, uint256 tokenId, bytes calldata data) external {\n        address predicate = predicateRegistry[2]; // 2 = ERC721\n        require(predicate != address(0), \"predicate not set\");\n        IPredicate(predicate).deposit(token, msg.sender, tokenId, data);\n    }\n}",
+   "explanation": "Bridge uses a mutable `predicateRegistry` mapping keyed by `tokenType` with an owner-controlled `setPredicate` function, enabling dynamic predicate resolution per token standard."
+  },
+  "routing_hint_candidates": [
+   "PREDICATE_ADDRESS",
+   "predicateRegistry",
+   "tokenType",
+   "ERC20Predicate",
+   "ERC721Predicate",
+   "ERC1155Predicate",
+   "NativePredicate",
+   "setPredicate",
+   "registerPredicate",
+   "PredicateRegistered",
+   "depositERC20",
+   "depositERC721",
+   "depositERC1155",
+   "withdrawERC20",
+   "withdrawERC721",
+   "IPredicate",
+   "onlyOwner",
+   "immutable",
+   "constructor",
+   "bridge",
+   "PolygonBridge",
+   "ArbitrumBridge",
+   "OptimismBridge",
+   "L1StandardBridge",
+   "L2StandardBridge",
+   "MessagePasser",
+   "CrossDomainMessenger",
+   "xDomainMessageSender",
+   "finalizeDeposit",
+   "finalizeWithdrawal"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "488"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

@@ -1,0 +1,73 @@
+{
+ "tag": "Governance",
+ "mode": "s2",
+ "detector": {
+  "name": "Governance",
+  "vulnerability_knowledge": "Governance systems are vulnerable when voting power can be manipulated via flash loans or instant token acquisition because snapshots use current balances instead of historical checkpoints. Proposal activation lacks rate limiting, allowing spam proposals to block legitimate ones through grace period lockouts. Threshold and quorum calculations often use totalSupply at proposal creation while voting power is measured at a prior block, enabling same-block supply inflation to lower requirements. Vote counting resets before external calls, permitting reentrancy to double-count signatures. Endorsement weights are recorded at call time without preventing token transfer and re-endorsement, causing double-counting. Parameter setters miss zero-address and bounds validation, and execution paths omit msg.value forwarding despite payable checks.",
+  "checks": [
+   "Snapshot voting power at proposal creation using historical checkpoints (e.g., getVotes(account, block.number - 1)) rather than current balanceOf to prevent flash loan manipulation.",
+   "Enforce a minimum delay or cooldown between proposal activations and validate proposer reputation or stake to prevent spam proposals from monopolizing the active slot via GRACE_PERIOD.",
+   "Calculate proposalThreshold and quorum using totalSupply at the same historical block used for voting power (snapshot - 1) so same-block minting cannot lower thresholds after proposal creation.",
+   "Reset vote counts and hasVoted flags only after the external call (_;) completes, not before, to prevent reentrancy from allowing signers to vote twice in the same transaction.",
+   "Record endorsement weight once per proposal per user at first endorsement and reject subsequent calls, or snapshot token balances at proposal activation to prevent transfer-and-re-endorse double counting.",
+   "Validate all address parameters (vetoer, treasury, token, guard) against address(0) in initialize and setter functions before assignment.",
+   "Validate percentage and basis-point parameters (e.g., minBidIncrement, proposalThresholdBps, quorumThresholdBps) against explicit upper bounds (100 or 10000) before casting to uint8/uint16.",
+   "Forward msg.value in low-level calls when the function is payable and validates msg.value == actionInfo.value (use {value: actionInfo.value} on executor.execute)."
+  ],
+  "incorrect_example": {
+   "code": "function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description) external returns (bytes32) {\n    uint256 threshold = proposalThreshold(); // uses current totalSupply\n    if (getVotes(msg.sender, block.timestamp - 1) < threshold) revert BELOW_PROPOSAL_THRESHOLD();\n    uint256 snapshot = block.timestamp + votingDelay;\n    uint256 deadline = snapshot + votingPeriod;\n    proposals[proposalId] = Proposal({\n        voteStart: uint32(snapshot),\n        voteEnd: uint32(deadline),\n        proposalThreshold: uint32(threshold),\n        quorumVotes: uint32(quorum()), // uses current totalSupply\n        proposer: msg.sender,\n        timeCreated: uint32(block.timestamp)\n    });\n    return proposalId;\n}\n\nfunction endorseProposal(uint256 proposalId) external {\n    uint256 userVotes = VOTES.balanceOf(msg.sender); // current balance, no snapshot\n    uint256 previous = userEndorsementsForProposal[proposalId][msg.sender];\n    totalEndorsementsForProposal[proposalId] -= previous;\n    userEndorsementsForProposal[proposalId][msg.sender] = userVotes;\n    totalEndorsementsForProposal[proposalId] += userVotes;\n}\n\nmodifier onlySigners() {\n    if (!signers.isSigner[msg.sender]) revert NotSigner();\n    bytes32 topic = keccak256(msg.data);\n    Voting storage voting = votingPerTopic[signerEpoch][topic];\n    if (voting.hasVoted[msg.sender]) revert AlreadyVoted();\n    voting.hasVoted[msg.sender] = true;\n    uint256 voteCount = voting.voteCount + 1;\n    if (voteCount < signers.threshold) {\n        voting.voteCount = voteCount;\n        return;\n    }\n    voting.voteCount = 0; // reset BEFORE external call\n    for (uint256 i = 0; i < signers.accounts.length; i++) {\n        voting.hasVoted[signers.accounts[i]] = false;\n    }\n    _;\n}\n\nfunction executeAction(ActionInfo calldata actionInfo) external payable {\n    if (msg.value != actionInfo.value) revert IncorrectMsgValue();\n    (bool success, ) = executor.execute(actionInfo.target, actionInfo.value, actionInfo.isScript, actionInfo.data); // missing {value: actionInfo.value}\n    if (!success) revert FailedActionExecution();\n}",
+   "explanation": "Proposal thresholds use current totalSupply while voting power is historical; endorsements use live balanceOf enabling double-counting via token transfer; vote counts reset before external call allowing reentrancy double-vote; executeAction validates msg.value but omits value forwarding in the low-level call."
+  },
+  "correct_example": {
+   "code": "function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description) external returns (bytes32) {\n    uint256 snapshotBlock = block.number - 1;\n    uint256 threshold = proposalThreshold(snapshotBlock); // uses historical totalSupply\n    if (getVotes(msg.sender, snapshotBlock) < threshold) revert BELOW_PROPOSAL_THRESHOLD();\n    uint256 snapshot = block.timestamp + votingDelay;\n    uint256 deadline = snapshot + votingPeriod;\n    proposals[proposalId] = Proposal({\n        voteStart: uint32(snapshot),\n        voteEnd: uint32(deadline),\n        proposalThreshold: uint32(threshold),\n        quorumVotes: uint32(quorum(snapshotBlock)), // historical totalSupply\n        proposer: msg.sender,\n        timeCreated: uint32(block.timestamp)\n    });\n    return proposalId;\n}\n\nfunction endorseProposal(uint256 proposalId) external {\n    if (userEndorsementsForProposal[proposalId][msg.sender] > 0) revert AlreadyEndorsed();\n    uint256 userVotes = VOTES.getPastVotes(msg.sender, proposalActivationBlock[proposalId]);\n    userEndorsementsForProposal[proposalId][msg.sender] = userVotes;\n    totalEndorsementsForProposal[proposalId] += userVotes;\n}\n\nmodifier onlySigners() {\n    if (!signers.isSigner[msg.sender]) revert NotSigner();\n    bytes32 topic = keccak256(msg.data);\n    Voting storage voting = votingPerTopic[signerEpoch][topic];\n    if (voting.hasVoted[msg.sender]) revert AlreadyVoted();\n    voting.hasVoted[msg.sender] = true;\n    uint256 voteCount = voting.voteCount + 1;\n    if (voteCount < signers.threshold) {\n        voting.voteCount = voteCount;\n        return;\n    }\n    _;\n    voting.voteCount = 0; // reset AFTER external call\n    for (uint256 i = 0; i < signers.accounts.length; i++) {\n        voting.hasVoted[signers.accounts[i]] = false;\n    }\n}\n\nfunction executeAction(ActionInfo calldata actionInfo) external payable {\n    if (msg.value != actionInfo.value) revert IncorrectMsgValue();\n    (bool success, ) = executor.execute{value: actionInfo.value}(actionInfo.target, actionInfo.value, actionInfo.isScript, actionInfo.data);\n    if (!success) revert FailedActionExecution();\n}",
+   "explanation": "Thresholds and quorum use historical totalSupply at snapshot-1; endorsements are recorded once per user at activation block; vote state resets after external call preventing reentrancy; executeAction forwards msg.value in the low-level call."
+  },
+  "routing_hint_candidates": [
+   "proposalThreshold",
+   "quorumVotes",
+   "getVotes",
+   "getPastVotes",
+   "block.timestamp",
+   "block.number",
+   "votingDelay",
+   "votingPeriod",
+   "totalEndorsementsForProposal",
+   "userEndorsementsForProposal",
+   "VOTES",
+   "balanceOf",
+   "activeProposal",
+   "GRACE_PERIOD",
+   "activationTimestamp",
+   "proposalHasBeenActivated",
+   "reclaimVotes",
+   "tokenClaimsForProposal",
+   "userVotesForProposal",
+   "votingPerTopic",
+   "signerEpoch",
+   "hasVoted",
+   "voteCount",
+   "signers.threshold",
+   "executor.execute",
+   "actionInfo.value",
+   "msg.value",
+   "initialize",
+   "_vetoer",
+   "settings.vetoer"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "406",
+  "177",
+  "182",
+  "185",
+  "405",
+  "217",
+  "294",
+  "225",
+  "212",
+  "407"
+ ],
+ "exclude_repo": "1aee004bafff",
+ "error": null
+}

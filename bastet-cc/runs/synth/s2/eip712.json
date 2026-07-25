@@ -1,0 +1,59 @@
+{
+ "tag": "EIP712",
+ "mode": "s2",
+ "detector": {
+  "name": "EIP712-Encoding-and-Replay-Protection",
+  "vulnerability_knowledge": "EIP-712 requires structured data to be hashed in a specific nested manner: the typehash is hashed together with the keccak256 of the encoded parameters, not with the raw parameters themselves. Dynamic types (bytes, string, arrays) must be keccak256-hashed before being included in the outer abi.encode. Using abi.encodePacked on arrays or omitting the inner keccak256 violates the standard and produces a different digest than off-chain signers (e.g., MetaMask, ethers.js) compute, causing valid signatures to fail or enabling cross-function replay if the same digest is accepted for multiple actions. Additionally, every signed payload must include a strictly incrementing nonce (or equivalent replay protection) bound to the signer and the contract domain; missing or predictable nonces allow an attacker to replay a captured signature to execute the same operation repeatedly.",
+  "checks": [
+   "Verify that the digest computation uses keccak256(abi.encode(typehash, keccak256(abi.encode(...parameters...)))) for struct types and keccak256(abi.encodePacked(...)) only for static primitives; dynamic arrays/bytes/strings must be hashed before the outer encode.",
+   "Confirm that array parameters are not passed through abi.encodePacked directly into the outer abi.encode; each dynamic array must be keccak256(abi.encode(array)) first.",
+   "Ensure the domain separator (name, version, chainId, verifyingContract) is incorporated exactly as specified in EIP-712 and matches the off-chain signing domain.",
+   "Check that a nonce is retrieved and atomically incremented per signer (or per relevant scope) before digest calculation, and that the nonce is included in the signed payload.",
+   "Validate that the deadline/expiration timestamp is included in the signed data and enforced during verification to prevent indefinite replay.",
+   "Confirm that the recovered address from ecrecover matches the expected signer and that the signature format (r, s, v or compact) is handled correctly.",
+   "Ensure no two distinct functions or actions share the same typehash or digest structure, which would allow cross-function signature replay.",
+   "Verify that the contract does not accept signatures signed by an EOA for a different chainId or verifyingContract (domain separation)."
+  ],
+  "incorrect_example": {
+   "code": "function validateBurnSignature(Types.EIP712Signature calldata signature, uint256 tokenId) external {\n    _validateRecoveredAddress(\n        _calculateDigest(\n            keccak256(\n                abi.encode(Typehash.BURN, tokenId, _getAndIncrementNonce(signature.signer), signature.deadline)\n            )\n        ),\n        signature\n    );\n}",
+   "explanation": "The typehash and parameters are hashed together in a single keccak256(abi.encode(...)), violating EIP-712 structured hashing which requires the typehash to be paired with the keccak256 of the encoded parameters."
+  },
+  "correct_example": {
+   "code": "function validateBurnSignature(Types.EIP712Signature calldata signature, uint256 tokenId) external {\n    uint256 nonce = _getAndIncrementNonce(signature.signer);\n    require(signature.deadline >= block.timestamp, \"expired\");\n    bytes32 structHash = keccak256(abi.encode(\n        Typehash.BURN,\n        tokenId,\n        nonce,\n        signature.deadline\n    ));\n    bytes32 digest = _calculateDigest(structHash); // _calculateDigest applies domain separator\n    _validateRecoveredAddress(digest, signature);\n}",
+   "explanation": "Parameters are encoded and hashed separately, then combined with the typehash inside a structHash; nonce is incremented and deadline enforced before digest calculation."
+  },
+  "routing_hint_candidates": [
+   "_calculateDigest",
+   "_validateRecoveredAddress",
+   "_getAndIncrementNonce",
+   "Typehash",
+   "EIP712Signature",
+   "DOMAIN_SEPARATOR",
+   "domainSeparator",
+   "chainId",
+   "verifyingContract",
+   "abi.encode",
+   "abi.encodePacked",
+   "keccak256",
+   "ecrecover",
+   "nonce",
+   "deadline",
+   "signer",
+   "r",
+   "s",
+   "v",
+   "compactSignature",
+   "replay",
+   "crossFunction",
+   "domainSeparatorV4"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "481",
+  "303",
+  "304"
+ ],
+ "exclude_repo": null,
+ "error": null
+}
