@@ -1,0 +1,62 @@
+{
+ "tag": "Gnosis safe",
+ "mode": "s2b",
+ "detector": {
+  "name": "Gnosis Safe Extension Missing Authorization Checks",
+  "vulnerability_knowledge": "Gnosis Safe extensions (Guards, Modules, and Fallback Handlers) integrate with the Safe core contract through well-defined interfaces. A Guard implements `IGuard.checkTransaction(address to, uint256 value, bytes data, Enum.Operation operation) returns (bool)` and is consulted before every transaction execution; if it returns `false` the transaction reverts. A Module implements `IModule.execTransactionFromModule(address to, uint256 value, bytes data, Enum.Operation operation) returns (bool)` and is called via `Safe.execTransactionFromModule`. A Fallback Handler implements `IFallbackHandler.handlePayment(address from, uint256 value, bytes data) returns (bool)` and receives ether or arbitrary calldata when the Safe receives a call that matches no other function. Vulnerabilities arise when these extension contracts omit authorization checks (e.g., only allowing the Safe itself or authorized signers to call configuration functions), fail to validate state transitions (e.g., enabling a guard without checking it is not already enabled, or disabling without ensuring the caller is the Safe), or mishandle reentrancy during callbacks. Because the Safe core trusts the extension's return value, a missing check can let an attacker bypass the multi-sig policy, drain funds, or permanently lock the Safe.",
+  "checks": [
+   "Guard.checkTransaction does not verify `msg.sender == address(safe)` before enforcing policy, allowing arbitrary callers to influence the return value.",
+   "Module.execTransactionFromModule lacks a `require(msg.sender == address(safe))` guard, so external callers can execute arbitrary transactions through the module.",
+   "FallbackHandler.handlePayment does not confirm `msg.sender == address(safe)` or validate `value`/`data`, enabling spoofed payment notifications.",
+   "Enable/disable module functions (e.g., `enableModule`, `disableModule` wrappers) miss `onlyOwner` or `onlySafe` modifiers, letting anyone add or remove extensions.",
+   "Guard configuration setters (e.g., `setGuard`, `configureGuard`) omit validation that the new guard address implements `IGuard` and is not the zero address.",
+   "State-changing functions in the extension do not follow checks-effects-interactions pattern, creating reentrancy risk when the Safe calls back into the extension.",
+   "Extension uses `delegatecall` or `call` to untrusted targets without restricting the calldata or verifying the target is an allowed contract.",
+   "Events for critical lifecycle changes (GuardChanged, ModuleEnabled, ModuleDisabled, FallbackHandlerChanged) are not emitted, breaking off-chain monitoring and invariant verification."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IGuard {\n    function checkTransaction(address to, uint256 value, bytes calldata data, uint8 operation) external returns (bool);\n}\n\ncontract VulnerableGuard is IGuard {\n    address public immutable safe;\n    bool public enabled;\n    mapping(bytes4 => bool) public allowedSelectors;\n\n    constructor(address _safe) { safe = _safe; }\n\n    // @audit missing msg.sender == safe check\n    function checkTransaction(address to, uint256 value, bytes calldata data, uint8 operation) external returns (bool) {\n        if (!enabled) return true;\n        return allowedSelectors[bytes4(data[:4])];\n    }\n\n    // @audit no authorization, anyone can toggle the guard\n    function setEnabled(bool _enabled) external {\n        enabled = _enabled;\n    }\n\n    // @audit no validation of selector or zero address\n    function allowSelector(bytes4 selector) external {\n        allowedSelectors[selector] = true;\n    }\n}\n",
+   "explanation": "The guard lacks `msg.sender == safe` checks in `checkTransaction`, `setEnabled`, and `allowSelector`, allowing any caller to bypass policy enforcement or reconfigure the guard."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IGuard {\n    function checkTransaction(address to, uint256 value, bytes calldata data, uint8 operation) external returns (bool);\n}\n\ncontract FixedGuard is IGuard {\n    address public immutable safe;\n    bool public enabled;\n    mapping(bytes4 => bool) public allowedSelectors;\n\n    constructor(address _safe) { safe = _safe; }\n\n    modifier onlySafe() {\n        require(msg.sender == safe, \"GS01\");\n        _;\n    }\n\n    function checkTransaction(address to, uint256 value, bytes calldata data, uint8 operation) external onlySafe returns (bool) {\n        if (!enabled) return true;\n        return allowedSelectors[bytes4(data[:4])];\n    }\n\n    function setEnabled(bool _enabled) external onlySafe {\n        enabled = _enabled;\n    }\n\n    function allowSelector(bytes4 selector) external onlySafe {\n        require(selector != bytes4(0), \"zero selector\");\n        allowedSelectors[selector] = true;\n    }\n}\n",
+   "explanation": "All external entry points are protected with `onlySafe` modifier ensuring only the Safe contract can invoke them, and input validation prevents zero selectors."
+  },
+  "routing_hint_candidates": [
+   "IGuard",
+   "checkTransaction",
+   "IModule",
+   "execTransactionFromModule",
+   "IFallbackHandler",
+   "handlePayment",
+   "enableModule",
+   "disableModule",
+   "setGuard",
+   "getModulesPaginated",
+   "GuardChanged",
+   "ModuleEnabled",
+   "ModuleDisabled",
+   "FallbackHandlerChanged",
+   "GS01",
+   "GS02",
+   "GS03",
+   "GS04",
+   "GS05",
+   "GS06",
+   "GS07",
+   "GS08",
+   "GS09",
+   "GS10",
+   "GS11",
+   "GS12",
+   "GS13",
+   "GS14",
+   "GS15",
+   "GS16"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [],
+ "exclude_repo": "fccd852beaa3",
+ "error": null
+}

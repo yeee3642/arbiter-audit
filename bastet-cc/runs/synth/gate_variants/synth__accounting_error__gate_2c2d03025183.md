@@ -7,47 +7,60 @@ You are a smart contract auditor. After reading the following vulnerability know
 ### Vulnerability Knowledge
 
 **Accounting Error**
-Accounting errors occur when a protocol's internal bookkeeping diverges from the actual on-chain asset movements or economic reality. Common root causes include: (1) assuming `transferFrom`/`safeTransfer` moves exactly the requested amount, which fails for fee-on-transfer or rebasing tokens where the received balance delta is smaller (or larger) than the argument; (2) updating state variables before or after external calls in an order that allows reentrancy or double-counting; (3) using stale or inflated denominators such as `totalSupply()` that includes burned or non-voting tokens when computing quotas, rewards, or fees; (4) applying formulas that reference the wrong basis (e.g., minting performance fees on total supply instead of realized profit) or skipping required conversions (e.g., returning stETH-denominated prices where WETH is expected); (5) trusting external contract balances without verifying they match the pool's ideal ratios, leading to value loss on deposits. Each of these creates a gap between recorded shares/entitlements and real value, enabling theft, unfair reward distribution, or protocol insolvency.
+Accounting errors occur when a protocol's internal state diverges from the true on-chain reality of assets it manages. Common mechanisms include: (1) assuming `transferFrom`/`burnFrom` moves the full requested amount, while fee-on-transfer or rebasing tokens deliver less (or more) to the contract; (2) using stale cached values (e.g., `totalSupply`, `lastUpdated`, high-water marks) without synchronizing them before reads or writes; (3) computing rewards, fees, or prices with formulas that omit components (missing conversion hops, wrong denominator, profit vs. principal confusion); (4) updating state in the wrong order — e.g., emitting events or minting shares before balances are finalized — enabling reentrancy or double-counting; (5) trusting external balances (`balanceOf(this)`) without verifying they match expected deltas after transfers, swaps, or liquidity operations. These flaws let attackers drain value, brick accounting, or silently misallocate rewards/fees.
 
 ### Detection Checks
 
-1. Verify that every ERC20 `transferFrom`, `safeTransfer`, or `burnFrom` call is followed by a balance delta check (`balanceAfter - balanceBefore`) instead of trusting the input `amount` parameter, especially for tokens not vetted as standard ERC20.
-2. Ensure state updates (e.g., `totalSupply`, user balances, reward indexes) happen *after* the corresponding asset transfer succeeds, and that no external call intervenes between the transfer and the state write.
-3. Confirm that denominators used in reward/fee/quorum calculations (e.g., `totalSupply()`, `baseSupply`) exclude burned tokens, tokens held by non-participating contracts, or other non-eligible holdings.
-4. Check that performance/management fee formulas mint shares based on *profit* (delta between current NAV and high-water mark) multiplied by the fee rate, not on raw `baseSupply` or `minLpPriceFactor` alone.
-5. Validate that price oracles return values in the exact unit expected by the caller (e.g., WETH per share, not stETH per share) and that any required conversion (Curve pool, wrapper contract) is applied.
-6. Ensure multi-asset deposits (e.g., `add_liquidity`) compute and enforce the pool's ideal token ratios before depositing, rather than blindly sending the full contract balance of each asset.
-7. For rebasing tokens, confirm that locked or staked amounts are read dynamically at withdrawal time (via `balanceOf`) rather than cached at deposit time.
-8. Verify that approval mappings or nonces used for withdrawal/loan authorization are scoped to the specific operation (e.g., separate `withdrawApproval` vs `loanApproval`) so one cannot consume the other.
+1. After any `transferFrom`, `safeTransferFrom`, `burnFrom`, or low-level `call` to an ERC20, verify the contract's actual balance delta (via `balanceOf(address(this))` before/after) matches the expected amount; revert or adjust accounting if it differs.
+2. Before reading `totalSupply()`, `balanceOf()`, or any user-supplied amount for reward/fee/share calculations, ensure the relevant state (e.g., `rewardsPerToken.lastUpdated`, `lpPriceHighWaterMarks`, `lastFeeCharge`) has been updated to the current block timestamp or latest checkpoint.
+3. When computing performance/management/protocol fees, confirm the formula uses *profit* (current value minus high-water mark or cost basis) multiplied by the fee rate, not total supply or principal; check for missing `(factor - DENOMINATOR)` or division by `DENOMINATOR^2` where required.
+4. In price oracles or `price()` functions, trace the full conversion path (e.g., wstETH -> stETH -> WETH via Curve) and ensure every hop is applied; a single-hop return in a multi-hop asset is an accounting error.
+5. When calculating protocol rewards from collected fees, verify the fee amount excludes principal/liquidity returns; `_decreaseFullLiquidityAndCollect` often returns `collectedAmount - decreaseLiquidityReturn` where the latter contains principal.
+6. For quorum or voting-power denominators, exclude burned tokens and tokens held by non-voting contracts (auction, treasury, staking) from `totalSupply()`; use a `votingSupply()` or snapshot instead.
+7. Before depositing into a multi-asset pool (Curve, Balancer), compute the ideal ratio from the pool's `get_virtual_price` or reserves and adjust input amounts; depositing raw `balanceOf(this)` for each token causes imbalanced deposits and LP token loss.
+8. For rebase tokens (stETH, aUSDC, etc.), never cache a static `amount` at lock/deposit time and later transfer that fixed value; always read the current `balanceOf(user)` or `sharesToAssets` conversion at execution time.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function deposit(uint256 amount) external {
-    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-    // @audit assumes full amount received; fails for fee-on-transfer
-    shares[msg.sender] += amount;
-    totalShares += amount;
+function depositRebase(address user, uint256 amount) external {
+    // Record static amount at deposit time
+    deposits[user] = amount;
+    IERC20(rebaseToken).safeTransferFrom(user, address(this), amount);
+}
+
+function withdrawRebase(address user) external {
+    // Transfer the *original* amount, ignoring rebases
+    uint256 amt = deposits[user];
+    delete deposits[user];
+    IERC20(rebaseToken).safeTransfer(user, amt); // @audit underpays on positive rebase, reverts on negative rebase
 }
 ```
 
-The contract credits `amount` shares without measuring the actual tokens received, so fee-on-transfer tokens cause an accounting shortfall.
+Caches a fixed token amount at deposit and withdraws that same amount later, ignoring rebasing balance changes.
 
 #### Example 2: Correct Example
 
 ```solidity
-function deposit(uint256 amount) external {
-    uint256 balBefore = IERC20(token).balanceOf(address(this));
-    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-    uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;
-    shares[msg.sender] += received;
-    totalShares += received;
+function depositRebase(address user, uint256 amount) external {
+    uint256 sharesBefore = rebaseToken.balanceOf(address(this));
+    IERC20(rebaseToken).safeTransferFrom(user, address(this), amount);
+    uint256 sharesAfter = rebaseToken.balanceOf(address(this));
+    deposits[user] = sharesAfter - sharesBefore; // store *shares* received
+}
+
+function withdrawRebase(address user) external {
+    uint256 shares = deposits[user];
+    delete deposits[user];
+    // Convert current shares to assets at withdrawal time
+    uint256 assets = rebaseToken.convertToAssets(shares);
+    IERC20(rebaseToken).safeTransfer(user, assets);
 }
 ```
 
-Measuring the real balance delta ensures shares match assets actually received, fixing fee-on-transfer and rebasing discrepancies.
+Stores share deltas on deposit and converts shares to current asset value on withdrawal, respecting rebases.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

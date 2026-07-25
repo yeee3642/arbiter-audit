@@ -22,7 +22,8 @@ MAX_DF_RATIO = 0.05
 MIN_LIFT = 2.0
 MIN_POS_REPOS = 2       # required when the tag has >=3 positive repos
 TOP_HINTS = 8
-MAX_HINTS = 12          # ceiling once coverage back-fill starts pulling from the bench
+MAX_CLASS_HINTS = 5     # curated class vocabulary seeded ahead of the ladder
+MAX_HINTS = 14          # ceiling once coverage back-fill starts pulling from the bench
 COVERAGE_TARGET = 0.80
 MIN_HINTS = 2           # below this a synthesized detector may not ship (no broadcast)
 
@@ -183,6 +184,22 @@ def validate_hints(tag: str, candidates: list[str],
     n_files = sum(len(s) for s in file_sets.values())
     n_pos_files = sum(len(file_sets[r]) for r in pos if r in file_sets) or 1
 
+    # Class vocabulary goes in first, not last (DESIGN reaches for the lexicon only
+    # after the ladder starves). Reason, measured: 23 of 45 LORO folds routed zero
+    # tasks onto their held-out repo because every surviving hint was one protocol's
+    # private vocabulary. Lift cannot tell class vocabulary from private vocabulary
+    # when a tag has two or three positive repos -- both concentrate identically --
+    # so generality has to come from a source that never saw those repos. The
+    # lexicon is distilled from subtag names, not from labels, and each term still
+    # has to survive both hard cuts here.
+    class_hints: list[str] = []
+    for h in FALLBACK_LEXICON.get(tag, [])[:MAX_CLASS_HINTS]:
+        if h in class_hints:
+            continue
+        df, _, _ = _df(h, file_sets)
+        if 0 < df and df / n_files <= MAX_DF_RATIO:
+            class_hints.append(h)
+
     rejected: dict[str, str] = {}
     # rows are (hint, lift, pos_df, pos_repo_hits)
     survivors: list[tuple[str, float, int, int]] = []
@@ -220,10 +237,11 @@ def validate_hints(tag: str, candidates: list[str],
     # lift score here, unlike in the survivor ranking where every entry already
     # cleared the guard.
     bench.sort(key=lambda t: (-t[3], *rank(t)))
-    kept = [h for h, *_ in survivors[:TOP_HINTS]]
+    kept = list(class_hints) + [h for h, *_ in survivors[:TOP_HINTS]
+                                if h not in class_hints]
     # Bench order: demoted survivors first (they cleared every cut), then the
     # soft rejects, so a relaxation is only ever spent when nothing cleaner is left.
-    pool = [h for h, *_ in survivors[TOP_HINTS:]] + [h for h, *_ in bench]
+    pool = [h for h, *_ in survivors[TOP_HINTS:] + bench if h not in kept]
 
     def coverage(hints: list[str]) -> float:
         if not localized_ident_sets:
@@ -286,6 +304,7 @@ def validate_hints(tag: str, candidates: list[str],
     return {
         "tag": tag,
         "kept": kept,
+        "class_hints": class_hints,
         "rejected": rejected,
         "backfilled": backfilled,
         "n_candidates": len(seen),

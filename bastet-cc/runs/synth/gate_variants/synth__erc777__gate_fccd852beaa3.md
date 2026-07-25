@@ -7,18 +7,18 @@ You are a smart contract auditor. After reading the following vulnerability know
 ### Vulnerability Knowledge
 
 **ERC777-Callback-Reentrancy**
-ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute arbitrary recipient code during `transfer`, `send`, or `operatorSend`. If a contract performs sensitive state updates (accounting, debt reduction, flow limits, command execution flags) *after* an external token transfer, a malicious ERC777 recipient can re-enter the same or a related function before those updates complete. This violates the Checks-Effects-Interactions pattern and enables cross-function reentrancy: the callback may call back into `swap`, `withdrawReserves`, `executeWithToken`, or `giveToken` while critical mappings (`reserveDebt`, `totalDebt`, flow accounting, `commandId` execution status) are still stale. Balance-delta accounting (`balanceAfter - balanceBefore`) is especially fragile because the callback can manipulate the contract's token balance mid-execution, inflating the calculated received amount. A `nonReentrant` guard on the entry function does not protect against cross-function reentrancy if the callback targets a different unprotected function that shares state.
+ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute arbitrary recipient code during `transfer`, `send`, and `operatorSend`. If a contract performs sensitive state updates (balance accounting, debt reduction, flow limits, command execution flags) after the external call that triggers the hook, a malicious recipient can re-enter the same or a related function and observe stale state. This violates the Checks-Effects-Interactions pattern. The vulnerability manifests in three common forms: (1) measuring received amounts by balance delta after `safeTransferFrom` -- an ERC777 `tokensToSend` hook can re-enter a withdrawal function that changes the contract's balance, inflating the calculated amount; (2) transferring tokens before updating internal accounting (`_addFlowIn`, debt ledgers, executed-command markers), allowing the callback to re-enter and manipulate the pre-update state; (3) calling an unprotected virtual/external function after the transfer, enabling cross-function reentrancy into payout or withdrawal logic. A `nonReentrant` modifier on the entry function does not protect against cross-function reentrancy if the reentrant target lacks the same guard.
 
 ### Detection Checks
 
-1. External ERC20/ERC777 transfer (`safeTransferFrom`, `transfer`, `safeTransfer`, `_giveToken`, `_transferFromExecutor`) occurs before critical state updates (debt subtraction, flow accounting, command execution flags, executor mapping writes).
-2. Received amount is calculated via post-transfer balance delta (`token.balanceOf(address(this)) - prevBalance`) instead of trusting the input `amount` parameter or using a pull-payment pattern.
-3. Missing `nonReentrant` modifier on functions that share mutable state with the transfer entry point (e.g., `withdrawReserves`, `swap`, `_executeWithToken`, `_addFlowIn`).
-4. Sensitive state variables (`reserveDebt`, `totalDebt`, flow limits, `commandId` executed flags, `expressExecutor` mappings) are written *after* the external call instead of before.
-5. Virtual or internal function (`_executeWithToken`, `_giveToken`, `_addFlowIn`) called after transfer lacks its own reentrancy guard and mutates shared state.
-6. Callback-susceptible token addresses are not validated against an allowlist or checked for ERC777 hook implementation (`IERC777Recipient`, `IERC777Sender`).
-7. Revert statements inside the callback path (e.g., in `tokensReceived`) can cause DoS for the caller if the contract does not handle transfer failures gracefully.
-8. Multiple sequential transfers in one function (e.g., `contractCallWithTokenValue` then `safeTransferFrom`) each open a callback window before any state is finalized.
+1. External token transfer (`safeTransferFrom`, `transfer`, `send`, `operatorSend`, `_giveToken`, `_transferFromExecutor`) occurs before critical state updates (balance accounting, debt reduction, flow limits, executed-command markers).
+2. Received amount is calculated as `balanceOf(address(this)) - prevBalance` after a `safeTransferFrom` call without protecting the balance measurement from intermediate changes via reentrancy.
+3. A `nonReentrant` modifier is present on the entry function but the reentrancy target (e.g., `withdrawReserves`, `_executeWithToken`, payout function) does not share the same reentrancy guard.
+4. Virtual or external function (`_executeWithToken`, `_giveToken`, callback) is invoked after the token transfer without ensuring state is fully settled.
+5. Flow limit or debt accounting (`_addFlowIn`, `reserveDebt[token][msg.sender] -= received`, `totalDebt[token] -= received`) is performed after the external call that can trigger ERC777 hooks.
+6. Command execution flag (`_setExpressExecutorWithToken`, `gateway.isCommandExecuted`) is set after the token transfer, allowing reentrant execution of the same command.
+7. Token transfer uses a low-level call or `call`/`delegatecall` pattern that forwards gas to the recipient, enabling arbitrary callback logic.
+8. Contract assumes ERC20 `transfer`/`transferFrom` cannot re-enter and omits `nonReentrant` on functions that handle ERC777-compatible tokens.
 
 ### Examples
 
@@ -27,32 +27,31 @@ ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute a
 ```solidity
 function repayLoan(IERC20 token, uint256 amount) external nonReentrant {
     if (reserveDebt[token][msg.sender] == 0) revert NoDebt();
-    uint256 prevBal = token.balanceOf(address(this));
+    uint256 prevBalance = token.balanceOf(address(this));
     token.safeTransferFrom(msg.sender, address(this), amount);
-    uint256 received = token.balanceOf(address(this)) - prevBal;
+    uint256 received = token.balanceOf(address(this)) - prevBalance;
     reserveDebt[token][msg.sender] -= received;
     totalDebt[token] -= received;
     emit DebtRepaid(token, msg.sender, received);
 }
 ```
 
-Balance-delta accounting after `safeTransferFrom` lets an ERC777 `tokensToSend` hook re-enter `swap`/`withdrawReserves`, altering the contract's balance and inflating `received` before debt is reduced.
+Balance-delta measurement after `safeTransferFrom` lets an ERC777 `tokensToSend` hook re-enter `withdrawReserves` and alter the contract's balance, inflating `received` and understating debt.
 
 #### Example 2: Correct Example
 
 ```solidity
 function repayLoan(IERC20 token, uint256 amount) external nonReentrant {
     if (reserveDebt[token][msg.sender] == 0) revert NoDebt();
-    uint256 debt = reserveDebt[token][msg.sender];
-    uint256 repayAmount = amount > debt ? debt : amount;
-    reserveDebt[token][msg.sender] -= repayAmount;
-    totalDebt[token] -= repayAmount;
-    token.safeTransferFrom(msg.sender, address(this), repayAmount);
-    emit DebtRepaid(token, msg.sender, repayAmount);
+    token.safeTransferFrom(msg.sender, address(this), amount);
+    uint256 received = amount; // trust the requested amount or use a pull pattern
+    reserveDebt[token][msg.sender] -= received;
+    totalDebt[token] -= received;
+    emit DebtRepaid(token, msg.sender, received);
 }
 ```
 
-State updates (debt reduction) happen before the external transfer; the trusted `repayAmount` is used instead of a post-transfer balance delta, eliminating reentrancy and inflation risks.
+Remove balance-delta accounting; use the requested `amount` (or a pull-payment pattern) and update state before any external call, eliminating reentrancy surface.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

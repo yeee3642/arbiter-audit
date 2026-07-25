@@ -1,0 +1,60 @@
+{
+ "tag": "Re-org Attack",
+ "mode": "s2b",
+ "detector": {
+  "name": "Re-org Attack",
+  "vulnerability_knowledge": "A re-org attack exploits the probabilistic finality of blockchain consensus: a miner or validator with sufficient hash power or stake can rewrite recent history by producing an alternative chain that excludes or reorders transactions from the last N blocks. Smart contracts that treat the current block as immutable \u2014 for example, using `block.number` or `block.timestamp` as a source of randomness, committing to a state change based on a single block's data, or finalizing a cross-chain message after one confirmation \u2014 become vulnerable when those blocks are orphaned. The attack surface includes any logic that assumes a block will never be reverted: committing a random seed from `blockhash(block.number - 1)`, accepting a governance vote tally immediately after the voting period ends, or releasing funds once a timelock expires without waiting for additional confirmations. An adversary who re-orgs the chain can replace the seed, flip the vote outcome, or double-spend the timelock release. Mitigations require either waiting for a configurable confirmation depth (e.g., 12 blocks on Ethereum, 15 on Polygon) before treating state as final, using commit-reveal schemes where the reveal window exceeds the maximum plausible re-org depth, or relying on finality gadgets (e.g., Ethereum's justified/finalized checkpoints via the beacon chain) instead of naive block height checks.",
+  "checks": [
+   "Contract uses `blockhash(block.number - 1)` or `blockhash(block.number - k)` for randomness or decision-making without verifying the block is finalized (e.g., via `block.number - k > finalizedBlockNumber` from a finality oracle).",
+   "State-changing function finalizes an action (mint, transfer, vote tally, withdrawal) based solely on `block.number >= deadline` or `block.timestamp >= deadline` with no additional confirmation-depth requirement.",
+   "Cross-chain message handler processes a message immediately upon receipt without checking that the source chain's block has reached finality (e.g., no call to a finality verification library or waiting for `finalized` checkpoint).",
+   "Governance or voting contract executes a proposal as soon as `block.number >= endBlock` without a timelock that exceeds the maximum expected re-org depth for the chain.",
+   "Contract reads `block.difficulty`, `block.prevrandao`, or `block.basefee` as entropy source for a single-block decision (e.g., lottery winner, NFT mint) without a commit-reveal delay.",
+   "Liquidation or auction settlement logic assumes the price oracle update in the current block is immutable and executes atomically without a grace period for chain re-orgs.",
+   "Bridge or relay contract releases funds on destination chain after a single block confirmation on source chain, lacking a configurable `confirmationDepth` parameter enforced before `release()`.",
+   "Contract uses `block.number` as a unique identifier for a nonce or epoch (e.g., `epochId = block.number`) and does not handle the case where the same `block.number` appears on two different forks."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract SimpleLottery {\n    uint256 public immutable deadline = block.number + 100;\n    address public winner;\n    bool public drawn;\n\n    function buyTicket() external payable {\n        require(msg.value == 0.01 ether, \"0.01 ETH required\");\n        require(block.number < deadline, \"sale ended\");\n    }\n\n    function drawWinner() external {\n        require(block.number >= deadline, \"not time yet\");\n        require(!drawn, \"already drawn\");\n        // Uses blockhash of the block immediately before the deadline\n        // Assumes that block will never be re-orged\n        uint256 seed = uint256(blockhash(deadline - 1));\n        winner = payable(uint160(seed));\n        drawn = true;\n    }\n\n    function claim() external {\n        require(drawn, \"no winner yet\");\n        require(msg.sender == winner, \"not winner\");\n        payable(winner).transfer(address(this).balance);\n    }\n}",
+   "explanation": "The lottery picks the winner from `blockhash(deadline - 1)` as soon as `block.number >= deadline`. A miner who re-orgs the block at height `deadline - 1` can replace its hash and thus choose the winner."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ninterface IFinalityOracle {\n    function finalizedBlockNumber() external view returns (uint256);\n}\n\ncontract SafeLottery {\n    uint256 public immutable deadline = block.number + 100;\n    uint256 public constant CONFIRMATION_DEPTH = 12;\n    address public winner;\n    bool public drawn;\n    IFinalityOracle public immutable finalityOracle;\n\n    constructor(address _finalityOracle) {\n        finalityOracle = IFinalityOracle(_finalityOracle);\n    }\n\n    function buyTicket() external payable {\n        require(msg.value == 0.01 ether, \"0.01 ETH required\");\n        require(block.number < deadline, \"sale ended\");\n    }\n\n    function drawWinner() external {\n        require(block.number >= deadline + CONFIRMATION_DEPTH, \"wait for finality\");\n        require(!drawn, \"already drawn\");\n        // The block at `deadline - 1` is now at least CONFIRMATION_DEPTH blocks deep\n        uint256 seed = uint256(blockhash(deadline - 1));\n        winner = payable(uint160(seed));\n        drawn = true;\n    }\n\n    function claim() external {\n        require(drawn, \"no winner yet\");\n        require(msg.sender == winner, \"not winner\");\n        payable(winner).transfer(address(this).balance);\n    }\n}",
+   "explanation": "The fixed version waits `CONFIRMATION_DEPTH` blocks past the deadline before reading the blockhash, and optionally verifies finality via an oracle, making a re-org that changes the seed economically infeasible."
+  },
+  "routing_hint_candidates": [
+   "blockhash",
+   "block.number",
+   "block.timestamp",
+   "block.difficulty",
+   "block.prevrandao",
+   "block.basefee",
+   "finalizedBlockNumber",
+   "confirmationDepth",
+   "finalityOracle",
+   "drawWinner",
+   "executeProposal",
+   "releaseFunds",
+   "settleAuction",
+   "processMessage",
+   "verifyFinality",
+   "commitReveal",
+   "epochId",
+   "deadline",
+   "timelock",
+   "governance",
+   "voteTally",
+   "crossChain",
+   "bridge",
+   "relay",
+   "oracleUpdate",
+   "liquidation",
+   "randomSeed",
+   "entropySource"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [],
+ "exclude_repo": "22ad8fd6e044",
+ "error": null
+}

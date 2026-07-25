@@ -7,51 +7,46 @@ You are a smart contract auditor. After reading the following vulnerability know
 ### Vulnerability Knowledge
 
 **ERC777-Callback-Reentrancy**
-ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute arbitrary external code during `transfer`, `send`, or `operatorSend` calls. If a contract performs sensitive state updates (balance accounting, debt reduction, storage cleanup) *before* the external call, a malicious hook can reenter the same or a related function and observe stale state, leading to inflated received amounts, double-spending, or permanent asset lockup. The Checks-Effects-Interactions pattern must be strictly followed: all state changes (effects) must complete before any external call (interaction) that can trigger an ERC777 hook. Additionally, reverts inside a hook (e.g., `tokensReceived`) can DoS the caller if the caller does not anticipate or handle the revert, such as when settling payments before removing rental records.
+ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute arbitrary external code during `transfer`, `send`, or `operatorSend` calls. If a contract performs sensitive state updates (balance accounting, debt reduction, storage cleanup) after initiating an ERC777 transfer but before the hook returns, a malicious token or recipient can reenter the same or a related function, corrupting internal accounting. The Checks-Effects-Interactions pattern requires all state mutations to complete before any external call. Additionally, reverting inside a hook (e.g., to block a transfer) can permanently stall protocols that lack a fallback or timeout, causing denial-of-service for asset recovery or rental termination flows.
 
 ### Detection Checks
 
-1. State variables (balances, debts, mappings) are updated *after* an external `safeTransferFrom`, `transfer`, `send`, `operatorSend`, or low-level `call` that may invoke an ERC777 hook.
-2. Received amount is calculated as `balanceAfter - balanceBefore` around a token transfer that can trigger `tokensToSend`/`tokensReceived`, allowing reentrancy to manipulate the balance delta.
-3. A `nonReentrant` modifier is missing on functions that perform token transfers and subsequent state updates, or the modifier does not cover cross-function reentrancy paths (e.g., `swap` -> `withdrawReserves`).
-4. External calls that transfer ERC777 tokens (e.g., `ESCRW.settlePayment`, `_safeTransfer`, `_reclaimRentedItems`) occur *before* critical storage cleanup (`STORE.removeRentals`, debt clearing), so a hook revert prevents the cleanup and locks assets.
-5. Hook validation (`STORE.hookOnStop`) is performed but there is no mechanism to disable or finalize hooks after rental creation, causing a revert if a previously approved hook is later disabled.
-6. Try/catch around hook calls (`IHook(target).onStop`) catches reverts but the surrounding function still reverts on hook failure, propagating the DoS to the caller.
-7. Token transfers use `safeTransferFrom`/`safeTransfer` without ensuring the recipient is not a malicious ERC777 contract that can reenter via hooks.
-8. Balance snapshots for accounting are taken immediately before the transfer, but the transfer itself can reenter and change the balance before the snapshot delta is computed.
+1. Token transfer (safeTransferFrom, transfer, send, operatorSend) occurs before state variables such as balances, debt, or rental mappings are updated.
+2. Received amount is calculated by reading token.balanceOf(address(this)) after the transfer, which an ERC777 tokensToSend hook can manipulate via reentrancy into a withdrawal or mint function.
+3. External calls to settlement or escrow contracts (e.g., settlePayment) that may transfer ERC777 tokens happen before storage cleanup (e.g., removeRentals), allowing a hook revert to block cleanup permanently.
+4. Hook validation (e.g., STORE.hookOnStop) is performed immediately before the external hook call without a mechanism to disable or skip hooks after rental creation, so a governance change can brick existing rentals.
+5. Missing nonReentrant modifier on functions that initiate ERC777 transfers while also reading mutable state after the transfer.
+6. Use of try/catch around hook calls that catches reverts but does not guarantee subsequent state updates execute, leaving the protocol in an inconsistent state if the hook fails.
+7. Callbacks are invoked while the contract still holds "dirty" state (e.g., rentalAssetUpdates accumulator in memory) that the reentrant call may also rely on.
+8. No deadline or fallback mechanism for hook execution, so a single malicious hook can indefinitely lock assets.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function repayLoan(ERC20 token_, uint256 amount_) external {
-    if (reserveDebt[token_][msg.sender] == 0) revert NoDebt();
-    uint256 prevBalance = token_.balanceOf(address(this));
-    token_.safeTransferFrom(msg.sender, address(this), amount_);
-    uint256 received = token_.balanceOf(address(this)) - prevBalance;
-    reserveDebt[token_][msg.sender] -= received;
-    totalDebt[token_] -= received;
-    emit DebtRepaid(token_, msg.sender, received);
+function repayLoan(ERC20 token, uint256 amount) external {
+    uint256 prevBalance = token.balanceOf(address(this));
+    token.safeTransferFrom(msg.sender, address(this), amount);
+    uint256 received = token.balanceOf(address(this)) - prevBalance;
+    reserveDebt[token][msg.sender] -= received;
+    totalDebt[token] -= received;
 }
 ```
 
-Balance delta measured around `safeTransferFrom` lets an ERC777 `tokensToSend` hook reenter `swap` -> `withdrawReserves`, altering the contract's token balance and inflating `received`.
+The function measures received tokens by balance difference after safeTransferFrom, but an ERC777 tokensToSend hook can reenter a withdrawal function that alters the contract's token balance, inflating `received` and understating the borrower's debt.
 
 #### Example 2: Correct Example
 
 ```solidity
-function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {
-    if (reserveDebt[token_][msg.sender] == 0) revert NoDebt();
-    token_.safeTransferFrom(msg.sender, address(this), amount_);
-    uint256 received = amount_; // trust the requested amount or use a pull-payment pattern
-    reserveDebt[token_][msg.sender] -= received;
-    totalDebt[token_] -= received;
-    emit DebtRepaid(token_, msg.sender, received);
+function repayLoan(ERC20 token, uint256 amount) external nonReentrant {
+    token.safeTransferFrom(msg.sender, address(this), amount);
+    reserveDebt[token][msg.sender] -= amount;
+    totalDebt[token] -= amount;
 }
 ```
 
-State updates use the trusted `amount_` parameter instead of a post-transfer balance delta, and `nonReentrant` prevents cross-function reentrancy.
+State updates use the trusted `amount` parameter instead of a post-transfer balance check, and the nonReentrant modifier prevents reentrancy during the external transfer.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

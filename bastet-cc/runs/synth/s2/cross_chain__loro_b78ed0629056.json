@@ -1,0 +1,67 @@
+{
+ "tag": "Cross-Chain",
+ "mode": "s2",
+ "detector": {
+  "name": "Cross-Chain Vulnerabilities",
+  "vulnerability_knowledge": "Cross-chain protocols must handle three fundamental failure modes: (1) Address format incompatibility \u2014 EVM addresses (20 bytes) cannot represent non-EVM chain addresses (bech32, ed25519 pubkeys, etc.), so encoding a destination or source address as `address` or `bytes20` breaks verification for heterogeneous chains. (2) Missing recovery/rollback \u2014 burning or locking tokens on the source chain before the destination chain executes the message creates irreversible loss if the remote call reverts, times out, or is never picked up; a refund or re-mint pathway keyed to a message ID and caller-specified refund address is required. (3) Decimal precision mismatch \u2014 tokens with the same symbol (e.g., USDC) may have different decimals on different chains (6 on Ethereum, 12 on some L2s, 8 on others); transmitting raw amounts without normalization causes value distortion. Additionally, cross-chain messages must include chain ID validation and replay protection (nonce or message ID) to prevent malicious replay across chains.",
+  "checks": [
+   "Functions that encode source/destination addresses for cross-chain messages use `address` or `bytes20` types instead of `bytes` or `string`, preventing representation of non-EVM address formats.",
+   "Token burn/lock operations (`_burn`, `transferFrom` to bridge, `lock`) execute before emitting the cross-chain message event, with no on-chain refund/re-mint logic gated by a message ID and a caller-specified refund address.",
+   "Cross-chain message emission (`emit ContractCall`, `emit ContractCallWithToken`) uses `msg.sender` as the refund/recipient address instead of accepting an explicit `refundAddress` or `destinationRecipient` parameter from the caller.",
+   "Amounts for cross-chain token transfers are passed through without decimal normalization \u2014 no lookup of token decimals on source chain, no conversion to a canonical representation (e.g., 18 decimals), and no validation that the destination chain expects the same decimal scale.",
+   "Cross-chain message payloads lack a source chain ID field or domain separator, enabling replay of messages from one chain on another chain with the same contract address.",
+   "Message verification on the destination chain does not validate that the reported source chain matches the expected chain ID, or that the source address format is compatible with the claimed source chain.",
+   "No timeout or expiration mechanism exists for pending cross-chain messages \u2014 messages can remain unexecuted indefinitely with no way for the user to reclaim locked/burned assets.",
+   "State updates (e.g., marking a message as executed, updating nonces) on the destination chain are not protected against reentrancy or out-of-order execution, allowing state inconsistency between chains."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CrossChainBridge {\n    event ContractCall(address indexed sender, string destinationChain, string destinationContract, bytes32 payloadHash, bytes payload);\n    event ContractCallWithToken(address indexed sender, string destinationChain, string destinationContract, bytes32 payloadHash, bytes payload, string symbol, uint256 amount);\n\n    mapping(string => address) public tokenContracts;\n\n    function callContract(\n        string calldata destinationChain,\n        string calldata destinationContractAddress,\n        bytes calldata payload\n    ) external {\n        // @audit uses msg.sender as refund address; no caller-specified refundAddress\n        emit ContractCall(msg.sender, destinationChain, destinationContractAddress, keccak256(payload), payload);\n    }\n\n    function callContractWithToken(\n        string calldata destinationChain,\n        string calldata destinationContractAddress,\n        bytes calldata payload,\n        string calldata symbol,\n        uint256 amount\n    ) external {\n        // @audit burns before emit; no recovery if destination fails\n        // @audit no decimal normalization for amount\n        IERC20(tokenContracts[symbol]).burnFrom(msg.sender, amount);\n        emit ContractCallWithToken(msg.sender, destinationChain, destinationContractAddress, keccak256(payload), payload, symbol, amount);\n    }\n\n    function _verifyApproval(\n        bytes32 commandId,\n        string memory sourceChain,\n        string memory sourceAddress,\n        address contractAddress,  // @audit address type cannot hold non-EVM addresses\n        bytes32 payloadHash,\n        string memory symbol,\n        uint256 amount\n    ) internal pure returns (bool) {\n        // approval lookup uses address-typed contractAddress\n        return true;\n    }\n}",
+   "explanation": "The contract burns tokens before cross-chain emission with no refund path, uses msg.sender instead of a caller-specified refund address, encodes contract addresses as EVM-only `address` type, and passes raw token amounts without decimal normalization."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CrossChainBridgeFixed {\n    event ContractCall(bytes caller, string destinationChain, string destinationContract, bytes32 payloadHash, bytes payload, bytes refundAddress);\n    event ContractCallWithToken(bytes caller, string destinationChain, string destinationContract, bytes32 payloadHash, bytes payload, string symbol, uint256 amount, bytes refundAddress);\n    event TokenRefunded(bytes indexed caller, string symbol, uint256 amount, bytes32 messageId);\n\n    mapping(string => address) public tokenContracts;\n    mapping(string => uint8) public tokenDecimals; // source chain decimals\n    mapping(bytes32 => bool) public executedMessages;\n    uint256 public constant MESSAGE_TIMEOUT = 7 days;\n    mapping(bytes32 => uint256) public messageTimestamps;\n\n    function callContract(\n        string calldata destinationChain,\n        string calldata destinationContractAddress,\n        bytes calldata payload,\n        bytes calldata refundAddress\n    ) external {\n        bytes32 messageId = keccak256(abi.encode(msg.sender, destinationChain, destinationContractAddress, payload, block.number));\n        messageTimestamps[messageId] = block.timestamp;\n        emit ContractCall(abi.encode(msg.sender), destinationChain, destinationContractAddress, keccak256(payload), payload, refundAddress);\n    }\n\n    function callContractWithToken(\n        string calldata destinationChain,\n        string calldata destinationContractAddress,\n        bytes calldata payload,\n        string calldata symbol,\n        uint256 amount,\n        bytes calldata refundAddress\n    ) external {\n        uint8 srcDecimals = tokenDecimals[symbol];\n        uint256 normalizedAmount = (srcDecimals < 18) ? amount * 10**(18 - srcDecimals) : amount / 10**(srcDecimals - 18);\n        bytes32 messageId = keccak256(abi.encode(msg.sender, destinationChain, destinationContractAddress, payload, symbol, normalizedAmount, block.number));\n        messageTimestamps[messageId] = block.timestamp;\n        // Lock instead of burn; refundable on timeout\n        IERC20(tokenContracts[symbol]).transferFrom(msg.sender, address(this), amount);\n        emit ContractCallWithToken(abi.encode(msg.sender), destinationChain, destinationContractAddress, keccak256(payload), payload, symbol, normalizedAmount, refundAddress);\n    }\n\n    function refundOnTimeout(bytes32 messageId, string calldata symbol, uint256 amount) external {\n        require(block.timestamp > messageTimestamps[messageId] + MESSAGE_TIMEOUT, \"not timed out\");\n        require(!executedMessages[messageId], \"already executed\");\n        executedMessages[messageId] = true;\n        IERC20(tokenContracts[symbol]).transfer(msg.sender, amount);\n        emit TokenRefunded(abi.encode(msg.sender), symbol, amount, messageId);\n    }\n\n    function _verifyApproval(\n        bytes32 commandId,\n        string memory sourceChain,\n        bytes memory sourceAddress,  // bytes supports any address format\n        bytes memory contractAddress,\n        bytes32 payloadHash,\n        string memory symbol,\n        uint256 amount\n    ) internal pure returns (bool) {\n        // approval lookup uses bytes for universal address representation\n        return true;\n    }\n}",
+   "explanation": "The fixed contract uses `bytes` for universal address representation, accepts explicit `refundAddress`, locks tokens instead of burning with a timeout-based refund mechanism, normalizes amounts to 18 decimals, includes message IDs with timestamps for replay protection and timeout handling, and marks messages as executed to prevent double-processing."
+  },
+  "routing_hint_candidates": [
+   "callContract",
+   "callContractWithToken",
+   "ContractCall",
+   "ContractCallWithToken",
+   "_burnTokenFrom",
+   "_burn",
+   "burnFrom",
+   "transferFrom",
+   "lock",
+   "mint",
+   "refundAddress",
+   "destinationChain",
+   "destinationContractAddress",
+   "sourceChain",
+   "sourceAddress",
+   "payloadHash",
+   "commandId",
+   "messageId",
+   "nonce",
+   "chainId",
+   "domainSeparator",
+   "tokenDecimals",
+   "normalizedAmount",
+   "executedMessages",
+   "messageTimestamps",
+   "MESSAGE_TIMEOUT",
+   "refundOnTimeout",
+   "replayProtection",
+   "crossChain",
+   "bridge"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "296",
+  "292",
+  "116",
+  "295"
+ ],
+ "exclude_repo": "b78ed0629056",
+ "error": null
+}

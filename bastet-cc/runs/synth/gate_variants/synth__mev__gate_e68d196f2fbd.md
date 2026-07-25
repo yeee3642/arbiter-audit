@@ -1,4 +1,4 @@
-# MEV-FrontRunAndOrderManipulation
+# MEV-Front-Run-And-Execution-Order-Dependency
 
 ## Detection prompt
 
@@ -6,60 +6,59 @@ You are a smart contract auditor. After reading the following vulnerability know
 
 ### Vulnerability Knowledge
 
-**MEV-FrontRunAndOrderManipulation**
-MEV vulnerabilities arise when a contract's outcome depends on the relative ordering of transactions within a block, allowing block producers or searchers to extract value by front-running, back-running, or sandwiching user transactions. Common patterns include: (1) check-then-act sequences where state is read, a decision is made, and state is written later without atomic validation, enabling an attacker to mutate the read state in between; (2) mutable configuration or approvals that can be changed by a privileged address or the user themselves between the user's intent and execution; (3) external calls (e.g., to a controller or strategy) whose results are not verified, allowing the callee to return less value while the caller silently accepts the shortfall; (4) accounting that omits accrued but uncollected value (fees, rewards), causing deposits/withdrawals to be priced against stale totals. In all cases the fix is to make the critical operation atomic: validate post-conditions after external calls, snapshot immutable parameters at the start of execution, use commit-reveal or signed intents for off-chain ordering, and include all value-bearing state (uncollected fees, pending rewards) in TVL/price calculations.
+**MEV-Front-Run-And-Execution-Order-Dependency**
+MEV vulnerabilities arise when a contract's outcome depends on the relative ordering of transactions within a block, allowing block producers or searchers to front-run, back-run, or sandwich user transactions for profit. Common patterns include: (1) check-then-act sequences where a state variable (approval, fee flag, price, TVL) is read, then later acted upon, but an interleaved transaction can mutate that state in between; (2) external calls (e.g., controller.withdraw, router.swap) whose return values or side-effects are not verified, letting a front-runner drain balances or manipulate oracle prices before the call; (3) mutable configuration (onlyFees, withdrawalApproval, slippage limits) that can be changed by a privileged or permissionless function after a user submits a transaction but before it executes; (4) accounting that omits accrued value (uncollected fees, pending rewards) causing deposits/withdrawals to be priced incorrectly. Auditors must trace every storage read that influences a financial transfer and ask whether an adversary can change that storage between the read and the transfer.
 
 ### Detection Checks
 
-1. Function reads a mutable storage variable (config, approval, fee, tick) and later uses it for a value-bearing decision without snapshotting it at entry or re-validating after external calls.
-2. External call to an untrusted or upgradeable contract (controller, strategy, router) is made and the return value or resulting balance delta is not verified against the requested amount.
-3. State-changing operation (burn, approval decrement, share mint) occurs before the final value transfer, and the transferred amount is derived from a pre-call balance check that can be invalidated by a front-run.
-4. TVL, price, or share calculation omits uncollected fees, tokensOwed, or pending rewards that are claimable by the position but not yet in the contract's balance.
-5. Function accepts a user-supplied output token or receiver address without verifying the contract holds sufficient balance of that token before burning shares or decrementing approvals.
-6. Approval or allowance is decremented after the sufficiency check but before the external transfer, creating a window where a front-run can spend the higher allowance.
-7. Configuration flag (e.g., onlyFees, fee basis) is read from storage at execution time rather than being fixed by the user's signed parameters or a commit-reveal scheme.
-8. Swap or liquidity operation lacks a deadline or slippage bound, allowing the transaction to be held in the mempool and executed at an adverse price.
+1. Identify functions that read a storage variable (e.g., withdrawApproval[user][token], config.onlyFees, tvl()) and later use it to authorize a transfer or calculate amounts without re-reading or locking the value.
+2. Verify that external calls which are expected to increase the contract's token balance (controller.withdraw, strategy.harvest, router.swap) are followed by a balance-of check that reverts if the actual delta is less than the expected amount.
+3. Ensure configurable parameters affecting fee calculation or slippage (onlyFees, maxRewardX64, token0SlippageX64, token1SlippageX64) are either immutable for the lifetime of a user's position or captured into a local variable at the start of the transaction and compared against the stored value before execution.
+4. Check that approval decrements (withdrawApproval[user][token] -= amount) occur atomically with the transfer, not after a separate validation step that can be front-run.
+5. Confirm that TVL or price calculations include all value accrued to the position (uncollected fees via tokensOwed0/tokensOwed1, pending rewards) before shares are minted or burned.
+6. Look for deadline parameters on all external swap/router calls; reject transactions where deadline == type(uint256).max or deadline <= block.timestamp.
+7. Validate that slippage protection (amountOutMin, amountRemoveMin0/1) is derived from a manipulation-resistant oracle (TWAP) and not solely from spot reserves readable at execution time.
+8. Ensure that burn/mint of shares happens after all balance checks and external calls so that a front-runner cannot cause the contract to burn shares for an amount that will not be received.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function withdraw(uint256 _shares, address _output) public {
-    uint256 _amount = (balance().mul(_shares)).div(totalSupply());
-    _burn(msg.sender, _shares);
-    uint256 _bal = IERC20(_output).balanceOf(address(this));
-    if (_bal < _amount) {
-        IController(manager.controllers(address(this))).withdraw(_output, _amount - _bal);
+function withdraw(uint256 shares, address output) external {
+    uint256 amount = (totalAssets() * shares) / totalSupply();
+    _burn(msg.sender, shares);
+    uint256 balBefore = IERC20(output).balanceOf(address(this));
+    if (balBefore < amount) {
+        IController(controller).withdraw(output, amount - balBefore);
     }
-    uint256 _after = IERC20(_output).balanceOf(address(this));
-    uint256 _received = _after - _bal;
-    if (_received < _amount - _bal) _amount = _after; // silently accept shortfall
-    IERC20(_output).safeTransfer(msg.sender, _amount);
+    uint256 balAfter = IERC20(output).balanceOf(address(this));
+    uint256 received = balAfter - balBefore;
+    if (received < amount) amount = balAfter; // silent shortfall
+    IERC20(output).safeTransfer(msg.sender, amount);
 }
 ```
 
-Burns shares before verifying the controller actually delivers the tokens, and silently reduces the payout if the controller returns less, enabling a front-run to drain the vault or the controller to under-deliver.
+Burns shares before verifying the controller actually sends the tokens, and silently accepts a shortfall, letting a front-runner drain the vault so the user receives less than their share.
 
 #### Example 2: Correct Example
 
 ```solidity
-function withdraw(uint256 _shares, address _output, uint256 _minAmount) public {
-    uint256 _amount = (balance().mul(_shares)).div(totalSupply());
-    require(_amount >= _minAmount, "slippage");
-    uint256 _balBefore = IERC20(_output).balanceOf(address(this));
-    if (_balBefore < _amount) {
-        IController(manager.controllers(address(this))).withdraw(_output, _amount - _balBefore);
+function withdraw(uint256 shares, address output, uint256 minAmount) external {
+    uint256 amount = (totalAssets() * shares) / totalSupply();
+    require(amount >= minAmount, "slippage");
+    uint256 balBefore = IERC20(output).balanceOf(address(this));
+    if (balBefore < amount) {
+        IController(controller).withdraw(output, amount - balBefore);
+        uint256 balAfter = IERC20(output).balanceOf(address(this));
+        require(balAfter - balBefore >= amount - balBefore, "controller shortfall");
     }
-    uint256 _balAfter = IERC20(_output).balanceOf(address(this));
-    uint256 _received = _balAfter - _balBefore;
-    require(_received >= _amount - _balBefore, "controller underflow");
-    _burn(msg.sender, _shares);
-    IERC20(_output).safeTransfer(msg.sender, _amount);
+    _burn(msg.sender, shares);
+    IERC20(output).safeTransfer(msg.sender, amount);
 }
 ```
 
-Validates the controller's delivery before burning shares, enforces a user-specified minimum, and reverts on shortfall instead of silently accepting less.
+Verifies the controller delivers the expected tokens before burning shares, reverts on shortfall, and enforces a user-specified minimum amount.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

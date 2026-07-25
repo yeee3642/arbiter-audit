@@ -1,4 +1,4 @@
-# MEV-Front-Run-And-Execution-Order-Dependency
+# MEV-Transaction-Ordering-Dependency
 
 ## Detection prompt
 
@@ -6,58 +6,54 @@ You are a smart contract auditor. After reading the following vulnerability know
 
 ### Vulnerability Knowledge
 
-**MEV-Front-Run-And-Execution-Order-Dependency**
-MEV vulnerabilities arise when a contract's correctness depends on the relative ordering of transactions within a block, allowing block producers or searchers to extract value by front-running, back-running, or sandwiching user transactions. Common patterns include: (1) reading mutable state (e.g., configuration flags, oracle prices, TVL calculations) without atomic validation, enabling an attacker to change that state between the user's transaction submission and execution; (2) performing external calls or balance checks before state changes (checks-effects-interactions violation), letting an attacker manipulate balances or prices in the interim; (3) omitting slippage limits, deadlines, or minimum output amounts on swaps/withdrawals, so a front-runner can move prices against the user; (4) calculating entitlements (shares, rewards, TVL) based on stale or incomplete on-chain data (e.g., ignoring uncollected fees, using spot prices without TWAP), creating arbitrage windows. The root cause is execution-order dependency: the same function call produces different outcomes depending on what transactions precede it in the block.
+**MEV-Transaction-Ordering-Dependency**
+MEV vulnerabilities arise when contract outcomes depend on the relative ordering of transactions within a block, enabling attackers to front-run, back-run, or sandwich user operations. The core mechanism is execution-order dependency: a function reads mutable state (storage, balances, oracle values, or configuration flags) that can be altered by a preceding transaction in the same block. Common patterns include: (1) reading a configurable flag (e.g., `onlyFees`) at execution time instead of binding it at intent-signing time, allowing a front-runner to flip the flag via an admin function; (2) calculating output amounts based on on-chain balances or TVL that exclude uncollected fees or pending rewards, so a front-runner can manipulate the denominator (e.g., by depositing/withdrawing) to skew share pricing; (3) accepting an arbitrary output token without verifying the vault holds sufficient balance before burning shares, letting an attacker drain the token first; (4) performing external calls (e.g., `controller.withdraw`) without verifying the actual transfer occurred, silently reducing the user's payout; (5) using hard-coded or missing deadlines on AMM swaps, allowing transactions to linger in the mempool and execute at stale prices. In all cases the fix is to make the operation order-independent: bind parameters at intent time (signatures, commit-reveal), validate post-call state changes, include uncollected fees in accounting, enforce user-supplied deadlines and slippage bounds, and verify token balances before state transitions.
 
 ### Detection Checks
 
-1. Function reads a storage variable (e.g., config.onlyFees, positionConfigs[tokenId]) that can be changed by another transaction before a critical calculation, without re-validating or snapshotting the value at the start of execution.
-2. Withdrawal or redemption calculates user entitlement (_amount) and burns shares before verifying the vault holds sufficient underlying tokens, allowing a front-runner to drain the token balance so the user receives less or nothing.
-3. External call to a controller/strategy (e.g., _controller.withdraw) is made to fetch funds, but the return value or post-call balance delta is not strictly enforced; the code silently accepts a shortfall (_diff < _toWithdraw) and reduces the user's payout.
-4. TVL or pricing function (tvl(), invariant()) computes value from on-chain state (position liquidity, pool reserves) but omits accrued but uncollected components (fees owed, rewards), systematically understating value and creating arbitrage for depositors/withdrawers who act on the stale number.
-5. Swap or router interaction lacks a user-supplied deadline parameter or uses type(uint256).max, permitting the transaction to be delayed and executed at an adverse price.
-6. Slippage protection is missing or uses a hard-coded zero minimum output (amountOutMin == 0), so a front-runner can sandwich the swap and force the user to accept arbitrarily bad rates.
-7. Reward or fee calculation branches on a mutable config flag (config.onlyFees) read late in the function after external calls, allowing the flag to be flipped by a front-run transaction and changing the economic basis of the reward.
-8. Invariant or boundary checks (e.g., scale1 > 2 * upperBound) create hard cliffs in the state space that liquidity providers can front-run by positioning just below the threshold and exiting before the boundary is crossed.
+1. Function reads a mutable configuration flag (e.g., `config.onlyFees`, `config.maxRewardX64`) from storage at execution time without verifying it matches the user's signed intent or a committed value.
+2. Share/token amount is calculated from a TVL or balance snapshot that omits uncollected fees (`tokensOwed0/1`), pending rewards, or strategy-held assets, enabling front-running via deposit/withdrawal to manipulate the price.
+3. External call to a controller/strategy (`controller.withdraw`, `strategy.harvest`) is made without verifying the vault's token balance actually increased by the requested amount; the code silently clamps the payout to the observed delta.
+4. User-supplied output token (`_output`) is not validated against the vault's actual holdings before burning shares or transferring, allowing an attacker to front-run and drain that token.
+5. AMM swap or router call uses a hard-coded deadline (`type(uint256).max`, `block.timestamp`) or omits the deadline parameter entirely, permitting mempool lingering and execution at adverse prices.
+6. Slippage protection (`amountOutMin`, `minTokensOut`, `rewardX64` bounds) is missing, set to zero, or validated against a manipulable oracle/TWAP without a freshness check.
+7. State transition (burn, mint, fee collection) occurs before the external calls that fund it, violating checks-effects-interactions and enabling reentrancy or balance manipulation.
+8. Invariant or boundary checks (e.g., `scale1 > 2 * upperBound`) create hard cliffs that liquidity providers can front-run by concentrating positions just below the threshold and exiting before price moves push reserves over the limit.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function withdraw(uint256 _shares, address _output) public {
-    uint256 _amount = (balance().mul(_shares)).div(totalSupply());
-    _burn(msg.sender, _shares); // burns before ensuring funds exist
-    uint256 _balance = IERC20(_output).balanceOf(address(this));
-    if (_balance < _amount) {
-        IController(manager.controllers(address(this))).withdraw(_output, _amount - _balance);
-        // no verification that withdraw succeeded
+function execute(ExecuteParams calldata params) external {
+    PositionConfig memory config = positionConfigs[params.tokenId]; // reads mutable flag at runtime
+    if (config.onlyFees) { // front-runner can flip via configToken() before this tx
+        state.protocolReward0 = state.feeAmount0 * params.rewardX64 / Q64;
+        state.amount0 -= state.protocolReward0;
     }
-    IERC20(_output).safeTransfer(msg.sender, _amount); // may revert or send less
+    // ... swap with no deadline
+    _routerSwap(params.amountIn, type(uint256).max, params.swapData);
 }
 ```
 
-Shares are burned before confirming the vault holds or can retrieve the underlying tokens, and the external withdraw call's success is not verified, enabling a front-runner to drain the token and leave the user with a failed transfer or reduced payout.
+The function reads `config.onlyFees` at execution time, allowing a front-runner to call `configToken` and change the fee basis; the swap uses `type(uint256).max` deadline, enabling mempool lingering.
 
 #### Example 2: Correct Example
 
 ```solidity
-function withdraw(uint256 _shares, address _output, uint256 _minAmount, uint256 _deadline) public {
-    require(block.timestamp <= _deadline, "expired");
-    uint256 _amount = (balance().mul(_shares)).div(totalSupply());
-    require(_amount >= _minAmount, "slippage");
-    uint256 _balanceBefore = IERC20(_output).balanceOf(address(this));
-    if (_balanceBefore < _amount) {
-        IController(manager.controllers(address(this))).withdraw(_output, _amount - _balanceBefore);
-        uint256 _balanceAfter = IERC20(_output).balanceOf(address(this));
-        require(_balanceAfter - _balanceBefore >= _amount - _balanceBefore, "withdraw failed");
+function execute(ExecuteParams calldata params, bytes calldata signature) external {
+    PositionConfig memory config = positionConfigs[params.tokenId];
+    require(keccak256(abi.encode(config.onlyFees, config.maxRewardX64)) == params.configHash, "config changed");
+    if (config.onlyFees) {
+        state.protocolReward0 = state.feeAmount0 * params.rewardX64 / Q64;
+        state.amount0 -= state.protocolReward0;
     }
-    _burn(msg.sender, _shares);
-    IERC20(_output).safeTransfer(msg.sender, _amount);
+    require(params.deadline > block.timestamp, "expired");
+    _routerSwap(params.amountIn, params.amountOutMin, params.deadline, params.swapData);
 }
 ```
 
-Adds deadline and minimum-amount parameters, verifies the controller withdraw actually increased the vault balance by the required amount, and only burns shares after funds are confirmed available.
+User commits to a `configHash` of the mutable parameters at sign time; the function verifies the hash matches current storage. Swap requires a user-supplied deadline and minimum output amount.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

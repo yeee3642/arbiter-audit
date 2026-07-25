@@ -3,50 +3,45 @@
  "mode": "s2b",
  "detector": {
   "name": "Solmate-Missing Return Check",
-  "vulnerability_knowledge": "Solmate's SafeTransferLib implements safeTransfer and safeTransferFrom with a low-level call that only checks the boolean return value when the target address has contract code (extcodesize > 0). If the token address is an EOA or a non-existent contract, the call succeeds silently and returns (false, empty), but the library treats this as success because no revert occurs. This allows attackers to register fake token addresses, call deposit/withdrawal functions that internally use safeTransfer, and have the protocol record a balance increase while no real tokens move. Later, when a victim deposits to the same vault or loan, the attacker can withdraw the victim's funds using the inflated balance. The root cause is the missing extcodesize check before the low-level call, which is a known design trade-off in Solmate for gas efficiency but creates a critical safety gap when used with untrusted token addresses.",
+  "vulnerability_knowledge": "Solmate's SafeTransferLib implements safeTransfer and safeTransferFrom by performing a low-level call to the token contract and checking the returned boolean. However, if the target address has no code (i.e., is an EOA or a non-existent contract), the call succeeds without reverting and returns zero bytes, which Solidity treats as `false` for a `bool` return \u2014 but the library's assembly logic only checks that the call succeeded, not that the return data decodes to `true`. Consequently, transfers to addresses without contract code silently succeed, corrupting internal accounting and enabling attackers to deposit to non-existent tokens and later drain funds when a real token is deployed at that address.",
   "checks": [
-   "Identify calls to SafeTransferLib.safeTransfer or SafeTransferLib.safeTransferFrom where the token address is user-supplied or not validated to be a deployed contract.",
-   "Verify that the token address is checked with extcodesize(token) > 0 before the safeTransfer call, or that the call is wrapped in a require that validates the return value explicitly.",
-   "Check for missing validation in createVault, getLoan, repayLoan, or similar entry points that accept a token address parameter and immediately pass it to SafeTransferLib.",
-   "Ensure that the contract does not assume ERC20 compliance without verifying the target is a contract (e.g., no IERC20(token).totalSupply() or similar pre-check).",
-   "Look for state changes (balance updates, vault creation, loan issuance) that occur after the safeTransfer call without a prior contract existence check.",
-   "Confirm that the low-level call in SafeTransferLib is not guarded by a require(success, \"...\") when extcodesize is zero \u2014 the library omits this on purpose.",
-   "Check if the protocol uses a token registry or allowlist; if not, any address can be passed as token.",
-   "Verify that the same pattern appears in multiple functions (deposit, withdraw, borrow, repay) indicating systemic lack of validation."
+   "Call to SafeTransferLib.safeTransfer or safeTransferFrom without a preceding `extcodesize(token) > 0` check.",
+   "Use of SafeTransferLib on a token address that is user-supplied or derived from untrusted input.",
+   "Absence of a require/assert verifying `token.code.length > 0` before the transfer.",
+   "Token address loaded from a mapping or array that can be poisoned with a zero-code address.",
+   "Transfer amount recorded in balances before the safeTransfer call, assuming success.",
+   "No fallback validation of the boolean return value from the low-level call (the library omits it).",
+   "Function lacks a modifier or inline check that the token is a known, deployed contract.",
+   "Contract uses Solmate's `LibSafeTransfer` or `SafeTransferLib` import without wrapping calls in an existence guard."
   ],
   "incorrect_example": {
-   "code": "function createVault(address token, uint256 amount) external {\n    SafeTransferLib.safeTransferFrom(token, msg.sender, address(this), amount);\n    vaults[msg.sender].balance += amount;\n    emit VaultCreated(msg.sender, token, amount);\n}",
-   "explanation": "safeTransferFrom succeeds silently when token has no code, allowing balance inflation with a fake token."
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport {SafeTransferLib} from \"solmate/utils/SafeTransferLib.sol\";\n\ncontract Vault {\n    using SafeTransferLib for IERC20;\n    mapping(address => uint256) public balances;\n\n    function createVault(address token, uint256 amount) external {\n        // @audit no check that token has code\n        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);\n        balances[token] += amount; // accounting assumes success\n    }\n}",
+   "explanation": "createVault calls Solmate's safeTransferFrom on a user-supplied token address without verifying the address contains contract code; a transfer to a non-existent address succeeds silently and inflates balances."
   },
   "correct_example": {
-   "code": "function createVault(address token, uint256 amount) external {\n    require(token.code.length > 0, \"TOKEN_NOT_CONTRACT\");\n    SafeTransferLib.safeTransferFrom(token, msg.sender, address(this), amount);\n    vaults[msg.sender].balance += amount;\n    emit VaultCreated(msg.sender, token, amount);\n}",
-   "explanation": "Adding extcodesize check via token.code.length ensures the token is a deployed contract before transfer."
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport {SafeTransferLib} from \"solmate/utils/SafeTransferLib.sol\";\n\ncontract Vault {\n    using SafeTransferLib for IERC20;\n    mapping(address => uint256) public balances;\n\n    function createVault(address token, uint256 amount) external {\n        require(token.code.length > 0, \"TOKEN_NOT_DEPLOYED\");\n        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);\n        balances[token] += amount;\n    }\n}",
+   "explanation": "The fix adds an explicit `token.code.length > 0` check before the safeTransferFrom call, ensuring the target is a deployed contract and preventing silent success on empty addresses."
   },
   "routing_hint_candidates": [
    "SafeTransferLib",
    "safeTransfer",
    "safeTransferFrom",
+   "LibSafeTransfer",
+   "solmate",
    "createVault",
-   "getLoan",
-   "repayLoan",
-   "vaults",
-   "token.code.length",
-   "extcodesize",
+   "getloan",
+   "replayloan",
    "IERC20",
-   "balance",
-   "msg.sender",
-   "VaultCreated",
-   "LoanCreated",
-   "LoanRepaid",
-   "token",
-   "amount",
-   "Solmate",
+   "code.length",
+   "extcodesize",
    "SafeTransferLib.safeTransfer",
    "SafeTransferLib.safeTransferFrom",
-   "code.length",
-   "code.size",
-   "isContract",
-   "deployed"
+   "token.code",
+   "address.code",
+   "codehash",
+   "ERC20",
+   "transferFrom",
+   "balanceOf"
   ]
  },
  "fallback": false,

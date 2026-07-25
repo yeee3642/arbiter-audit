@@ -7,49 +7,48 @@ You are a smart contract auditor. After reading the following vulnerability know
 ### Vulnerability Knowledge
 
 **Accounting Error**
-Accounting errors occur when a protocol's internal state diverges from the actual on-chain reality of asset balances, token mechanics, or cross-module invariants. Common root causes include: (1) assuming transfer amounts equal requested amounts without verifying post-transfer balances, which breaks for fee-on-transfer, rebasing, or burn-on-transfer tokens; (2) updating state variables before or without confirming external calls succeeded, creating state-update inconsistencies; (3) using stale or unvalidated parameters (e.g., prices, totalsupply, timestamps) in reward/fee/share calculations; (4) omitting synchronization steps when assets move across modules (vault-strategy, escrow-settlement, lock-execute); and (5) applying incorrect formulas that mint/burn shares based on total supply instead of profit deltas, or that ignore conversion rates between wrapped/base assets. These flaws let attackers drain value, brick accounting, or cause silent loss of funds.
+Accounting errors arise when on-chain state diverges from the real asset movements or economic intent of a protocol. Common root causes include: (1) trusting external token transfers without measuring actual balance deltas, which breaks for fee-on-transfer, rebasing, or non-standard ERC-20s; (2) updating counters (totalSupply, user balances, reward indexes) in the wrong order or omitting updates entirely, creating invariant violations; (3) using stale or unvalidated inputs (prices, timestamps, order hashes) in calculations; (4) applying formulas that confuse absolute quantities with rates or that omit fee factors, leading to systematic over- or under-minting; (5) failing to synchronize cross-module records (vault↔strategy, escrow↔order, reward tracker↔token) so the same value is counted twice or not at all. Auditors must trace every asset inflow/outflow and verify that the corresponding state mutation is atomic, correctly ordered, and uses the *actual* transferred amount rather than the requested amount.
 
 ### Detection Checks
 
-1. Verify every ERC20 transferFrom/burnFrom/mint is followed by a balanceOf delta check (post - pre >= expected) instead of trusting the input amount.
-2. Ensure state variables (totalSupply, balances, highWaterMarks, lastUpdated) are updated atomically with the external interaction that changes the underlying asset, not before or after in a separate transaction.
-3. Confirm reward/fee accrual functions update timestamp/accumulator baselines (e.g., rewardsPerToken.lastUpdated) even on early returns when totalSupply == 0 or period not started.
-4. Check that price oracles return values in the expected unit (e.g., WETH vs stETH) and that conversion hops (Curve, Uniswap) are applied before using the price in accounting.
-5. Validate that performance/management fee formulas mint shares proportional to (newPrice - highWaterMark) * performanceFee / DENOMINATOR, not to totalSupply * priceFactor.
-6. Ensure vault/strategy harvest functions credit only the profit portion (after - before - debtLimit) to the vault balance, not the full strategy balance delta.
-7. Confirm burn/destroy functions decrement all supply trackers (totalSupply, circulatingSupply, shares) in the same execution context as the token burn.
-8. Verify liquidity additions compute and enforce ideal token ratios matching the target pool (e.g., Curve 3pool proportions) instead of depositing raw contract balances.
+1. After any external `transferFrom`, `safeTransferFrom`, or `burnFrom` call, the contract must read the *post-transfer* balance (or `totalSupply` delta) and use that measured delta for accounting instead of the input `amount` parameter.
+2. Any function that mints/burns shares or updates `totalSupply` must perform the state update in the same transaction and before any external call that could re-enter or change balances.
+3. Reward/index update functions (`_updateRewardsPerToken`, `updateReward`, etc.) must update `lastUpdated`/`periodFinish` even when `totalSupply == 0` or the reward period has not started, otherwise the first depositor inherits stale history.
+4. Price/valuation functions must convert through the full oracle chain (e.g., wstETH → stETH → WETH via Curve) and not stop at an intermediate unit; the returned denomination must match the caller's expectation.
+5. Performance/management fee calculations must compute *incremental* profit (current NAV minus high-water mark) multiplied by the fee rate, not apply the fee rate to `totalSupply` or principal.
+6. Harvest/deposit/withdraw flows that sync vault↔strategy balances must credit only the *net profit* (strategy balance after harvest minus strategy debt/limit), not the gross balance delta.
+7. Order/position lifecycle functions (`stopRent`, `liquidate`, `closePosition`) must verify the order hash exists in storage and that the order is in a fulfillable state before mutating any balances or deleting records.
+8. Liquidity provision helpers (`add_liquidity`, `zap`, `deposit`) must calculate token amounts in the pool's target ratio (using `calc_token_amount` or similar) instead of dumping raw contract balances, which creates imbalanced deposits and LP token shortfalls.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function _burnTokenFrom(address sender, string memory symbol, uint256 amount) internal {
-    address token = tokenAddresses(symbol);
-    bool ok = IERC20(token).transferFrom(sender, address(this), amount);
-    require(ok, "BurnFailed");
-    // No balance delta verification — fee-on-transfer tokens credit less than `amount`
+function deposit(uint256 amount) external {
+    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+    // BUG: assumes full `amount` arrived; fee-on-transfer tokens deliver less
+    shares[msg.sender] += amount;
+    totalSupply += amount;
 }
 ```
 
-The function trusts the requested `amount` was received, but fee-on-transfer tokens deliver less, causing the protocol's internal accounting to overstate holdings.
+The contract credits the user with the requested `amount` instead of the actual balance increase, causing an accounting mismatch for fee-on-transfer or rebasing tokens.
 
 #### Example 2: Correct Example
 
 ```solidity
-function _burnTokenFrom(address sender, string memory symbol, uint256 amount) internal {
-    address token = tokenAddresses(symbol);
-    uint256 before = IERC20(token).balanceOf(address(this));
-    bool ok = IERC20(token).transferFrom(sender, address(this), amount);
-    require(ok, "BurnFailed");
-    uint256 received = IERC20(token).balanceOf(address(this)) - before;
-    require(received >= amount, "FeeOnTransferNotSupported");
-    // Or adjust accounting by `received` instead of `amount`
+function deposit(uint256 amount) external {
+    uint256 before = token.balanceOf(address(this));
+    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+    uint256 after = token.balanceOf(address(this));
+    uint256 actual = after - before;
+    shares[msg.sender] += actual;
+    totalSupply += actual;
 }
 ```
 
-Measuring the actual balance increase after transfer ensures accounting matches on-chain reality for any token type.
+Measuring the balance delta after the transfer ensures the accounting reflects the real tokens received, works for any ERC-20 variant, and preserves the invariant `totalSupply == token.balanceOf(address(this))`.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

@@ -1,0 +1,53 @@
+{
+ "tag": "Replay Attack",
+ "mode": "s2b",
+ "detector": {
+  "name": "Replay Attack",
+  "vulnerability_knowledge": "A replay attack occurs when an attacker captures a valid signed message, transaction, or data payload and resubmits it to the contract, causing the same state change to execute again. In Solidity, this typically manifests when a contract accepts off-chain signatures (EIP-712, EIP-191) or on-chain commitments without tracking which nonces or message hashes have already been processed. The core mechanism is missing or insufficient uniqueness enforcement: the contract must record each used nonce or message hash in a mapping (e.g., `usedNonces[signer][nonce]` or `executedMessages[hash]`) and reject duplicates before applying state changes. Vulnerabilities arise when nonces are not incremented atomically with the effect, when the nonce space is shared across different actions allowing cross-function replay, when `msg.sender` is used as the sole replay guard but the signer differs from the sender (meta-transactions), or when chain ID and contract address are not included in the signed payload enabling cross-chain or cross-contract replay. Proper mitigation requires strict nonce validation, domain separation via EIP-712 `domainSeparator`, and marking the nonce as used before any external calls to prevent reentrancy-based replay.",
+  "checks": [
+   "Contract accepts a signature (ecrecover, EIP-712 _verify) but does not store and check a used-nonce mapping keyed by signer and nonce before executing effects.",
+   "Nonce is validated but not marked as consumed atomically with the state change, allowing reentrancy to replay the same nonce.",
+   "Signed payload lacks domain separator (chainId, verifyingContract) enabling cross-chain or cross-contract replay of the same signature.",
+   "Nonce scheme is shared across multiple functions or action types, permitting a nonce used for one action to be replayed for a different action.",
+   "Contract uses only `msg.sender` as replay protection for meta-transactions where the signer != `msg.sender`, allowing anyone to replay the signed payload via a different relayer.",
+   "Replay protection mapping is reset or cleared (e.g., via `delete` or array pop) without ensuring all pending nonces are finalized.",
+   "Off-chain signed message includes a deadline/expiration but contract does not enforce it, allowing indefinite replay window.",
+   "Contract implements EIP-2612 permit or similar but does not increment the owner's nonce after successful execution."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract VulnerableMetaTx {\n    mapping(address => uint256) public nonces;\n    \n    function executeMetaTx(\n        address from,\n        bytes calldata data,\n        uint256 nonce,\n        bytes calldata signature\n    ) external {\n        // @audit missing replay protection: no check that nonce is unused\n        // @audit missing domain separator in signed payload\n        bytes32 hash = keccak256(abi.encodePacked(from, data, nonce));\n        address signer = ECDSA.recover(hash, signature);\n        require(signer == from, \"invalid signer\");\n        \n        // @audit nonce not marked used before external call\n        (bool success, ) = from.call(data);\n        require(success, \"call failed\");\n        \n        nonces[from] = nonce + 1; // @audit too late, reentrancy can replay\n    }\n}",
+   "explanation": "The contract verifies the signature but never checks whether the nonce was already used, does not include a domain separator, and increments the nonce only after the external call, enabling reentrancy-based replay."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/utils/cryptography/ECDSA.sol\";\nimport \"@openzeppelin/contracts/utils/cryptography/EIP712.sol\";\n\ncontract SecureMetaTx is EIP712 {\n    mapping(address => uint256) public nonces;\n    mapping(bytes32 => bool) public usedMessageHash;\n    \n    constructor() EIP712(\"SecureMetaTx\", \"1\") {}\n    \n    function executeMetaTx(\n        address from,\n        bytes calldata data,\n        uint256 nonce,\n        bytes calldata signature\n    ) external {\n        bytes32 structHash = keccak256(abi.encode(\n            keccak256(\"MetaTx(address from,bytes data,uint256 nonce)\"),\n            from, keccak256(data), nonce\n        ));\n        bytes32 digest = _hashTypedDataV4(structHash);\n        address signer = ECDSA.recover(digest, signature);\n        require(signer == from, \"invalid signer\");\n        \n        // @audit check and mark nonce used atomically before effects\n        require(nonces[from] == nonce, \"invalid nonce\");\n        nonces[from] = nonce + 1;\n        \n        // @audit optional: also track full message hash for defense in depth\n        require(!usedMessageHash[digest], \"message already executed\");\n        usedMessageHash[digest] = true;\n        \n        (bool success, ) = from.call(data);\n        require(success, \"call failed\");\n    }\n}",
+   "explanation": "The fixed contract uses EIP-712 domain separation, validates the nonce matches the expected sequential value, increments the nonce before the external call, and tracks the full message hash to prevent any replay."
+  },
+  "routing_hint_candidates": [
+   "EIP712",
+   "_hashTypedDataV4",
+   "domainSeparator",
+   "ecrecover",
+   "ECDSA.recover",
+   "nonces",
+   "usedNonces",
+   "usedMessageHash",
+   "executeMetaTx",
+   "permit",
+   "DOMAIN_SEPARATOR",
+   "nonce",
+   "signature",
+   "signer",
+   "metaTransaction",
+   "replayProtection",
+   "chainId",
+   "verifyingContract",
+   "_verify"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "483"
+ ],
+ "exclude_repo": "1aee004bafff",
+ "error": null
+}

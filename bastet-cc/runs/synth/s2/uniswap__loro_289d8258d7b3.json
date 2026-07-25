@@ -1,0 +1,65 @@
+{
+ "tag": "Uniswap",
+ "mode": "s2b",
+ "detector": {
+  "name": "Uniswap-Integration-Errors",
+  "vulnerability_knowledge": "Uniswap integration vulnerabilities arise from mishandling core AMM primitives across V2, V3, and V4. In V2, the pair address derivation depends on a correct init code hash; a mismatched constant (e.g., using Uniswap's hash for a SushiSwap fork or vice versa) causes pairFor() to return an incorrect address, breaking oracles, routers, and liquidity management. In V3, swap paths are tightly packed byte arrays alternating token addresses (20 bytes) and fee tiers (3 bytes). Reversing such a path for exact-output swaps requires reversing the logical sequence of (token, fee) pairs, not a naive byte-wise reversal; the latter corrupts token/fee boundaries and produces invalid pool lookups. V3 TWAP oracles require reading slot0 and observations with proper time-weighted arithmetic; using spot price (slot0.sqrtPriceX96) directly or miscomputing the geometric mean across observations enables price manipulation. Liquidity accounting errors include treating the full pool reserves as protocol-owned (ignoring LP shares), miscalculating position liquidity from amount0/amount1 ratios, and allowing dust amounts to accumulate without recovery. Missing slippage protection (amountOutMinimum = 0 or amountInMaximum = type(uint256).max) on swap, mint, or burn calls permits sandwich attacks and value leakage. V4 hooks introduce additional surface: incorrect hook permissions, missing before/after swap delta validation, and wrong PoolKey ordering.",
+  "checks": [
+   "Verify UniswapV2Library.pairFor() uses the correct init code hash constant for the target DEX (Uniswap vs SushiSwap vs custom fork) by comparing the hardcoded hex value against the factory's INIT_CODE_PAIR_HASH.",
+   "In V3 exact-output swap logic, confirm path reversal iterates over (token, fee) tuples in reverse order and re-encodes each tuple correctly, rather than applying a byte-level reverse() on the entire bytes memory.",
+   "Check that TWAP price consumers read at least two observations with distinct timestamps, compute the geometric mean of sqrtPriceX96 values weighted by time deltas, and enforce a minimum observation window (e.g., > 0 seconds) instead of using slot0.sqrtPriceX96 directly.",
+   "Ensure liquidity calculations for position management (mint, burn, collect) derive liquidity from amount0 and amount1 using the correct sqrtPriceX96 boundaries (tickLower/tickUpper) and do not assume the entire pool reserve belongs to the protocol.",
+   "Validate that every swapExactTokensForTokens, swapTokensForExactTokens, mint, burn, and flash call includes a non-zero amountOutMinimum or capped amountInMaximum parameter sourced from a trusted slippage oracle or user input, not hardcoded to 0 or type(uint256).max.",
+   "Confirm deadline parameters on router interactions are set to a near-future block.timestamp + reasonable buffer (e.g., 20 minutes) rather than type(uint256).max or block.timestamp.",
+   "In V4 hook implementations, verify beforeSwap/afterSwap return the correct hook permissions bitmask and validate the delta amounts against expected invariants (e.g., zero-for-one direction matches token0/token1 ordering).",
+   "Check PoolKey construction in V4: currency0 < currency1 ordering, correct fee tier, tickSpacing matching the fee, and hooks address set to the deployed hook contract."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract UniswapV3SwapError {\n    ISwapRouter public immutable router;\n    bytes public constant WRONG_PATH = hex\"0001f4\"; // tokenA, fee 500\n    \n    function swapExactOutputSingle(bytes calldata path, uint256 amountOut) external {\n        // @audit byte-wise reversal corrupts token/fee boundaries\n        bytes memory reversedPath = new bytes(path.length);\n        for (uint256 i = 0; i < path.length; i++) {\n            reversedPath[i] = path[path.length - 1 - i];\n        }\n        \n        router.exactOutputSingle(\n            ISwapRouter.ExactOutputSingleParams({\n                path: reversedPath,\n                recipient: msg.sender,\n                deadline: type(uint256).max, // @audit no deadline\n                amountOut: amountOut,\n                amountInMaximum: type(uint256).max // @audit no slippage\n            })\n        );\n    }\n    \n    function getPairV2(address tokenA, address tokenB) external pure returns (address) {\n        // @audit wrong init code hash for SushiSwap deployment\n        bytes32 constant INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f; // Uniswap V2 hash\n        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);\n        return address(uint256(keccak256(abi.encodePacked(\n            hex\"ff\",\n            0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac, // factory\n            keccak256(abi.encodePacked(token0, token1)),\n            INIT_CODE_HASH\n        ))));\n    }\n}",
+   "explanation": "The swapExactOutputSingle function reverses the V3 path byte-by-byte, destroying the (token, fee) tuple structure; it also omits slippage and deadline protections. The getPairV2 function uses Uniswap V2's init code hash instead of the fork's hash, causing pair address derivation to fail on SushiSwap or other forks."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract UniswapV3SwapFixed {\n    ISwapRouter public immutable router;\n    IUniswapV3Factory public immutable factory;\n    \n    function swapExactOutputSingle(\n        address tokenIn,\n        address tokenOut,\n        uint24 fee,\n        uint256 amountOut,\n        uint256 amountInMaximum,\n        uint256 deadline\n    ) external {\n        // @audit encode path as (tokenOut, fee, tokenIn) for exactOutput\n        bytes memory path = abi.encodePacked(tokenOut, fee, tokenIn);\n        \n        router.exactOutputSingle(\n            ISwapRouter.ExactOutputSingleParams({\n                path: path,\n                recipient: msg.sender,\n                deadline: deadline, // @audit user-supplied deadline\n                amountOut: amountOut,\n                amountInMaximum: amountInMaximum // @audit slippage protection\n            })\n        );\n    }\n    \n    function getPairV2(address tokenA, address tokenB) external view returns (address) {\n        // @audit fetch init code hash from factory at runtime\n        bytes32 initCodeHash = factory.INIT_CODE_PAIR_HASH();\n        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);\n        return address(uint256(keccak256(abi.encodePacked(\n            hex\"ff\",\n            address(factory),\n            keccak256(abi.encodePacked(token0, token1)),\n            initCodeHash\n        ))));\n    }\n}",
+   "explanation": "The fixed swapExactOutputSingle constructs the V3 path correctly as tokenOut-fee-tokenIn without reversal, and requires caller-supplied slippage and deadline parameters. The getPairV2 function reads INIT_CODE_PAIR_HASH from the factory contract, making it compatible with any V2 fork."
+  },
+  "routing_hint_candidates": [
+   "pairFor",
+   "INIT_CODE_PAIR_HASH",
+   "initCodeHash",
+   "slot0",
+   "sqrtPriceX96",
+   "observations",
+   "observe",
+   "tickLower",
+   "tickUpper",
+   "liquidity",
+   "amount0",
+   "amount1",
+   "exactInputSingle",
+   "exactOutputSingle",
+   "exactInput",
+   "exactOutput",
+   "swapExactTokensForTokens",
+   "swapTokensForExactTokens",
+   "mint",
+   "burn",
+   "collect",
+   "flash",
+   "PoolKey",
+   "currency0",
+   "currency1",
+   "fee",
+   "tickSpacing",
+   "hooks",
+   "beforeSwap",
+   "afterSwap"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "64",
+  "243"
+ ],
+ "exclude_repo": "289d8258d7b3",
+ "error": null
+}
