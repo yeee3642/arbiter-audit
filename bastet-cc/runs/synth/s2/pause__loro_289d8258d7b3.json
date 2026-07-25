@@ -1,0 +1,61 @@
+{
+ "tag": "Pause",
+ "mode": "s2",
+ "detector": {
+  "name": "Pause",
+  "vulnerability_knowledge": "Pause mechanisms (OpenZeppelin Pausable, custom whenPaused/whenNotPaused modifiers) are critical safety valves. Three recurring flaw patterns appear in audits:\n\n1. 1/64 Gas Rule abuse: A try/catch around an external call (e.g., token.mint()) catches Out-of-Gas errors. An attacker forwards exactly 63/64 of the gas limit, forcing the call to OOG while the catch block executes _pause(), permanently halting the system.\n\n2. Invalid pause-state validation: Using a sentinel value like `auction.tokenId == 0` to detect \"first auction\" or \"uninitialized\" state is unsafe when 0 is a valid tokenId. This causes re-initialization on unpause, overwriting active auction state and orphaning NFTs/bids.\n\n3. Missing pause guards on state-changing functions: Functions that mutate protocol state (removeFollower, transfer, mint, burn, etc.) omit the whenNotPaused modifier, allowing disallowed operations during a pause. The pause flag is checked in some entry points but not others, creating inconsistent enforcement.\n\nAuditors must verify: (a) no catch-all error handling triggers pause, (b) pause/unpause logic uses explicit boolean flags not sentinel values, (c) every external/write function has the correct pause modifier, (d) unpause cannot be front-run or re-entered to corrupt state.",
+  "checks": [
+   "Check that no try/catch block catches generic Error or Panic and calls _pause() in the catch clause \u2014 this enables 1/64 gas griefing.",
+   "Verify that unpause() does not rely on sentinel values (tokenId == 0, totalSupply == 0, etc.) to decide whether to re-initialize state; use an explicit initialized boolean or version counter.",
+   "Confirm every external/public function that writes state (mint, burn, transfer, updateSettings, removeFollower, claim, settle, etc.) has either whenNotPaused or whenPaused modifier matching the intended pause semantics.",
+   "Ensure _pause() and _unpause() are internal and only callable via access-controlled external functions (onlyOwner, onlyRole, onlyGovernance).",
+   "Check that pause/unpause events (Paused, Unpaused) are emitted with the correct account (msg.sender) for off-chain monitoring.",
+   "Validate that unpause() cannot be front-run: if unpause triggers automatic state transitions (e.g., _createAuction), those transitions must be idempotent or guarded against re-entry.",
+   "Verify that view/pure functions do not incorrectly revert when paused unless they are explicitly gated (some protocols allow reads during pause).",
+   "Confirm the contract has a recovery path: if pause is permanent (no unpause role), document as centralization risk; if unpause exists, ensure it cannot be blocked by a stuck state variable."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/token/ERC721/ERC721.sol\";\n\ncontract FlawedAuction is ERC721, Pausable {\n    struct Auction {\n        uint256 tokenId;\n        uint40 startTime;\n        uint40 endTime;\n        uint256 highestBid;\n        address highestBidder;\n        bool settled;\n    }\n    Auction public auction;\n    address public treasury;\n\n    constructor() ERC721(\"Auction\", \"AUC\") {\n        treasury = msg.sender;\n    }\n\n    function _createAuction() internal {\n        try this.mint(msg.sender) returns (uint256 tokenId) { // self-mint for demo\n            auction.tokenId = tokenId;\n            auction.startTime = uint40(block.timestamp);\n            auction.endTime = uint40(block.timestamp + 3600);\n            auction.highestBid = 0;\n            auction.highestBidder = address(0);\n            auction.settled = false;\n        } catch Error(string memory) {\n            _pause(); // @audit 1/64 gas griefing: catch-all pauses contract\n        }\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (auction.tokenId == 0) { // @audit invalid validation: tokenId 0 is valid\n            transferOwnership(treasury);\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function removeFollower(uint256 tokenId) external {\n        // @audit missing whenNotPaused modifier\n        _burn(tokenId);\n    }\n}\n",
+   "explanation": "The contract exhibits all three flaw patterns: (1) try/catch around mint catches OOG and calls _pause(), enabling 1/64 gas griefing; (2) unpause uses auction.tokenId == 0 as sentinel, but tokenId 0 is a valid ERC721 token, causing re-initialization that overwrites active auction; (3) removeFollower lacks whenNotPaused, allowing burns during pause."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/token/ERC721/ERC721.sol\";\nimport \"@openzeppelin/contracts/access/Ownable.sol\";\n\ncontract FixedAuction is ERC721, Pausable, Ownable {\n    struct Auction {\n        uint256 tokenId;\n        uint40 startTime;\n        uint40 endTime;\n        uint256 highestBid;\n        address highestBidder;\n        bool settled;\n    }\n    Auction public auction;\n    bool public initialized = false;\n\n    constructor() ERC721(\"Auction\", \"AUC\") Ownable(msg.sender) {}\n\n    function _createAuction() internal {\n        uint256 tokenId = _mint(msg.sender); // no try/catch, revert on failure\n        auction.tokenId = tokenId;\n        auction.startTime = uint40(block.timestamp);\n        auction.endTime = uint40(block.timestamp + 3600);\n        auction.highestBid = 0;\n        auction.highestBidder = address(0);\n        auction.settled = false;\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (!initialized) {\n            initialized = true;\n            transferOwnership(treasury);\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function removeFollower(uint256 tokenId) external whenNotPaused {\n        _burn(tokenId);\n    }\n}\n",
+   "explanation": "Fixes: (1) removed try/catch, let mint revert naturally so OOG bubbles up; (2) replaced tokenId == 0 sentinel with explicit initialized boolean; (3) added whenNotPaused to removeFollower."
+  },
+  "routing_hint_candidates": [
+   "Pausable",
+   "whenNotPaused",
+   "whenPaused",
+   "_pause",
+   "_unpause",
+   "Paused",
+   "Unpaused",
+   "onlyOwner",
+   "onlyRole",
+   "onlyGovernance",
+   "initialized",
+   "reinitializer",
+   "tokenId",
+   "settled",
+   "removeFollower",
+   "_burn",
+   "mint",
+   "transferOwnership",
+   "try",
+   "block.timestamp",
+   "auction",
+   "highestBid",
+   "highestBidder",
+   "startTime",
+   "endTime"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "221",
+  "208",
+  "301"
+ ],
+ "exclude_repo": "289d8258d7b3",
+ "error": null
+}

@@ -1,0 +1,64 @@
+{
+ "tag": "Upgradeable",
+ "mode": "s2b",
+ "detector": {
+  "name": "Upgradeable",
+  "vulnerability_knowledge": "Upgradeable contracts rely on proxy patterns (Transparent, UUPS, Diamond) where logic resides in an implementation contract while state lives in the proxy. The proxy delegates calls via `delegatecall`, so the implementation's storage layout must exactly match the proxy's; adding new state variables without reserved storage gaps shifts subsequent slots and corrupts data. Initialization replaces constructors: an `initialize()` function guarded by an `initializer` modifier (OpenZeppelin) or a manual `initialized` boolean must be called exactly once, otherwise the contract can be re-initialized by anyone. Upgrade authority is typically held by an `owner`, `admin`, or `governor` role; missing or weak access control on `upgradeTo`, `upgradeToAndCall`, or Diamond's `diamondCut` allows unauthorized logic replacement. EIP-1967 and EIP-2535 prescribe standard storage slots for implementation address and admin; deviating from them breaks tooling and audit assumptions. Finally, upgrade calldata (e.g., `initialize` arguments) must be validated before execution, otherwise a malicious governor can inject arbitrary code during the upgrade.",
+  "checks": [
+   "Proxy contract lacks a storage gap (e.g., `uint256[50] __gap;`) in the base implementation contract, risking storage collisions when new state variables are added in future upgrades.",
+   "Implementation contract uses a constructor instead of an `initialize()` function with `initializer` modifier, leaving the proxy uninitialized and vulnerable to front-running initialization.",
+   "Upgrade function (`upgradeTo`, `upgradeToAndCall`, `diamondCut`, `setImplementation`) missing role-based access control (`onlyOwner`, `onlyAdmin`, `onlyGovernor`) or using an incorrectly initialized `Ownable`/`AccessControl` so the owner address is zero.",
+   "Initializer function lacks the `initializer` modifier or a manual `initialized` flag check, allowing re-initialization after the first call.",
+   "Upgrade calldata is executed via `delegatecall` without validating the target function selector or arguments, enabling arbitrary code execution during upgrade.",
+   "Contract inherits `EIP712Upgradeable` or similar upgradeable base but never calls its `__EIP712_init` / `__ERC20_init` etc., leaving domain separator or token metadata uninitialized.",
+   "Storage layout uses `immutable` or `constant` variables in the implementation contract, which are not stored in proxy storage and behave differently after upgrade.",
+   "Diamond proxy's `diamondCut` does not enforce facet removal/addition validation (e.g., duplicate selectors, zero address facets) or lacks a timelock/multisig on the `diamondCut` caller."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol\";\nimport \"@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol\";\n\ncontract VulnerableUpgradeable is Initializable, OwnableUpgradeable {\n    uint256 public value;\n    // Missing storage gap\n\n    function initialize(uint256 _value) external {\n        // Missing initializer modifier\n        value = _value;\n        __Ownable_init(); // owner set here, but OwnableUpgradeable constructor not run\n    }\n\n    function setValue(uint256 _value) external onlyOwner {\n        value = _value;\n    }\n\n    // No upgradeTo function; assume external proxy calls delegatecall on this\n}\n",
+   "explanation": "Missing storage gap, initialize lacks `initializer` modifier allowing re-initialization, OwnableUpgradeable not properly initialized so `onlyOwner` checks fail, and no access-controlled upgrade function."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol\";\nimport \"@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol\";\nimport \"@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol\";\n\ncontract SecureUpgradeable is Initializable, OwnableUpgradeable, UUPSUpgradeable {\n    uint256 public value;\n    uint256[49] private __gap; // storage gap for future upgrades\n\n    function initialize(uint256 _value) external initializer {\n        value = _value;\n        __Ownable_init(msg.sender);\n    }\n\n    function setValue(uint256 _value) external onlyOwner {\n        value = _value;\n    }\n\n    // UUPSUpgradeable provides upgradeToAndCall with onlyOwner\n    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}\n}\n",
+   "explanation": "Storage gap reserves slots, `initializer` modifier prevents re-initialization, `OwnableUpgradeable` initialized with deployer, and `UUPSUpgradeable` supplies access-controlled upgrade mechanism."
+  },
+  "routing_hint_candidates": [
+   "upgradeTo",
+   "upgradeToAndCall",
+   "diamondCut",
+   "initialize",
+   "initializer",
+   "onlyOwner",
+   "onlyAdmin",
+   "onlyGovernor",
+   "__gap",
+   "UUPSUpgradeable",
+   "TransparentUpgradeableProxy",
+   "ERC1967Proxy",
+   "ERC1967Upgrade",
+   "EIP712Upgradeable",
+   "Initializable",
+   "OwnableUpgradeable",
+   "AccessControlUpgradeable",
+   "delegatecall",
+   "implementation",
+   "admin",
+   "beacon",
+   "facet",
+   "selector",
+   "storageSlot",
+   "reinitializer",
+   "__Ownable_init",
+   "__EIP712_init",
+   "timelock",
+   "multisig"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "235",
+  "45"
+ ],
+ "exclude_repo": "fccd852beaa3",
+ "error": null
+}

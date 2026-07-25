@@ -7,128 +7,114 @@ You are a smart contract auditor. After reading the following vulnerability know
 ### Vulnerability Knowledge
 
 **Governance**
-Governance systems are vulnerable when voting power can be manipulated via flash loans or instant token acquisition because snapshots use current balances instead of historical checkpoints. Proposal activation lacks rate limiting, allowing spam proposals to block legitimate ones through grace period lockouts. Threshold and quorum calculations often use totalSupply at proposal creation while voting power is measured at a prior block, enabling same-block supply inflation to lower requirements. Vote counting resets before external calls, permitting reentrancy to double-count signatures. Endorsement weights are recorded at call time without preventing token transfer and re-endorsement, causing double-counting. Parameter setters miss zero-address and bounds validation, and execution paths omit msg.value forwarding despite payable checks.
+Governance vulnerabilities arise when voting power, proposal lifecycle, or parameter management can be manipulated due to missing or incorrect validations. A common flaw is using live token balances (e.g., `balanceOf(msg.sender)`) instead of snapshots, allowing flash loans or intra-block transfers to inflate voting weight and double-count endorsements. Proposal activation often lacks rate limiting or spam checks, so a low-power actor can repeatedly activate dummy proposals and lock out legitimate ones via grace periods. Threshold and quorum calculations may snapshot total supply at proposal creation but measure voting power at a prior block, enabling same-block supply inflation to lower effective thresholds. Vote reclamation logic frequently only blocks the currently active proposal, permitting users to vote and immediately reclaim in the same transaction before activation. Multi-sig or role-based voting modifiers that reset state before an external call (`_;`) enable reentrancy, letting signers vote twice in one transaction. Parameter setters (e.g., for vetoer, bid increments, or quorum) often omit zero-address or bounds checks, allowing invalid configurations. Execution functions may validate `msg.value` but fail to forward it in the low-level call, causing value loss. Finally, external functions that write critical state (like quorum supplies) without access control let anyone overwrite governance parameters after proposal creation.
 
 ### Detection Checks
 
-1. Snapshot voting power at proposal creation using historical checkpoints (e.g., getVotes(account, block.number - 1)) rather than current balanceOf to prevent flash loan manipulation.
-2. Enforce a minimum delay or cooldown between proposal activations and validate proposer reputation or stake to prevent spam proposals from monopolizing the active slot via GRACE_PERIOD.
-3. Calculate proposalThreshold and quorum using totalSupply at the same historical block used for voting power (snapshot - 1) so same-block minting cannot lower thresholds after proposal creation.
-4. Reset vote counts and hasVoted flags only after the external call (_;) completes, not before, to prevent reentrancy from allowing signers to vote twice in the same transaction.
-5. Record endorsement weight once per proposal per user at first endorsement and reject subsequent calls, or snapshot token balances at proposal activation to prevent transfer-and-re-endorse double counting.
-6. Validate all address parameters (vetoer, treasury, token, guard) against address(0) in initialize and setter functions before assignment.
-7. Validate percentage and basis-point parameters (e.g., minBidIncrement, proposalThresholdBps, quorumThresholdBps) against explicit upper bounds (100 or 10000) before casting to uint8/uint16.
-8. Forward msg.value in low-level calls when the function is payable and validates msg.value == actionInfo.value (use {value: actionInfo.value} on executor.execute).
+1. Voting power or endorsement weight is read from a live balance (`balanceOf`, `getVotes`) instead of a snapshot taken at proposal creation or a fixed past block, enabling flash-loan manipulation.
+2. Proposal activation lacks anti-spam measures: no minimum endorsement age, no cooldown between activations, or no limit on concurrent proposals, allowing griefing via dummy proposals.
+3. Threshold or quorum values are snapshotted using current `totalSupply` while voting power is measured at `block.timestamp - 1` (or another past block), creating a mismatch that can be exploited by inflating supply in the same block.
+4. Vote reclamation (`reclaimVotes`) only blocks the currently active proposal ID, permitting a user to vote and immediately reclaim in the same transaction before the proposal becomes active.
+5. Multi-sig or role-voting modifiers reset `voteCount` and `hasVoted` flags before the external call (`_;`), enabling reentrancy that lets a signer vote twice in one transaction.
+6. Critical parameter setters (vetoer, quorum, proposal threshold, bid increment) miss zero-address validation or upper/lower bounds checks (e.g., percentage > 100).
+7. Execution functions validate `msg.value == actionInfo.value` but call `executor.execute(target, value, ...)` without `{value: actionInfo.value}`, so Ether is not forwarded.
+8. External functions that write governance-critical state (e.g., `actionApprovalSupply`, `actionDisapprovalSupply`, `settings.vetoer`) have no access control (`onlyOwner`, `onlyRole`, `onlyManager`), allowing anyone to overwrite them after proposal creation.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description) external returns (bytes32) {
-    uint256 threshold = proposalThreshold(); // uses current totalSupply
-    if (getVotes(msg.sender, block.timestamp - 1) < threshold) revert BELOW_PROPOSAL_THRESHOLD();
-    uint256 snapshot = block.timestamp + votingDelay;
-    uint256 deadline = snapshot + votingPeriod;
-    proposals[proposalId] = Proposal({
-        voteStart: uint32(snapshot),
-        voteEnd: uint32(deadline),
-        proposalThreshold: uint32(threshold),
-        quorumVotes: uint32(quorum()), // uses current totalSupply
-        proposer: msg.sender,
-        timeCreated: uint32(block.timestamp)
-    });
-    return proposalId;
-}
-
 function endorseProposal(uint256 proposalId) external {
-    uint256 userVotes = VOTES.balanceOf(msg.sender); // current balance, no snapshot
+    uint256 userVotes = VOTES.balanceOf(msg.sender); // live balance, no snapshot
     uint256 previous = userEndorsementsForProposal[proposalId][msg.sender];
     totalEndorsementsForProposal[proposalId] -= previous;
     userEndorsementsForProposal[proposalId][msg.sender] = userVotes;
     totalEndorsementsForProposal[proposalId] += userVotes;
 }
 
+function activateProposal(uint256 proposalId) external {
+    if (totalEndorsementsForProposal[proposalId] * 100 < VOTES.totalSupply() * ENDORSEMENT_THRESHOLD) revert();
+    if (block.timestamp < activeProposal.activationTimestamp + GRACE_PERIOD) revert(); // no spam limit
+    activeProposal = ActivatedProposal(proposalId, block.timestamp);
+}
+
+function reclaimVotes(uint256 proposalId) external {
+    if (proposalId == activeProposal.proposalId) revert(); // only blocks active
+    VOTES.transferFrom(address(this), msg.sender, userVotesForProposal[proposalId][msg.sender]);
+}
+
 modifier onlySigners() {
-    if (!signers.isSigner[msg.sender]) revert NotSigner();
-    bytes32 topic = keccak256(msg.data);
-    Voting storage voting = votingPerTopic[signerEpoch][topic];
-    if (voting.hasVoted[msg.sender]) revert AlreadyVoted();
+    if (voting.hasVoted[msg.sender]) revert();
     voting.hasVoted[msg.sender] = true;
-    uint256 voteCount = voting.voteCount + 1;
-    if (voteCount < signers.threshold) {
-        voting.voteCount = voteCount;
-        return;
-    }
-    voting.voteCount = 0; // reset BEFORE external call
-    for (uint256 i = 0; i < signers.accounts.length; i++) {
-        voting.hasVoted[signers.accounts[i]] = false;
-    }
-    _;
+    voting.voteCount++;
+    if (voting.voteCount < threshold) return;
+    voting.voteCount = 0;
+    for (uint i=0;i<signers.length;i++) voting.hasVoted[signers[i]] = false;
+    _; // reentrancy: state cleared before external call
+}
+
+function setVetoer(address _vetoer) external {
+    settings.vetoer = _vetoer; // no zero-address check
 }
 
 function executeAction(ActionInfo calldata actionInfo) external payable {
-    if (msg.value != actionInfo.value) revert IncorrectMsgValue();
-    (bool success, ) = executor.execute(actionInfo.target, actionInfo.value, actionInfo.isScript, actionInfo.data); // missing {value: actionInfo.value}
-    if (!success) revert FailedActionExecution();
+    if (msg.value != actionInfo.value) revert();
+    executor.execute(actionInfo.target, actionInfo.value, actionInfo.data); // missing {value: actionInfo.value}
 }
 ```
 
-Proposal thresholds use current totalSupply while voting power is historical; endorsements use live balanceOf enabling double-counting via token transfer; vote counts reset before external call allowing reentrancy double-vote; executeAction validates msg.value but omits value forwarding in the low-level call.
+Live balance used for endorsements enables double-counting via flash loans; activation lacks spam protection; reclaimVotes allows vote-and-reclaim in same tx; modifier clears state before external call enabling reentrancy; setVetoer misses zero-address check; executeAction validates msg.value but does not forward it.
 
 #### Example 2: Correct Example
 
 ```solidity
-function propose(address[] memory targets, uint256[] memory values, bytes[] memory calldatas, string memory description) external returns (bytes32) {
-    uint256 snapshotBlock = block.number - 1;
-    uint256 threshold = proposalThreshold(snapshotBlock); // uses historical totalSupply
-    if (getVotes(msg.sender, snapshotBlock) < threshold) revert BELOW_PROPOSAL_THRESHOLD();
-    uint256 snapshot = block.timestamp + votingDelay;
-    uint256 deadline = snapshot + votingPeriod;
-    proposals[proposalId] = Proposal({
-        voteStart: uint32(snapshot),
-        voteEnd: uint32(deadline),
-        proposalThreshold: uint32(threshold),
-        quorumVotes: uint32(quorum(snapshotBlock)), // historical totalSupply
-        proposer: msg.sender,
-        timeCreated: uint32(block.timestamp)
-    });
-    return proposalId;
-}
-
 function endorseProposal(uint256 proposalId) external {
-    if (userEndorsementsForProposal[proposalId][msg.sender] > 0) revert AlreadyEndorsed();
-    uint256 userVotes = VOTES.getPastVotes(msg.sender, proposalActivationBlock[proposalId]);
+    uint256 userVotes = VOTES.getPastVotes(msg.sender, proposalSnapshot[proposalId]); // snapshot at proposal creation
+    uint256 previous = userEndorsementsForProposal[proposalId][msg.sender];
+    totalEndorsementsForProposal[proposalId] -= previous;
     userEndorsementsForProposal[proposalId][msg.sender] = userVotes;
     totalEndorsementsForProposal[proposalId] += userVotes;
 }
 
+function activateProposal(uint256 proposalId) external {
+    if (totalEndorsementsForProposal[proposalId] * 100 < VOTES.totalSupply() * ENDORSEMENT_THRESHOLD) revert();
+    if (block.timestamp < lastActivationTimestamp + ACTIVATION_COOLDOWN) revert(); // rate limit
+    if (block.timestamp < activeProposal.activationTimestamp + GRACE_PERIOD) revert();
+    activeProposal = ActivatedProposal(proposalId, block.timestamp);
+    lastActivationTimestamp = block.timestamp;
+}
+
+function reclaimVotes(uint256 proposalId) external {
+    if (proposalId == activeProposal.proposalId) revert();
+    if (proposalId == pendingActivationProposalId) revert(); // block proposals in activation pipeline
+    VOTES.transferFrom(address(this), msg.sender, userVotesForProposal[proposalId][msg.sender]);
+}
+
 modifier onlySigners() {
-    if (!signers.isSigner[msg.sender]) revert NotSigner();
-    bytes32 topic = keccak256(msg.data);
-    Voting storage voting = votingPerTopic[signerEpoch][topic];
-    if (voting.hasVoted[msg.sender]) revert AlreadyVoted();
+    if (voting.hasVoted[msg.sender]) revert();
     voting.hasVoted[msg.sender] = true;
-    uint256 voteCount = voting.voteCount + 1;
-    if (voteCount < signers.threshold) {
-        voting.voteCount = voteCount;
-        return;
-    }
+    voting.voteCount++;
+    if (voting.voteCount < threshold) return;
+    // execute external call FIRST, then clear state
     _;
-    voting.voteCount = 0; // reset AFTER external call
-    for (uint256 i = 0; i < signers.accounts.length; i++) {
-        voting.hasVoted[signers.accounts[i]] = false;
-    }
+    voting.voteCount = 0;
+    for (uint i=0;i<signers.length;i++) voting.hasVoted[signers[i]] = false;
+}
+
+function setVetoer(address _vetoer) external onlyOwner {
+    if (_vetoer == address(0)) revert();
+    settings.vetoer = _vetoer;
 }
 
 function executeAction(ActionInfo calldata actionInfo) external payable {
-    if (msg.value != actionInfo.value) revert IncorrectMsgValue();
-    (bool success, ) = executor.execute{value: actionInfo.value}(actionInfo.target, actionInfo.value, actionInfo.isScript, actionInfo.data);
-    if (!success) revert FailedActionExecution();
+    if (msg.value != actionInfo.value) revert();
+    (bool success, ) = executor.execute{value: actionInfo.value}(actionInfo.target, actionInfo.data);
+    if (!success) revert();
 }
 ```
 
-Thresholds and quorum use historical totalSupply at snapshot-1; endorsements are recorded once per user at activation block; vote state resets after external call preventing reentrancy; executeAction forwards msg.value in the low-level call.
+Endorsements use snapshot at proposal creation; activation adds cooldown to prevent spam; reclaimVotes blocks pending proposals; modifier executes external call before clearing state; setVetoer adds onlyOwner and zero-address check; executeAction forwards value with {value: ...}.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

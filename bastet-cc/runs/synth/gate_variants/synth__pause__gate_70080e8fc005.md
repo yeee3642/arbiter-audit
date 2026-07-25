@@ -1,4 +1,4 @@
-# Pause-Bypassable Pause Controls
+# Pause-Bypassable Pause Logic
 
 ## Detection prompt
 
@@ -6,19 +6,19 @@ You are a smart contract auditor. After reading the following vulnerability know
 
 ### Vulnerability Knowledge
 
-**Pause-Bypassable Pause Controls**
-Contracts using OpenZeppelin's Pausable pattern or custom pause logic rely on `whenNotPaused` / `whenPaused` modifiers to gate critical operations. A bypass occurs when state-changing functions that should be blocked during a pause lack the modifier, or when an alternative code path (e.g., a different external function, internal helper, or fallback) reaches the same state transition without passing through the guarded entry point. The result is that privileged pause/unpause roles cannot actually halt the system: users continue to mint, burn, transfer, or withdraw while `paused() == true`. A second failure mode is a permanent lock — `unpause` is gated behind a role that can no longer be called (e.g., the only account with `UNPAUSER_ROLE` is a contract that self-destructed), or the pause flag is written to storage in a way that cannot be flipped back.
+**Pause-Bypassable Pause Logic**
+Pause mechanisms (OpenZeppelin Pausable, custom whenPaused/whenNotPaused modifiers) are intended to halt sensitive operations during emergencies. A bypass occurs when state-changing functions that should be gated by the pause flag omit the modifier, allowing users to execute disallowed actions while the system is paused. Common patterns include: (1) multiple entry points to the same logical operation where only one path is guarded (e.g., unfollow() guarded but removeFollower() and burn() are not), (2) admin-only functions that assume the pause flag is checked elsewhere, and (3) withdrawal or claim functions that rely on an "active" flag instead of the global pause state, causing funds to become stuck when the contract is paused or deactivated. The pause flag is typically a single boolean (paused) toggled by a privileged role; any function that mutates protocol-critical state must explicitly enforce whenNotPaused or equivalent logic, otherwise the pause is ineffective.
 
 ### Detection Checks
 
-1. Every external / public function that mutates protocol-critical state (mint, burn, transfer, deposit, withdraw, claim, follow, unfollow, setApprovalForAll, etc.) either has `whenNotPaused` or an explicit `require(!paused(), "Pausable: paused")` at the top of the function body.
-2. No internal helper (_burn, _mint, _transfer, _withdraw, _unfollow, etc.) that performs the actual state change is callable from an unguarded external entry point; trace all call paths to each state-changing internal function.
-3. The `pause()` and `unpause()` functions themselves are protected by the correct access-control modifier (e.g., `onlyPauser`, `onlyRole(PAUSER_ROLE)`) and there is no path to call them without authorization.
-4. There exists at least one viable path to call `unpause()` after a pause — i.e., the unpauser role is not assigned to an address that can be permanently frozen, a contract without `receive()`/`fallback()`, or an EOA that could be lost; preferably the role is held by a timelock or multisig.
-5. State variables that control the pause flag (`_paused`, `paused`, `isPaused`) are not written directly anywhere except inside `pause()` / `unpause()`; no `assembly { sstore(...) }` or delegatecall proxy storage collision can flip the flag.
-6. If the contract inherits `PausableUpgradeable` / `Pausable`, the initializer (`__Pausable_init`, `initialize`) sets the initial pause state explicitly and cannot be re-entered to flip it.
-7. Functions that read `paused()` to decide logic (e.g., `withdrawLeftoverBalances`, `deactivateVault`) must behave correctly when `paused() == true` — they should either revert or follow a documented fallback that does not leave user funds stuck.
-8. Events `Paused(address account)` and `Unpaused(address account)` are emitted exactly once per state transition and the `account` matches `msg.sender` (or the authorized role bearer) to enable off-chain monitoring.
+1. Identify all functions that modify protocol-critical state (transfers, mints, burns, role changes, parameter updates) and verify each is annotated with whenNotPaused or an equivalent pause check.
+2. Check for alternative entry points to the same logical operation (e.g., removeFollower, burn, transferFrom) that lack the pause modifier while the primary entry point (e.g., unfollow) has it.
+3. Verify that pause/unpause functions are restricted to the correct privileged role (onlyOwner, onlyPauser, onlyAdmin) and cannot be called by arbitrary users.
+4. Ensure the pause state is a single source of truth; avoid duplicate flags like "active", "deactivated", "paused" that diverge and cause inconsistent gating.
+5. Confirm that view/pure functions do not incorrectly rely on pause state for access control (they cannot enforce it).
+6. Check that unpause does not silently re-enable functions that were individually disabled or that have separate deactivation logic.
+7. Validate that emergency withdrawal or rescue functions are callable when paused (whenPaused) if intended, or are also blocked if not intended.
+8. Look for reentrancy or callback paths that could mutate state while paused by invoking unguarded external calls.
 
 ### Examples
 
@@ -28,50 +28,57 @@ Contracts using OpenZeppelin's Pausable pattern or custom pause logic rely on `w
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract FollowNFT is ERC721, AccessControl, Pausable {
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+contract FollowNFT is ERC721, Ownable, Pausable {
     mapping(uint256 => address) public followers;
-    
-    constructor() ERC721("FollowNFT", "FOLLOW") {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(PAUSER_ROLE, msg.sender);
-    }
-    
+    mapping(address => uint256) public followCount;
+
+    constructor() ERC721("FollowNFT", "FOLLOW") {}
+
     function follow(address to) external whenNotPaused {
-        uint256 tokenId = totalSupply();
+        uint256 tokenId = totalSupply() + 1;
         _mint(to, tokenId);
         followers[tokenId] = msg.sender;
+        followCount[msg.sender]++;
     }
-    
-    // @audit missing whenNotPaused — bypasses pause
+
+    function unfollow(uint256 tokenId) external whenNotPaused {
+        require(followers[tokenId] == msg.sender, "Not follower");
+        _burn(tokenId);
+        followCount[msg.sender]--;
+        delete followers[tokenId];
+    }
+
+    // @audit missing whenNotPaused - bypasses pause
     function removeFollower(uint256 tokenId) external {
-        require(followers[tokenId] == msg.sender);
+        require(followers[tokenId] == msg.sender, "Not follower");
         _burn(tokenId);
+        followCount[msg.sender]--;
         delete followers[tokenId];
     }
-    
-    // @audit missing whenNotPaused — bypasses pause
+
+    // @audit missing whenNotPaused - bypasses pause
     function burn(uint256 tokenId) external {
-        require(ownerOf(tokenId) == msg.sender);
+        require(ownerOf(tokenId) == msg.sender, "Not owner");
         _burn(tokenId);
+        followCount[msg.sender]--;
         delete followers[tokenId];
     }
-    
-    function pause() external onlyRole(PAUSER_ROLE) {
+
+    function pause() external onlyOwner {
         _pause();
     }
-    
-    function unpause() external onlyRole(PAUSER_ROLE) {
+
+    function unpause() external onlyOwner {
         _unpause();
     }
 }
 ```
 
-removeFollower() and burn() mutate critical state (burn tokens, delete mappings) but lack whenNotPaused, so users can unfollow/burn while the system is paused.
+unfollow() is correctly guarded with whenNotPaused, but removeFollower() and burn() omit the modifier, allowing users to unfollow/burn while the system is paused.
 
 #### Example 2: Correct Example
 
@@ -79,48 +86,55 @@ removeFollower() and burn() mutate critical state (burn tokens, delete mappings)
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract FollowNFT is ERC721, AccessControl, Pausable {
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+contract FollowNFT is ERC721, Ownable, Pausable {
     mapping(uint256 => address) public followers;
-    
-    constructor() ERC721("FollowNFT", "FOLLOW") {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(PAUSER_ROLE, msg.sender);
-    }
-    
+    mapping(address => uint256) public followCount;
+
+    constructor() ERC721("FollowNFT", "FOLLOW") {}
+
     function follow(address to) external whenNotPaused {
-        uint256 tokenId = totalSupply();
+        uint256 tokenId = totalSupply() + 1;
         _mint(to, tokenId);
         followers[tokenId] = msg.sender;
+        followCount[msg.sender]++;
     }
-    
+
+    function unfollow(uint256 tokenId) external whenNotPaused {
+        require(followers[tokenId] == msg.sender, "Not follower");
+        _burn(tokenId);
+        followCount[msg.sender]--;
+        delete followers[tokenId];
+    }
+
     function removeFollower(uint256 tokenId) external whenNotPaused {
-        require(followers[tokenId] == msg.sender);
+        require(followers[tokenId] == msg.sender, "Not follower");
         _burn(tokenId);
+        followCount[msg.sender]--;
         delete followers[tokenId];
     }
-    
+
     function burn(uint256 tokenId) external whenNotPaused {
-        require(ownerOf(tokenId) == msg.sender);
+        require(ownerOf(tokenId) == msg.sender, "Not owner");
         _burn(tokenId);
+        followCount[msg.sender]--;
         delete followers[tokenId];
     }
-    
-    function pause() external onlyRole(PAUSER_ROLE) {
+
+    function pause() external onlyOwner {
         _pause();
     }
-    
-    function unpause() external onlyRole(PAUSER_ROLE) {
+
+    function unpause() external onlyOwner {
         _unpause();
     }
 }
 ```
 
-All state-changing external functions now carry whenNotPaused, so pause() actually halts follow, removeFollower, and burn.
+All state-changing entry points (unfollow, removeFollower, burn) now consistently enforce whenNotPaused, eliminating the bypass.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

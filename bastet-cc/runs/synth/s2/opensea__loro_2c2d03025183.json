@@ -1,0 +1,64 @@
+{
+ "tag": "Opensea",
+ "mode": "s2b",
+ "detector": {
+  "name": "Opensea-Seaport-Order-Validation",
+  "vulnerability_knowledge": "Seaport order fulfillment allows arbitrary extra ERC20 items (tips) to be appended to the order's offer and consideration arrays. If a contract fulfills an order without validating each extra ERC20 token, an attacker can include a malicious token whose transfer() reverts (e.g., a token with a deny-list or a broken implementation). The revert bubbles up, the fulfillment succeeds for the NFT side, but the tip transfer fails, leaving the rented or purchased asset stuck in the rental safe or escrow with no way to withdraw it. Additionally, EIP-712 domain separators and struct hashes for custom order types (e.g., RentalOrder) must include every field that affects execution semantics. Omitting the rentalWallet (or any wallet/recipient field) from the hash allows an attacker to replay a valid signature with a different wallet address, redirecting funds or assets. Stop/validation functions must verify that the order exists, is active, and matches the caller's role (lender vs. renter) before allowing state changes; otherwise any address matching a loose role check can cancel or stop arbitrary orders.",
+  "checks": [
+   "Order fulfillment function iterates over all offer/consideration items and validates each ERC20 token against an allowlist or known-good list before attempting transfer.",
+   "Fulfillment uses low-level call with success check instead of direct transfer for ERC20 tips, or wraps each tip transfer in try/catch to prevent a single bad token from reverting the entire fulfillment.",
+   "EIP-712 domain separator and RentalOrder struct hash include every immutable field: rentalWallet, lender, renter, asset, tokenId, startTime, endTime, price, and nonce.",
+   "stopRent or cancelOrder function checks that the orderId exists in a mapping (e.g., orders[orderId].status == ACTIVE) before proceeding.",
+   "stopRent verifies msg.sender == order.lender (or order.renter for renter-initiated stop) and not just a loose role like 'isLender[msg.sender]'.",
+   "Fulfillment validates that the total consideration items match the expected count and that no extra items have been injected beyond the signed order.",
+   "Contract uses Seaport's standard `fulfillBasicOrder` or `fulfillAdvancedOrder` with criteria resolvers that enforce token validation, rather than custom fulfillment logic.",
+   "Reentrancy guard on fulfillment and stop functions to prevent state manipulation during external calls."
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport {Seaport} from \"seaport/contracts/Seaport.sol\";\nimport {IERC20} from \"@openzeppelin/contracts/token/ERC20/IERC20.sol\";\n\ncontract RentalCreate {\n    Seaport immutable seaport;\n    mapping(bytes32 => bool) public orderFulfilled;\n    \n    struct RentalOrder {\n        address lender;\n        address renter;\n        address rentalWallet; // missing from EIP-712 hash\n        address asset;\n        uint256 tokenId;\n        uint256 startTime;\n        uint256 endTime;\n        uint256 price;\n        uint256 nonce;\n    }\n    \n    // @audit EIP-712 hash omits rentalWallet\n    function hashOrder(RentalOrder calldata order) internal pure returns (bytes32) {\n        return keccak256(abi.encode(\n            keccak256(\"RentalOrder(address lender,address renter,address asset,uint256 tokenId,uint256 startTime,uint256 endTime,uint256 price,uint256 nonce)\"),\n            order.lender,\n            order.renter,\n            order.asset,\n            order.tokenId,\n            order.startTime,\n            order.endTime,\n            order.price,\n            order.nonce\n        ));\n    }\n    \n    function fulfillOrder(\n        Seaport.OrderParameters calldata parameters,\n        Seaport.FulfillmentComponent[] calldata offerFulfillments,\n        Seaport.FulfillmentComponent[] calldata considerationFulfillments,\n        bytes32 orderHash,\n        bytes calldata signature\n    ) external {\n        // @audit no validation of extra ERC20 tips in consideration\n        seaport.fulfillAdvancedOrder{value: msg.value}(\n            parameters,\n            offerFulfillments,\n            considerationFulfillments,\n            orderHash,\n            signature\n        );\n        orderFulfilled[orderHash] = true;\n    }\n    \n    function stopRent(bytes32 orderHash) external {\n        // @audit no check that order exists or was fulfilled\n        // @audit only checks caller is a lender somewhere, not this order's lender\n        require(isLender[msg.sender], \"Not lender\");\n        orderFulfilled[orderHash] = false;\n    }\n    \n    mapping(address => bool) public isLender;\n}",
+   "explanation": "The fulfillOrder function does not validate extra ERC20 consideration items (tips), allowing a malicious reverting token to lock the rented asset. The RentalOrder hash omits rentalWallet, enabling signature replay with a different wallet. stopRent lacks existence/fulfillment checks and only verifies a global lender role."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport {Seaport} from \"seaport/contracts/Seaport.sol\";\nimport {IERC20} from \"@openzeppelin/contracts/token/ERC20/IERC20.sol\";\nimport {ReentrancyGuard} from \"@openzeppelin/contracts/security/ReentrancyGuard.sol\";\n\ncontract RentalCreateFixed is ReentrancyGuard {\n    Seaport immutable seaport;\n    mapping(bytes32 => OrderStatus) public orderStatus;\n    \n    enum OrderStatus { NONE, ACTIVE, FULFILLED, STOPPED }\n    \n    struct RentalOrder {\n        address lender;\n        address renter;\n        address rentalWallet;\n        address asset;\n        uint256 tokenId;\n        uint256 startTime;\n        uint256 endTime;\n        uint256 price;\n        uint256 nonce;\n    }\n    \n    // @audit EIP-712 hash includes ALL fields including rentalWallet\n    function hashOrder(RentalOrder calldata order) internal pure returns (bytes32) {\n        return keccak256(abi.encode(\n            keccak256(\"RentalOrder(address lender,address renter,address rentalWallet,address asset,uint256 tokenId,uint256 startTime,uint256 endTime,uint256 price,uint256 nonce)\"),\n            order.lender,\n            order.renter,\n            order.rentalWallet,\n            order.asset,\n            order.tokenId,\n            order.startTime,\n            order.endTime,\n            order.price,\n            order.nonce\n        ));\n    }\n    \n    function fulfillOrder(\n        Seaport.OrderParameters calldata parameters,\n        Seaport.FulfillmentComponent[] calldata offerFulfillments,\n        Seaport.FulfillmentComponent[] calldata considerationFulfillments,\n        bytes32 orderHash,\n        bytes calldata signature\n    ) external nonReentrant {\n        // @audit validate each ERC20 consideration item against allowlist\n        for (uint i = 0; i < parameters.consideration.length; i++) {\n            Seaport.ConsiderationItem memory item = parameters.consideration[i];\n            if (item.itemType == 1) { // ERC20\n                require(allowedERC20[item.token], \"ERC20 not allowed\");\n            }\n        }\n        // @audit also validate fulfillment components\n        for (uint i = 0; i < considerationFulfillments.length; i++) {\n            address token = considerationFulfillments[i].token;\n            if (token != address(0)) {\n                require(allowedERC20[token], \"Fulfillment ERC20 not allowed\");\n            }\n        }\n        \n        seaport.fulfillAdvancedOrder{value: msg.value}(\n            parameters,\n            offerFulfillments,\n            considerationFulfillments,\n            orderHash,\n            signature\n        );\n        orderStatus[orderHash] = OrderStatus.FULFILLED;\n    }\n    \n    function stopRent(bytes32 orderHash) external nonReentrant {\n        // @audit verify order exists and is active\n        require(orderStatus[orderHash] == OrderStatus.ACTIVE, \"Order not active\");\n        // @audit verify caller is THIS order's lender (stored off-chain or in mapping)\n        // In practice, retrieve lender from order storage or event\n        require(msg.sender == getOrderLender(orderHash), \"Not order lender\");\n        orderStatus[orderHash] = OrderStatus.STOPPED;\n    }\n    \n    mapping(address => bool) public allowedERC20;\n    mapping(bytes32 => address) public orderLender;\n    \n    function getOrderLender(bytes32 orderHash) internal view returns (address) {\n        return orderLender[orderHash];\n    }\n}",
+   "explanation": "The fixed version includes rentalWallet in the EIP-712 hash, validates every ERC20 token in both the order parameters and fulfillment components against an allowlist, tracks order status to ensure existence and active state, and verifies the caller is the specific order's lender."
+  },
+  "routing_hint_candidates": [
+   "Seaport",
+   "fulfillAdvancedOrder",
+   "fulfillBasicOrder",
+   "OrderParameters",
+   "ConsiderationItem",
+   "OfferItem",
+   "itemType",
+   "ERC20",
+   "ERC721",
+   "ERC1155",
+   "EIP712Domain",
+   "RentalOrder",
+   "rentalWallet",
+   "lender",
+   "renter",
+   "orderHash",
+   "stopRent",
+   "cancelOrder",
+   "orderStatus",
+   "allowedERC20",
+   "tip",
+   "consideration",
+   "fulfillmentComponent",
+   "criteriaResolver",
+   "conduit",
+   "zone",
+   "nonce",
+   "signature",
+   "hashOrder"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "469",
+  "464"
+ ],
+ "exclude_repo": "2c2d03025183",
+ "error": null
+}

@@ -1,4 +1,4 @@
-# Governance
+# Governance-Manipulation
 
 ## Detection prompt
 
@@ -6,146 +6,120 @@ You are a smart contract auditor. After reading the following vulnerability know
 
 ### Vulnerability Knowledge
 
-**Governance**
-Governance systems are vulnerable when voting power snapshots, proposal lifecycle checks, and parameter updates lack proper validation or timing constraints. Flash loans or same-block token acquisition can inflate voting weight if snapshots use the current block instead of a prior block. Proposal IDs derived solely from calldata without a nonce or sender allow front-running and permanent blocking of legitimate proposals. Threshold and quorum values captured at proposal creation must align with the voting snapshot timestamp; using current totalSupply for thresholds while voting power is measured at snapshot-1 enables manipulation. State transitions (Pending, Active, Succeeded, Defeated, Queued, Executed, Expired, Canceled, Vetoed) must use correct comparison operators; off-by-one errors such as `<` instead of `<=` for defeat checks let tied proposals incorrectly succeed. Vote reclamation must bind to a specific proposal ID and prevent reclaiming before the proposal becomes active, otherwise users can vote and reclaim in the same transaction. Member management must track removal history to prevent re-addition of voted-out addresses. Parameter setters (e.g., voting delay, period, quorum, weight duration) must verify no active proposals exist before applying changes. Multi-signature voting modifiers must not reset vote state before the external call, or reentrancy can allow double-voting. Minting of governance tokens must enforce a supply cap to prevent arbitrary inflation of voting power.
+**Governance-Manipulation**
+Governance systems are vulnerable when voting power snapshots, proposal lifecycle checks, and parameter updates lack proper validation or timing constraints. Flash loans or same-block token acquisition can inflate voting weight if snapshots use the current block instead of a prior block. Proposal IDs derived solely from calldata without a nonce allow front-running: an attacker submits the same proposal, cancels it, and permanently blocks the legitimate proposer because the ID already exists. Threshold comparisons using strict inequality (<) instead of <= cause tied votes to be misclassified as Succeeded rather than Defeated. Vote reclamation functions that only block the currently active proposal ID permit voting and immediate reclamation in the same transaction before activation. Member management that allows re-adding previously removed addresses without a governance veto check enables voted-out members to regain privileges. Parameter setters (e.g., voting duration, quorum, token minting) that do not verify the absence of active proposals allow mid-vote rule changes that alter outcomes. Multi-sig or endorsement modifiers that clear vote state before the external call (_;) enable reentrancy voting: a signer who already voted can vote again if the external call reenters. Uncapped minting of governance tokens by a privileged role inflates totalSupply, lowering proposal thresholds and quorum requirements arbitrarily.
 
 ### Detection Checks
 
-1. Verify that proposal creation snapshots voting power at `block.timestamp - 1` (or a prior block) and that `proposalThreshold` and `quorumVotes` are derived from the same snapshot, not current `totalSupply`.
-2. Ensure `proposalId` computation includes `msg.sender` and a nonce or `block.number` so identical calldata from different proposers or at different times yields unique IDs.
-3. Check that the `Defeated` state transition uses `<=` for `forVotes <= againstVotes` (or the documented tie-break rule) and that quorum comparison matches specification.
-4. Confirm `reclaimVotes` (or similar) rejects calls when `proposalId` equals the currently active proposal AND when the proposal's `voteStart` is in the future, preventing same-transaction vote-and-reclaim.
-5. Validate that `addMember` (or role assignment) checks a `removedMembers` mapping or equivalent history to block re-addition of previously expelled addresses.
-6. Ensure parameter setters (`setVotingDelay`, `setVotingPeriod`, `setQuorum`, `setFullWeightDuration`, etc.) revert if any proposal is in `Active` or `Pending` state.
-7. Inspect multi-sig or committee voting modifiers: vote counting state (`voteCount`, `hasVoted`) must be cleared only after the external call (`_;`) succeeds, not before, to prevent reentrancy double-voting.
-8. Verify governance token minting functions (`issueVotesTo`, `mint`) enforce a hard `maxSupply` cap or require DAO approval for increases.
+1. Verify that proposal creation snapshots voting power at block.timestamp - 1 (or a prior block) and that proposalThreshold/quorum are derived from the same snapshot, not current totalSupply.
+2. Ensure proposalId includes msg.sender or a monotonically increasing nonce in hashProposal so identical calldata from different proposers yields distinct IDs.
+3. Confirm that state() uses <= for forVotes vs againstVotes comparison so a tie returns Defeated, not Succeeded.
+4. Check that reclaimVotes (or similar) prevents reclamation for any proposal where the user has voted, not only the currently active one, and that the check occurs before any external call.
+5. Validate that addMember (or equivalent) checks a removal registry or requires DAO approval before re-adding an address that was previously removed by governance.
+6. Confirm that parameter setters (setVotingPeriod, setQuorum, setFullWeightDuration, mint governance tokens) revert if any proposal is in Active, Pending, or Queued state.
+7. Inspect multi-sig/endorsement modifiers: vote state (voteCount, hasVoted) must be cleared only after the external call (_;) completes, not before, to prevent reentrancy double-voting.
+8. Ensure governance token minting functions enforce a maximum totalSupply cap or require a timelocked governance vote, preventing arbitrary inflation by a single role.
 
 ### Examples
 
 #### Example 1: Incorrect Example
 
 ```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata desc) external returns (bytes32) {
+    uint256 threshold = proposalThreshold(); // uses current totalSupply
+    if (getVotes(msg.sender, block.timestamp - 1) < threshold) revert();
+    bytes32 id = hashProposal(targets, values, calldatas, keccak256(bytes(desc))); // no nonce
+    if (proposals[id].voteStart != 0) revert();
+    proposals[id].voteStart = uint32(block.timestamp + votingDelay);
+    proposals[id].proposalThreshold = uint32(threshold);
+    proposals[id].quorumVotes = uint32(quorum()); // current totalSupply
+    return id;
+}
 
-contract GovernanceFlawed {
-    struct Proposal {
-        uint32 voteStart;
-        uint32 voteEnd;
-        uint32 proposalThreshold;
-        uint32 quorumVotes;
-        uint256 forVotes;
-        uint256 againstVotes;
-        bool executed;
-        bool canceled;
-    }
-    mapping(bytes32 => Proposal) public proposals;
-    uint256 public votingDelay = 1 days;
-    uint256 public votingPeriod = 7 days;
-    IERC20Votes public token;
-    
-    function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (bytes32) {
-        bytes32 proposalId = keccak256(abi.encode(targets, values, calldatas, keccak256(bytes(description))));
-        if (proposals[proposalId].voteStart != 0) revert();
-        // @audit uses current totalSupply for threshold/quorum, but voting power measured at snapshot-1
-        proposals[proposalId] = Proposal({
-            voteStart: uint32(block.timestamp + votingDelay),
-            voteEnd: uint32(block.timestamp + votingDelay + votingPeriod),
-            proposalThreshold: uint32(token.getPastTotalSupply(block.timestamp)),
-            quorumVotes: uint32(token.getPastTotalSupply(block.timestamp) / 10),
-            forVotes: 0,
-            againstVotes: 0,
-            executed: false,
-            canceled: false
-        });
-        return proposalId;
-    }
-    
-    function state(bytes32 proposalId) external view returns (uint8) {
-        Proposal storage p = proposals[proposalId];
-        if (p.voteStart == 0) revert();
-        if (block.timestamp < p.voteStart) return 0; // Pending
-        if (block.timestamp < p.voteEnd) return 1;   // Active
-        // @audit uses < instead of <= for defeat check
-        if (p.forVotes < p.againstVotes || p.forVotes < p.quorumVotes) return 2; // Defeated
-        return 3; // Succeeded
-    }
-    
-    function setVotingDelay(uint256 newDelay) external {
-        votingDelay = newDelay; // @audit no check for active proposals
-    }
+function state(bytes32 id) public view returns (ProposalState) {
+    Proposal memory p = proposals[id];
+    if (p.forVotes < p.againstVotes || p.forVotes < p.quorumVotes) return ProposalState.Defeated; // strict <
+    return ProposalState.Succeeded;
+}
+
+function reclaimVotes(uint256 pid) external {
+    if (pid == activeProposalId) revert(); // only blocks active
+    if (claimed[pid][msg.sender]) revert();
+    claimed[pid][msg.sender] = true;
+    token.transfer(msg.sender, userVotes[pid][msg.sender]);
+}
+
+function addMember(address member) external onlyRole(ADMIN) {
+    members.push(member); // no check for prior removal
+}
+
+function setVotingPeriod(uint256 p) external onlyOwner {
+    votingPeriod = p; // no active proposal check
+}
+
+modifier onlySigners() {
+    if (voted[msg.sender]) revert();
+    voted[msg.sender] = true;
+    voteCount++;
+    if (voteCount < threshold) { _; return; }
+    voteCount = 0; // cleared BEFORE external call
+    for (uint i=0;i<signers.length;i++) voted[signers[i]] = false;
+    _;
 }
 ```
 
-Proposal creation uses current totalSupply for threshold/quorum while voting power is snapshotted at voteStart-1; defeat check uses `<` instead of `<=`; setVotingDelay lacks active-proposal guard.
+Proposal uses current totalSupply for thresholds, proposalId lacks nonce, Defeated check uses strict <, reclaimVotes only blocks active proposal, addMember allows re-adding removed members, setVotingPeriod changes params mid-vote, and modifier clears vote state before external call enabling reentrancy double-voting.
 
 #### Example 2: Correct Example
 
 ```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata desc) external returns (bytes32) {
+    uint256 snap = block.timestamp - 1;
+    uint256 threshold = proposalThreshold(snap);
+    if (getVotes(msg.sender, snap) < threshold) revert();
+    bytes32 id = hashProposal(targets, values, calldatas, keccak256(bytes(desc)), msg.sender); // includes proposer
+    if (proposals[id].voteStart != 0) revert();
+    proposals[id].voteStart = uint32(block.timestamp + votingDelay);
+    proposals[id].proposalThreshold = uint32(threshold);
+    proposals[id].quorumVotes = uint32(quorum(snap));
+    return id;
+}
 
-contract GovernanceFixed {
-    struct Proposal {
-        uint32 voteStart;
-        uint32 voteEnd;
-        uint32 proposalThreshold;
-        uint32 quorumVotes;
-        uint256 forVotes;
-        uint256 againstVotes;
-        bool executed;
-        bool canceled;
+function state(bytes32 id) public view returns (ProposalState) {
+    Proposal memory p = proposals[id];
+    if (p.forVotes <= p.againstVotes || p.forVotes < p.quorumVotes) return ProposalState.Defeated; // <=
+    return ProposalState.Succeeded;
+}
+
+function reclaimVotes(uint256 pid) external {
+    if (userVotes[pid][msg.sender] > 0 && !claimed[pid][msg.sender]) {
+        claimed[pid][msg.sender] = true;
+        token.transfer(msg.sender, userVotes[pid][msg.sender]);
     }
-    mapping(bytes32 => Proposal) public proposals;
-    uint256 public votingDelay = 1 days;
-    uint256 public votingPeriod = 7 days;
-    IERC20Votes public token;
-    uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18;
-    mapping(address => bool) public removedMembers;
-    
-    function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (bytes32) {
-        bytes32 proposalId = keccak256(abi.encode(msg.sender, block.number, targets, values, calldatas, keccak256(bytes(description))));
-        if (proposals[proposalId].voteStart != 0) revert();
-        uint32 snap = uint32(block.timestamp - 1);
-        uint256 totalSupplyAtSnap = token.getPastTotalSupply(snap);
-        proposals[proposalId] = Proposal({
-            voteStart: uint32(block.timestamp + votingDelay),
-            voteEnd: uint32(block.timestamp + votingDelay + votingPeriod),
-            proposalThreshold: uint32(totalSupplyAtSnap / 100),
-            quorumVotes: uint32(totalSupplyAtSnap / 10),
-            forVotes: 0,
-            againstVotes: 0,
-            executed: false,
-            canceled: false
-        });
-        return proposalId;
-    }
-    
-    function state(bytes32 proposalId) external view returns (uint8) {
-        Proposal storage p = proposals[proposalId];
-        if (p.voteStart == 0) revert();
-        if (block.timestamp < p.voteStart) return 0;
-        if (block.timestamp < p.voteEnd) return 1;
-        // @audit uses <= for tie-break
-        if (p.forVotes <= p.againstVotes || p.forVotes < p.quorumVotes) return 2;
-        return 3;
-    }
-    
-    function setVotingDelay(uint256 newDelay) external {
-        for (bytes32 id : activeProposalIds) {
-            if (block.timestamp >= proposals[id].voteStart && block.timestamp < proposals[id].voteEnd) revert();
-        }
-        votingDelay = newDelay;
-    }
-    
-    function addMember(address member) external {
-        if (removedMembers[member]) revert();
-        // add logic
-    }
+}
+
+function addMember(address member) external onlyRole(ADMIN) {
+    if (removedMembers[member]) revert(); // block re-addition
+    members.push(member);
+}
+
+function setVotingPeriod(uint256 p) external onlyOwner {
+    if (hasActiveProposal()) revert();
+    votingPeriod = p;
+}
+
+modifier onlySigners() {
+    if (voted[msg.sender]) revert();
+    voted[msg.sender] = true;
+    voteCount++;
+    if (voteCount < threshold) { _; return; }
+    _;
+    voteCount = 0; // cleared AFTER external call
+    for (uint i=0;i<signers.length;i++) voted[signers[i]] = false;
 }
 ```
 
-Proposal ID includes sender and block.number; threshold/quorum use snapshot at block.timestamp-1; defeat check uses `<=`; setVotingDelay blocks changes during active voting; addMember checks removal history.
+Snapshots use prior block, proposalId includes proposer, Defeated uses <=, reclaimVotes allows any voted proposal, addMember blocks removed members, setVotingPeriod checks for active proposals, and modifier clears state after external call preventing reentrancy.
 
 ### Task to Perform
 Apply each detection check above to every contract function provided. Report only concrete instances of this vulnerability class, citing the specific check that failed and the offending lines.

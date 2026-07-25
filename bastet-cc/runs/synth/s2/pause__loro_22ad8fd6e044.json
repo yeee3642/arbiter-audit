@@ -1,0 +1,58 @@
+{
+ "tag": "Pause",
+ "mode": "s2",
+ "detector": {
+  "name": "Pause",
+  "vulnerability_knowledge": "Pause mechanisms (Pausable, whenPaused, whenNotPaused) guard critical state transitions. Flaws arise when: (1) a catch-all try/catch swallows Out-of-Gas errors (EIP-150 63/64 rule) and triggers _pause() on mint failure, letting an attacker force a pause by starving gas; (2) pause/unpause logic uses sentinel values like tokenId == 0 to detect \"first auction\", but tokenId 0 can be a valid active auction, causing re-initialization that overwrites state and orphans NFTs/bids; (3) ownership checks for paused-state recovery read from deactivated vaults (vaults[owner] == false) and call IVault(owner).ownerOf(tokenId), which reverts or returns stale data, permanently locking leftover balances. Correct designs must: avoid catch-all error handling around external calls that can be gas-griefed; use explicit boolean flags (e.g., auctionInitialized) instead of sentinel token IDs; and ensure recovery paths validate vault activation before delegating ownership queries.",
+  "checks": [
+   "try/catch around external calls (mint, transfer, etc.) catches all errors including Out-of-Gas and calls _pause() in the catch block, enabling gas-griefing pause attacks",
+   "unpause() or recovery logic uses tokenId == 0 (or similar sentinel) to detect first initialization, but tokenId 0 is a valid minted token ID",
+   "pause/unpause state transitions lack reentrancy guards or allow re-entry during state flip",
+   "functions that must be blocked when paused lack whenNotPaused modifier (or equivalent manual require(!paused()))",
+   "functions that must be allowed when paused lack whenPaused modifier, or pause modifier logic is inverted",
+   "owner/admin can call pause/unpause without timelock or multisig, enabling centralized rug-pull or accidental permanent lock",
+   "recovery/withdrawal functions during paused state read ownership from deactivated/disabled components (vaults[owner] == false) without guarding the delegate call",
+   "pause state variable is not immutable after finalization, allowing indefinite toggling with no recovery mechanism"
+  ],
+  "incorrect_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/token/ERC721/ERC721.sol\";\n\ncontract FlawedAuction is ERC721, Pausable {\n    struct Auction {\n        uint256 tokenId;\n        uint40 startTime;\n        uint40 endTime;\n        uint256 highestBid;\n        address highestBidder;\n        bool settled;\n    }\n    Auction public auction;\n    address public treasury;\n    \n    constructor(address _treasury) ERC721(\"Auction\", \"AUC\") {\n        treasury = _treasury;\n    }\n\n    function _createAuction() internal {\n        try this.mint(msg.sender) returns (uint256 tokenId) {\n            auction.tokenId = tokenId;\n            auction.startTime = uint40(block.timestamp);\n            auction.endTime = uint40(block.timestamp + 3600);\n            auction.highestBid = 0;\n            auction.highestBidder = address(0);\n            auction.settled = false;\n        } catch Error(string memory) {\n            _pause(); // @audit catches OOG, attacker can force pause via 63/64 rule\n        }\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (auction.tokenId == 0) { // @audit tokenId 0 can be valid active auction\n            transferOwnership(treasury);\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function withdrawLeftover(uint256 tokenId) external whenPaused {\n        address owner = ownerOf(tokenId);\n        if (vaults[owner]) { // @audit vaults mapping not defined, but pattern matches evidence\n            owner = IVault(owner).ownerOf(tokenId); // @audit reverts if vault deactivated\n        }\n        require(owner == msg.sender, \"Unauthorized\");\n        // ... withdraw logic\n    }\n\n    mapping(address => bool) public vaults;\n    interface IVault { function ownerOf(uint256) external view returns (address); }\n}",
+   "explanation": "The catch-all in _createAuction() lets an attacker force a pause via gas griefing; unpause() uses tokenId == 0 as first-auction sentinel but tokenId 0 is valid; withdrawLeftover() delegates to deactivated vaults without checking activation state, locking funds."
+  },
+  "correct_example": {
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport \"@openzeppelin/contracts/utils/Pausable.sol\";\nimport \"@openzeppelin/contracts/token/ERC721/ERC721.sol\";\n\ncontract FixedAuction is ERC721, Pausable {\n    struct Auction {\n        uint256 tokenId;\n        uint40 startTime;\n        uint40 endTime;\n        uint256 highestBid;\n        address highestBidder;\n        bool settled;\n    }\n    Auction public auction;\n    bool public auctionInitialized;\n    address public treasury;\n    \n    constructor(address _treasury) ERC721(\"Auction\", \"AUC\") {\n        treasury = _treasury;\n    }\n\n    function _createAuction() internal {\n        uint256 tokenId = _mint(msg.sender); // @audit no try/catch, revert propagates\n        auction.tokenId = tokenId;\n        auction.startTime = uint40(block.timestamp);\n        auction.endTime = uint40(block.timestamp + 3600);\n        auction.highestBid = 0;\n        auction.highestBidder = address(0);\n        auction.settled = false;\n        auctionInitialized = true;\n    }\n\n    function unpause() external onlyOwner {\n        _unpause();\n        if (!auctionInitialized) { // @audit explicit boolean flag, not sentinel\n            transferOwnership(treasury);\n            _createAuction();\n        } else if (auction.settled) {\n            _createAuction();\n        }\n    }\n\n    function withdrawLeftover(uint256 tokenId) external whenPaused {\n        address owner = ownerOf(tokenId);\n        if (vaults[owner] && IVault(owner).isActive()) { // @audit check vault active before delegate\n            owner = IVault(owner).ownerOf(tokenId);\n        }\n        require(owner == msg.sender, \"Unauthorized\");\n        // ... withdraw logic\n    }\n\n    mapping(address => bool) public vaults;\n    interface IVault {\n        function ownerOf(uint256) external view returns (address);\n        function isActive() external view returns (bool);\n    }\n}",
+   "explanation": "Removes try/catch so OOG reverts instead of triggering pause; uses auctionInitialized boolean instead of tokenId == 0 sentinel; adds isActive() check before delegating to vault in paused withdrawal."
+  },
+  "routing_hint_candidates": [
+   "_pause",
+   "_unpause",
+   "whenPaused",
+   "whenNotPaused",
+   "paused",
+   "auctionInitialized",
+   "auction.tokenId",
+   "auction.settled",
+   "vaults",
+   "IVault",
+   "ownerOf",
+   "isActive",
+   "transferOwnership",
+   "onlyOwner",
+   "nonReentrant",
+   "try",
+   "catch",
+   "mint",
+   "_mint",
+   "block.timestamp",
+   "gasleft",
+   "reentrancyGuard"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "221",
+  "208",
+  "350"
+ ],
+ "exclude_repo": "22ad8fd6e044",
+ "error": null
+}

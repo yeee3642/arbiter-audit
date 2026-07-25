@@ -3,40 +3,47 @@
  "mode": "s2b",
  "detector": {
   "name": "Solidity Version",
-  "vulnerability_knowledge": "Solidity compiler versions and optimizer settings can introduce subtle behavioral changes that break security assumptions. Between 0.4.x and 0.8.x, integer overflow/underflow semantics shifted from wrapping to reverting, meaning contracts compiled with older versions silently wrap while newer ones revert, altering control flow in arithmetic-heavy logic. The optimizer (enabled via `--optimize` and `--optimize-runs`) has historically miscompiled specific patterns: versions 0.5.0-0.5.7 mishandled `bytes` memory cleanup leading to dirty higher-order bytes, 0.6.0-0.6.2 incorrectly optimized `keccak256` on empty byte arrays, and 0.8.13-0.8.16 introduced a Yul optimizer bug that corrupted memory when using inline assembly with `mstore`/`mload` sequences. Contracts using `abi.encodePacked` with dynamic types (e.g., `string`, `bytes`) are vulnerable to hash collisions across versions due to padding differences. Auditors must verify the exact compiler version and optimizer settings in `hardhat.config.js`, `foundry.toml`, or `pragma` directives, then cross-reference known bug lists (e.g., Solidity blog security alerts) to determine if deployed bytecode exhibits affected patterns.",
+  "vulnerability_knowledge": "Solidity compiler versions and optimizer settings can introduce subtle semantic changes or bugs that affect contract behavior. Between major versions (e.g., 0.4.x to 0.5.x, 0.6.x to 0.7.x, 0.7.x to 0.8.x) breaking changes include: explicit visibility requirements, constructor keyword, overflow checks (0.8.0+), immutable/mutable keywords, try/catch, custom errors, and ABIEncoderV2 becoming default. Minor versions may contain optimizer bugs (e.g., 0.8.13 optimizer bug with Yul inlining, 0.8.16 storage write bug) or behavioral changes (e.g., 0.8.14 changed `block.timestamp` aliasing). Contracts that do not pin a specific compiler version with `pragma solidity ^0.8.0` (caret) or `>=0.8.0 <0.9.0` risk being compiled with a buggy or semantically different version. Additionally, enabling the optimizer without testing both optimized and non-optimized bytecode can surface optimizer-specific bugs. Auditors must verify the exact compiler version and optimizer settings used in deployment match those used in testing.",
   "checks": [
-   "Contract uses `pragma solidity ^0.4.x` or `^0.5.x` without explicit overflow checks (e.g., `SafeMath`) on arithmetic operations involving user-controlled values.",
-   "Optimizer enabled with `runs >= 200` on compiler versions 0.5.0-0.5.7 and contract uses `bytes` memory variables returned from external calls or `abi.decode`.",
-   "Contract compiled with 0.6.0-0.6.2 and computes `keccak256(\"\")` or `keccak256(bytes(0))` for critical logic (e.g., merkle roots, commitment schemes).",
-   "Inline assembly block contains `mstore` followed by `mload` at overlapping offsets and compiler version is 0.8.13-0.8.16 with optimizer enabled.",
-   "`abi.encodePacked` used with multiple dynamic-length arguments (e.g., `abi.encodePacked(userInput, anotherString)`) for cryptographic hashing or signature verification.",
-   "Contract relies on `address(this).balance` or `selfbalance` for invariant checks but compiled with 0.7.0-0.7.5 where `SELFBALANCE` opcode misbehaves under certain optimizer settings.",
-   "Uses `try/catch` external call error handling compiled with 0.6.0-0.6.11 where revert data decoding can corrupt memory under optimizer.",
-   "Declares `immutable` variables initialized from constructor arguments but compiled with 0.6.5-0.6.8 where immutable evaluation order bug causes wrong values under optimizer."
+   "Contract uses a floating pragma (caret `^`, tilde `~`, or `>=` without upper bound) instead of a pinned exact version (e.g., `pragma solidity 0.8.19;`).",
+   "Contract enables optimizer (`optimizer.enabled = true`) but does not document or test with the specific optimizer runs value; high runs (e.g., 10000) increase optimizer bug surface.",
+   "Contract is compiled with a version known to have critical optimizer bugs (e.g., 0.8.13, 0.8.14, 0.8.15, 0.8.16) without mitigation or version pinning to a patched version.",
+   "Contract relies on overflow/underflow wrapping behavior (pre-0.8.0 semantics) but uses `pragma solidity >=0.8.0` where checked arithmetic is default, causing unexpected reverts.",
+   "Contract uses `block.timestamp` alias `now` (removed in 0.7.0) or other deprecated syntax without version guard.",
+   "Contract uses inline assembly or Yul that may be affected by optimizer changes across versions (e.g., memory layout, stack usage).",
+   "Contract imports dependencies (OpenZeppelin, Solmate, etc.) with floating pragmas, allowing transitive compilation with incompatible versions.",
+   "Contract uses `try/catch` or custom errors (0.6.0+/0.8.4+) but pragma allows older versions where these features are unavailable."
   ],
   "incorrect_example": {
-   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.5.7;\n\ncontract VulnerableBytes {\n    bytes public data;\n    \n    function setData(bytes calldata _data) external {\n        data = _data;\n    }\n    \n    function getHash() external view returns (bytes32) {\n        // Optimizer bug in 0.5.0-0.5.7: dirty higher-order bytes in memory\n        // cause keccak256 to hash stale memory beyond actual length\n        return keccak256(data);\n    }\n}",
-   "explanation": "Compiler 0.5.7 with optimizer enabled fails to zero-pad `bytes` memory before hashing, causing `keccak256` to include uninitialized memory bytes, breaking hash consistency."
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Vault {\n    uint256 public totalAssets;\n    \n    function deposit(uint256 amount) external {\n        totalAssets += amount; // Relies on checked arithmetic (0.8.0+)\n    }\n    \n    function withdraw(uint256 amount) external {\n        totalAssets -= amount; // Reverts on underflow in 0.8.0+, but would wrap in 0.7.x\n    }\n}",
+   "explanation": "Floating pragma `^0.8.0` allows compilation with any 0.8.x version, including those with known optimizer bugs (0.8.13-0.8.16). The arithmetic behavior changes between 0.7.x (wrapping) and 0.8.x (checked), so deploying with an unintended version changes semantics."
   },
   "correct_example": {
-   "code": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract FixedBytes {\n    bytes public data;\n    \n    function setData(bytes calldata _data) external {\n        data = _data;\n    }\n    \n    function getHash() external view returns (bytes32) {\n        // 0.8.20 includes fix for bytes memory cleaning; optimizer safe\n        return keccak256(data);\n    }\n}",
-   "explanation": "Upgrading to 0.8.20 resolves the optimizer bug; `bytes` memory is properly cleaned before hashing, ensuring deterministic results."
+   "code": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.19;\n\ncontract Vault {\n    uint256 public totalAssets;\n    \n    function deposit(uint256 amount) external {\n        totalAssets += amount;\n    }\n    \n    function withdraw(uint256 amount) external {\n        if (totalAssets < amount) revert InsufficientBalance();\n        totalAssets -= amount;\n    }\n    \n    error InsufficientBalance();\n}",
+   "explanation": "Exact pragma `0.8.19` pins the compiler to a patched version without known critical optimizer bugs. Explicit underflow check with custom error works reliably on this version."
   },
   "routing_hint_candidates": [
    "optimizer.enabled",
    "optimizer.runs",
+   "viaIR",
+   "ABIEncoderV2",
+   "unchecked",
    "immutable",
-   "try",
-   "catch",
-   "selfbalance",
+   "constructor",
+   "receive",
+   "fallback",
+   "block.timestamp",
+   "now",
    "SafeMath",
-   "verbatim",
-   "yul",
-   "evm.version",
-   "london",
-   "paris",
-   "shanghai",
-   "cancun"
+   "ReentrancyGuard",
+   "Ownable",
+   "ERC20",
+   "ERC721",
+   "OpenZeppelin",
+   "Solmate",
+   "foundry.toml",
+   "hardhat.config",
+   "evmVersion"
   ]
  },
  "fallback": false,

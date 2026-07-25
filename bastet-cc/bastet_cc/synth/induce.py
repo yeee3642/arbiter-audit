@@ -80,8 +80,14 @@ INDUCE_SYSTEM = (
     "showing the flaw and its fix, with one-sentence explanations.\n"
     "- `routing_hint_candidates`: 10 to 30 identifiers that would LITERALLY appear "
     "in vulnerable Solidity source (function names, member accesses like "
-    "`msg.sender`, event/type names). Prefer rare, class-specific identifiers over "
-    "generic ones like `transfer` or `require`."
+    "`msg.sender`, event/type names). These select which files ANY project gets "
+    "scanned for this vulnerability class, so they must be vocabulary of the CLASS, "
+    "not of the example projects: do NOT copy protocol-specific names out of the "
+    "evidence snippets (a name like `_addMemberToCohortArray` exists in one "
+    "codebase and routes nothing anywhere else). Give the identifiers a different "
+    "protocol in this class would also contain -- standard interface methods, "
+    "canonical function and modifier names, well-known library and event names. "
+    "Still prefer rare ones over ubiquitous ones like `transfer` or `require`."
 )
 
 
