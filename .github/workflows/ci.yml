@@ -1,0 +1,113 @@
+name: ci
+
+# Everything in this workflow runs without an API key and without the 6.8 GB
+# corpus. That is deliberate: the invariants worth protecting -- the control arm
+# equalling upstream's literal rule, the scorer's arithmetic, the leakage rule
+# being able to fail, the rate limiter holding the measured cap -- are all
+# checkable from the repository alone. Anything that needs the corpus is marked
+# `needs_corpus` and skips.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Windows is in the matrix because a real bug lived there and only there:
+    # `_VENDOR`/`_NONPROD` anchor on `/`, while index_repo built its relative
+    # path with str(Path.relative_to(...)) -- backslashes on Windows -- so vendor
+    # and mock filtering silently did nothing, and a repository shipping
+    # scope.txt indexed zero files. Neither failure raised; both changed the
+    # experiment. An ubuntu-only matrix cannot see that class of defect.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+        exclude:
+          # One Windows job is enough to catch path handling; the rest is
+          # platform-independent arithmetic.
+          - os: windows-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e "bastet-cc[dev]"
+
+      - name: Test
+        run: cd bastet-cc && python -m pytest -q
+
+  credentials:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # No install: redact.py is pure stdlib on purpose, so the guard keeps
+      # working even if the dependency set is broken.
+      - name: Scan tracked artefacts for credentials
+        run: cd bastet-cc && python scripts/scrub_artifacts.py --audit
+
+      - name: Fail if the working tree still contains a credential
+        run: |
+          cd bastet-cc
+          if ! python scripts/scrub_artifacts.py > /dev/null; then
+            echo "::error::credential-shaped values found in tracked artefacts"
+            python scripts/scrub_artifacts.py
+            exit 1
+          fi
+
+  integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: python -m pip install -e "bastet-cc[dev]"
+
+      # The split freeze is the foundation of every measurement: if splits.json
+      # was edited after the hash was recorded, the leakage audit's PASS means
+      # nothing and neither does anything downstream of it.
+      - name: Split freeze verifies
+        run: cd bastet-cc && python -m pytest tests/test_leakage_guard.py -q
+
+      - name: Detector index is loadable and consistent
+        run: |
+          cd bastet-cc
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from bastet_cc.routing import load_detectors
+
+          total = 0
+          for d in ("detectors", "detectors_synth"):
+              dets = load_detectors(d)
+              total += len(dets)
+              for det in dets:
+                  md = Path(d) / f"{det.id}.md"
+                  assert md.exists(), f"{det.id} indexed but {md} missing"
+          tags = set()
+          for d in ("detectors", "detectors_synth"):
+              for det in load_detectors(d):
+                  tags.update(det.tags)
+          print(f"{total} detectors, {len(tags)} distinct tags")
+          assert total == 79, total
+          PY
