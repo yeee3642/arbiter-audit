@@ -20,17 +20,23 @@ from pathlib import Path
 
 import typer
 
+from .automation import AIS3_BASE_URL, AIS3_PINNED_MODEL
 from .llm import DEFAULT_RPM
 
 app = typer.Typer(add_completion=False, help="Bastet-CC: routed smart-contract vulnerability detection")
+automation_app = typer.Typer(
+    add_completion=False,
+    help="Pinned-model gateway shared by upstream Bastet and Bastet-CC",
+)
+app.add_typer(automation_app, name="automation")
 
 PKG = Path(__file__).resolve().parent
 ROOT = PKG.parent
 DATA = ROOT.parent / "data"
 RUNS = ROOT / "runs"
 
-DEFAULT_MODEL = "ais3/nemotron-3-ultra-550b"
-DEFAULT_BASE_URL = "https://llm-api.zoolab.org/v1"
+DEFAULT_MODEL = AIS3_PINNED_MODEL
+DEFAULT_BASE_URL = AIS3_BASE_URL
 PROMPT_VERSION = "v1"
 
 
@@ -159,6 +165,17 @@ def scan(
     verify: bool = typer.Option(True, help="run the refutation pass"),
     closure: bool = typer.Option(
         False, help="routed only: append one-hop callees to each slice"),
+    automation_url: str | None = typer.Option(
+        None,
+        "--automation-url",
+        help="opt in to the local fair-budget gateway, e.g. http://127.0.0.1:8765",
+    ),
+    automation_experiment: str | None = typer.Option(
+        None, "--automation-experiment", help="must match the gateway experiment"
+    ),
+    automation_subject: str | None = typer.Option(
+        None, "--automation-subject", help="must match the gateway subject"
+    ),
 ) -> None:
     """Scan repositories and record findings.
 
@@ -179,6 +196,17 @@ def scan(
         raise typer.BadParameter(
             "closure is a routed-arm treatment; enabling it on the broadcast "
             "control would void the comparison")
+    automation_values = (
+        automation_url, automation_experiment, automation_subject)
+    if any(v is not None for v in automation_values) and not all(
+        isinstance(v, str) and v.strip() for v in automation_values
+    ):
+        raise typer.BadParameter(
+            "--automation-url, --automation-experiment, and --automation-subject "
+            "must be supplied together")
+    if automation_url and model != AIS3_PINNED_MODEL:
+        raise typer.BadParameter(
+            f"automation mode requires model {AIS3_PINNED_MODEL}")
 
     repos = _split_repos(target) if target in ("train_syn", "dev", "test") else [target]
     paths = [Path(r) if Path(r).is_dir() else _repo_dir(r) for r in repos]
@@ -199,7 +227,16 @@ def scan(
     store.write_manifest({
         "arm": arm, "model": model, "prompt_version": PROMPT_VERSION,
         "target": target, "repos": repos, "concurrency": concurrency,
-        "rpm": rpm or None,
+        "rpm": None if automation_url else (rpm or None),
+        "base_url": (
+            automation_url.rstrip("/") + "/v1"
+            if automation_url and not automation_url.rstrip("/").endswith("/v1")
+            else automation_url or DEFAULT_BASE_URL
+        ),
+        "automation": {
+            "experiment_id": automation_experiment,
+            "subject_id": automation_subject,
+        } if automation_url else None,
         "detectors": len(dets), "detector_dirs": [str(d) for d in _detector_dirs(synth)],
         "verify": verify, "closure": closure,
         "closure_stats": closure_stats or None,
@@ -214,7 +251,7 @@ def scan(
     # governed by the cap once the plan is larger than a minute's worth. Saying
     # so up front stops a 6-hour run from being started as if it were a 1-hour one.
     remaining = len(tasks) - len(done)
-    if rpm and remaining:
+    if rpm and remaining and not automation_url:
         hours = remaining / rpm / 60
         typer.echo(f"  at {rpm} rpm this is ~{hours:.1f} h of wall clock"
                    f" ({remaining:,} calls); concurrency={concurrency} bounds memory,"
@@ -226,12 +263,32 @@ def scan(
 
     async def _go() -> None:
         from .executor import run_tasks
-        client = LLMClient(
-            base_url=DEFAULT_BASE_URL, api_key=_api_key(),
-            model=model, max_concurrency=concurrency,
-            rpm=rpm or None,
-            log_path=RUNS / run / "llm_log.jsonl",
-        )
+        if automation_url:
+            gateway_base = automation_url.rstrip("/")
+            if not gateway_base.endswith("/v1"):
+                gateway_base += "/v1"
+            client = LLMClient(
+                base_url=gateway_base,
+                api_key=None,
+                model=model,
+                max_concurrency=concurrency,
+                max_retries=0,
+                rpm=None,
+                extra_headers={
+                    "X-Bastet-Experiment": automation_experiment or "",
+                    "X-Bastet-Subject": automation_subject or "",
+                },
+                log_path=RUNS / run / "llm_log.jsonl",
+            )
+        else:
+            client = LLMClient(
+                base_url=DEFAULT_BASE_URL,
+                api_key=_api_key(),
+                model=model,
+                max_concurrency=concurrency,
+                rpm=rpm or None,
+                log_path=RUNS / run / "llm_log.jsonl",
+            )
         try:
             await run_tasks(tasks, client, store)
             if verify:
@@ -264,11 +321,8 @@ def evaluate(
     calibration: Path = typer.Option(None, help="calibration json; omit to fit on this split"),
 ) -> None:
     """Score a run under the corrected scorer, upstream's, or both."""
-    import pandas as pd
-
     from .aggregate import (aggregate, confusion_by_tag, fit_calibration, macro_f1,
-                            scoreable_tags, truth_map, upstream_calibration,
-                            upstream_predictions)
+                            scoreable_tags, truth_map, upstream_predictions)
     from .runstore import RunStore
 
     store = RunStore(RUNS / run)
@@ -327,8 +381,6 @@ def calibrate(
         False, help="also run the wider grid and report the overfitting headroom"),
 ) -> None:
     """Fit the decision layer on DEV and freeze it for the TEST run."""
-    import pandas as pd
-
     from .aggregate import fit_calibration, format_sweep, grid_search
     from .runstore import RunStore
 
@@ -712,6 +764,193 @@ def diff_scan(
             "closure": closure, "detectors": len(dets),
         }, indent=2))
         typer.echo(f"\nwrote {out}")
+
+
+@automation_app.command("serve")
+def automation_serve(
+    workflow_root: Path = typer.Option(
+        ...,
+        "--workflow-root",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        help="frozen upstream Bastet n8n_workflow directory",
+    ),
+    experiment: str = typer.Option(..., "--experiment"),
+    subject: str = typer.Option(..., "--subject"),
+    workflow: str = typer.Option("flashloan", "--workflow"),
+    run_dir: Path = typer.Option(Path("runs/automation"), "--run-dir"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    live: bool = typer.Option(
+        False, "--live", help="call AIS3; otherwise use the deterministic mock"
+    ),
+    global_calls: int = typer.Option(20, "--global-calls"),
+    global_tokens: int = typer.Option(200_000, "--global-tokens"),
+    per_arm_calls: int = typer.Option(10, "--per-arm-calls"),
+    per_arm_tokens: int = typer.Option(100_000, "--per-arm-tokens"),
+    provider_attempts: int = typer.Option(3, "--provider-attempts"),
+) -> None:
+    """Serve the loopback-only OpenAI and n8n compatibility surfaces."""
+
+    from .automation.contracts import BudgetLimits
+    from .automation.server import build_service, create_server
+
+    if live and not os.environ.get("AIS3_API_KEY"):
+        typer.secho(
+            "live mode requires a rotated AIS3_API_KEY in the process environment",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    experiment_dir = run_dir / experiment
+    try:
+        service = build_service(
+            workflow_root=workflow_root,
+            experiment_id=experiment,
+            subject_id=subject,
+            selected_workflow=workflow,
+            budget_limits=BudgetLimits(
+                global_calls=global_calls,
+                global_tokens=global_tokens,
+                per_arm_calls=per_arm_calls,
+                per_arm_tokens=per_arm_tokens,
+            ),
+            ledger_path=experiment_dir / "ledger.jsonl",
+            manifest_path=experiment_dir / "manifest.json",
+            live=live,
+            max_provider_attempts=provider_attempts,
+        )
+        server = create_server(service, host=host, port=port)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.secho(f"automation setup failed: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
+
+    bound_host, bound_port = server.server_address[:2]
+    typer.echo(
+        f"automation ready at http://{bound_host}:{bound_port} "
+        f"({service.profile.provider_mode}, {AIS3_PINNED_MODEL})"
+    )
+    typer.echo(f"manifest: {experiment_dir / 'manifest.json'}")
+    typer.echo("claim boundary: pipeline/live-smoke readiness only; no win claim")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.echo("stopping automation server")
+    finally:
+        server.server_close()
+        service.close()
+
+
+@automation_app.command("smoke")
+def automation_smoke(
+    url: str = typer.Option("http://127.0.0.1:8765", "--url"),
+    experiment: str = typer.Option(..., "--experiment"),
+    subject: str = typer.Option(..., "--subject"),
+) -> None:
+    """Exercise both arms with one subject and print the shared budget summary."""
+
+    import httpx
+
+    base = url.rstrip("/")
+    headers = {
+        "X-Bastet-Experiment": experiment,
+        "X-Bastet-Subject": subject,
+    }
+    fixture = (
+        "pragma solidity ^0.8.20;\n"
+        "contract MockVault {\n"
+        "  function deposit(uint256 amount) external { require(amount > 0); }\n"
+        "}\n"
+    )
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            health = client.get(f"{base}/health")
+            health.raise_for_status()
+            profile = health.json()
+            if (
+                profile.get("experiment_id") != experiment
+                or profile.get("subject_id") != subject
+            ):
+                raise RuntimeError("server experiment/subject does not match smoke request")
+
+            workflows_response = client.get(f"{base}/api/v1/workflows", headers=headers)
+            workflows_response.raise_for_status()
+            active = workflows_response.json().get("data") or []
+            if len(active) != 1:
+                raise RuntimeError("expected exactly one active upstream workflow")
+            webhook = next(
+                node
+                for node in active[0]["nodes"]
+                if node.get("type") == "n8n-nodes-base.webhook"
+            )
+            path = str(webhook["parameters"]["path"]).lstrip("=")
+            submitted = client.post(
+                f"{base}/webhook/{path}",
+                headers=headers,
+                json={"prompt": fixture, "mode": "trace"},
+            )
+            submitted.raise_for_status()
+            execution_id = submitted.text
+            execution = client.get(
+                f"{base}/api/v1/executions/{execution_id}?includeData=true",
+                headers=headers,
+            )
+            execution.raise_for_status()
+            if not execution.json().get("finished"):
+                raise RuntimeError("upstream execution did not finish")
+
+            completion = client.post(
+                f"{base}/v1/chat/completions",
+                headers={**headers, "X-Bastet-Stage": "detect"},
+                json={
+                    "model": AIS3_PINNED_MODEL,
+                    "temperature": 0,
+                    "max_tokens": 512,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                'Review the contract and return only '
+                                '{"findings": []} or a schema-compatible finding.'
+                            ),
+                        },
+                        {"role": "user", "content": fixture},
+                    ],
+                },
+            )
+            completion.raise_for_status()
+            if completion.json().get("model") != AIS3_PINNED_MODEL:
+                raise RuntimeError("OpenAI surface returned an unexpected model")
+
+            budget_response = client.get(f"{base}/budget", headers=headers)
+            budget_response.raise_for_status()
+            summary = budget_response.json()
+    except (httpx.HTTPError, KeyError, StopIteration, ValueError, RuntimeError) as exc:
+        typer.secho(f"automation smoke failed: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo("pipeline_ready: upstream and bastet-cc used one pinned gateway")
+    typer.echo(json.dumps(summary, indent=2, ensure_ascii=False))
+
+
+@automation_app.command("budget")
+def automation_budget(
+    url: str = typer.Option("http://127.0.0.1:8765", "--url"),
+) -> None:
+    """Show the shared call/token budget and redacted ledger summary."""
+
+    import httpx
+
+    try:
+        response = httpx.get(f"{url.rstrip('/')}/budget", timeout=10.0)
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+    except (httpx.HTTPError, ValueError) as exc:
+        typer.secho(f"cannot read automation budget: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()

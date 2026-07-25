@@ -263,13 +263,14 @@ bastet_cc/
   plan.py        the ONLY fork between routed and broadcast arms
   executor.py    concurrent execution, resumable
   llm.py         OpenAI-compatible client, lenient JSON recovery, 120 rpm token bucket
+  automation/    pinned dual-surface gateway, fair budgets, workflow shim, audit ledger
   verify.py      single-round refutation pass
   aggregate.py   repo-level decision layer; upstream == prior=1, tau->0
   evaluate.py    corrected scorer + faithful replica of upstream's
   stats.py       paired inference: exact McNemar, sign test, power, n-guarded bootstrap
   redact.py      credential stripping at the point of capture
   synth/         localize -> induce -> hints -> gate
-tests/           157 tests; no network, no corpus, no API key
+tests/           offline-first tests; no network, corpus, or API key by default
 ```
 
 `plan.py` being the single fork point is what makes the comparison fair. The broadcast
@@ -338,6 +339,87 @@ resulting wall-clock estimate before it starts, so a six-hour run is not begun
 under the impression that it is a one-hour run. `--concurrency` bounds memory;
 it does not bound rate.
 
+### Same-model automation gateway
+
+Phase 1 adds one loopback-only execution plane below both systems. It exposes an
+OpenAI-compatible `/v1/chat/completions` endpoint to Bastet-CC and the three n8n
+scan endpoints expected by the unmodified upstream CLI. Both arms are pinned to
+`ais3/llama-3.1-8b`; workflow files that name `gpt-4o-mini` or private Azure
+deployments cannot select a different provider model.
+
+The earlier result tables retain the model actually used for those historical
+runs (`ais3/nemotron-3-ultra-550b`). The current `scan` default intentionally
+uses `ais3/llama-3.1-8b` so this experiment compares both tools on the exact
+same model.
+
+The n8n service at `http://localhost:5678` remains useful for inspecting the
+original workflows. The automation service below is a deliberately smaller
+scan-compatible shim, not a replacement n8n workflow engine. Phase 1 supports
+the single-`chainLlm` `flashloan` workflow and rejects multi-model workflows
+instead of pretending to reproduce their merge semantics.
+
+On Windows, start the offline deterministic gateway from the `bastet-cc`
+directory:
+
+```powershell
+$upstream = "C:\path\to\frozen\Bastet"
+bastet-cc automation serve `
+  --workflow-root "$upstream\n8n_workflow" `
+  --workflow flashloan `
+  --experiment phase1-smoke `
+  --subject upstream-example
+```
+
+In another terminal, exercise both surfaces with the same subject, then run the
+actual upstream CLI unchanged:
+
+```powershell
+bastet-cc automation smoke `
+  --experiment phase1-smoke `
+  --subject upstream-example
+
+.\scripts\run_upstream_shim.ps1 `
+  -UpstreamRoot $upstream `
+  -GatewayUrl http://127.0.0.1:8765
+```
+
+To route a Bastet-CC scan through the same ledger:
+
+```powershell
+bastet-cc scan C:\path\to\contracts `
+  --run phase1-bastet-cc `
+  --automation-url http://127.0.0.1:8765 `
+  --automation-experiment phase1-smoke `
+  --automation-subject upstream-example
+```
+
+Mock mode is the default and needs no credential. Live mode must be explicit,
+and the process reads a rotated key only from the environment:
+
+```powershell
+$env:AIS3_API_KEY = "<rotated key>"
+bastet-cc automation serve `
+  --workflow-root "$upstream\n8n_workflow" `
+  --workflow flashloan `
+  --experiment phase1-live `
+  --subject upstream-example `
+  --live
+```
+
+The manifest stores endpoint, model, subject, workflow/prompt hashes, adapter
+versions, and budgets. Before every provider call, the JSONL ledger fsyncs a
+worst-case reservation; a second append-only event reconciles actual usage.
+This makes crash/restart conservative instead of resetting spent budget. The
+ledger stores request metadata, hashes, and usage—never prompts, authorization
+headers, or credentials. Completed upstream-compatible results are separately
+fsynced to `executions.jsonl` before an execution id is returned, so polling
+survives a gateway restart. That result file contains redacted finding output
+and should be protected like any other scan artifact.
+
+A mock run proves pipeline and contract readiness. A live smoke proves the
+pinned endpoint is callable. Neither is evidence that one arm wins; that
+requires the preregistered paired benchmark.
+
 ### What a fresh clone can check
 
 Tests, the credential scan and the leakage rules need neither the corpus nor a key:
@@ -371,11 +453,12 @@ python scripts/leakage_audit.py              # split enforcement (rules 2/3 need
 python scripts/upstream_null_test.py --analyse   # re-derives the null summary
 ```
 
-Rebuild the upstream control group from zero:
+Start the safe upstream compatibility baseline without mutating the frozen
+checkout or writing a key to `.env`:
 
 ```bash
-cd ../upstream-bastet
-AIS3_API_KEY=... ./setup_baseline.sh ais3/nemotron-3-ultra-550b
+export BASTET_UPSTREAM_ROOT=/path/to/frozen/Bastet
+./scripts/setup_upstream_baseline.sh ais3/llama-3.1-8b
 ```
 
 ## Experimental protocol
@@ -423,7 +506,9 @@ Known limits, stated rather than hidden:
 
 Complete and measured: instrument audit, routing, cost, coverage analysis, leakage
 audit, memorisation probe, upstream control group, figures, detector synthesis
-(S1–S4, 23 detectors assembled into `detectors_synth/`).
+(S1–S4, 23 detectors assembled into `detectors_synth/`). The offline
+dual-surface automation path is also implemented: it can run the frozen upstream
+scan protocol and Bastet-CC through one pinned-model budget and ledger.
 
 Not yet run: **the DEV and TEST scans**. `runs/` holds smoke tests and two
 single-repository DEV runs; no arm has been scored end to end, so no
@@ -431,6 +516,10 @@ routed-vs-broadcast accuracy claim exists yet. The claims that are measured are
 the instrument audit, cost, and coverage — all of which are independent of that
 scan. `PREREGISTRATION.md` fixes the metrics and decision rules for the
 comparison before it is run, including what counts as a negative result.
+
+Also not yet claimed: live superiority over upstream with
+`ais3/llama-3.1-8b`. That claim remains blocked until a rotated key is supplied
+and the preregistered, same-subject, same-budget paired benchmark completes.
 
 Power, before spending the wall-clock: TEST is 12 repositories × ~20 tags ≈ 240
 paired decisions, but only *discordant* pairs carry evidence. Below ~25

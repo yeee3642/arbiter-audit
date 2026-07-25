@@ -30,6 +30,7 @@ import asyncio
 import json
 import re
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -154,10 +155,11 @@ def _classify_http(status: int, body: str) -> tuple[str, bool]:
 
 
 class LLMClient:
-    def __init__(self, base_url: str, api_key: str, model: str,
+    def __init__(self, base_url: str, api_key: str | None, model: str,
                  max_concurrency: int = 32, timeout_s: int = 120,
                  max_retries: int = 3, log_path: Path | None = None,
-                 rpm: int | None = DEFAULT_RPM):
+                 rpm: int | None = DEFAULT_RPM,
+                 extra_headers: Mapping[str, str] | None = None):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
@@ -166,9 +168,16 @@ class LLMClient:
         self._sem = asyncio.Semaphore(max_concurrency)
         # rpm=None disables the bucket, for a different endpoint or an offline test.
         self.limiter = RateLimiter(rpm) if rpm else None
+        headers: dict[str, str] = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        for name, value in (extra_headers or {}).items():
+            if name.lower() == "authorization":
+                raise ValueError("extra_headers may not override Authorization")
+            headers[str(name)] = str(value)
         self._http = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_s),
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
             limits=httpx.Limits(max_connections=max_concurrency + 4),
         )
         # None = untested, False = endpoint rejected response_format for this model;
@@ -184,9 +193,11 @@ class LLMClient:
                        schema: dict | None = None,
                        temperature: float = 0.0,
                        max_tokens: int = 3072,
-                       task_id: str | None = None) -> LLMResult:
+                       task_id: str | None = None,
+                       stage: str | None = None) -> LLMResult:
         async with self._sem:
-            result = await self._complete_inner(system, user, schema, temperature, max_tokens)
+            result = await self._complete_inner(
+                system, user, schema, temperature, max_tokens, stage)
         self._log(task_id, result)
         return result
 
@@ -202,7 +213,8 @@ class LLMClient:
     # -- internals ----------------------------------------------------------
 
     async def _complete_inner(self, system: str, user: str, schema: dict | None,
-                              temperature: float, max_tokens: int) -> LLMResult:
+                              temperature: float, max_tokens: int,
+                              stage: str | None) -> LLMResult:
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -221,7 +233,7 @@ class LLMClient:
             if schema is not None and self._json_mode is not False:
                 body["response_format"] = {"type": "json_object"}
             attempts += 1
-            status, payload, err = await self._post(body)
+            status, payload, err = await self._post(body, stage=stage)
 
             if err is not None:
                 error = err
@@ -279,7 +291,7 @@ class LLMClient:
                      "content": "You repair malformed JSON. Output only the corrected JSON object, nothing else."},
                     {"role": "user", "content": text or "(empty)"},
                 ],
-            })
+            }, stage="repair" if stage else None)
             if r_err is None and r_status == 200:
                 usage = r_payload.get("usage") or {}
                 in_tok += int(usage.get("prompt_tokens") or 0)
@@ -304,7 +316,9 @@ class LLMClient:
             return {"findings": value}
         return None
 
-    async def _post(self, body: dict) -> tuple[int, dict | str, str | None]:
+    async def _post(
+        self, body: dict, stage: str | None = None
+    ) -> tuple[int, dict | str, str | None]:
         """One HTTP round-trip; network-level failures come back as labels.
 
         The bucket is drained here rather than in `complete()` so that retries and
@@ -314,7 +328,9 @@ class LLMClient:
         """
         await self._throttle()
         try:
-            r = await self._http.post(f"{self.base_url}/chat/completions", json=body)
+            headers = {"X-Bastet-Stage": stage} if stage else None
+            r = await self._http.post(
+                f"{self.base_url}/chat/completions", json=body, headers=headers)
         except httpx.TimeoutException:
             return 0, "", "timeout"
         except httpx.HTTPError:

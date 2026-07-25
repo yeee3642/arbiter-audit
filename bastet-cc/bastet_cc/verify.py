@@ -438,8 +438,8 @@ async def verify_findings(findings: list[Finding], repo_index: dict,
         f = out[i]
         system, user = build_verify_prompt(
             f, ctx, tag_definition(f.tag), list(detector_checks(f.detector_id)))
-        result = await client.complete(system, user, schema=VERIFY_SCHEMA,
-                                       task_id=vid)
+        result = await client.complete(
+            system, user, schema=VERIFY_SCHEMA, task_id=vid, stage="verify")
         verdict, reason = _normalize_verdict(result.parsed)
         if result.error in TRANSIENT_ERRORS:
             verdicts["transient_error"] = verdicts.get("transient_error", 0) + 1
