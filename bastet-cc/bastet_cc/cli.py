@@ -546,6 +546,175 @@ def power(
 
 
 @app.command()
+def report(
+    run: str = typer.Option(..., "--run", help="run id under runs/"),
+    fmt: str = typer.Option("md", "--format", help="sarif | md | json"),
+    out: Path = typer.Option(None, help="output file; default runs/<run>/report.<ext>"),
+    repo_url: str = typer.Option("", help="base URL for permalinks in markdown"),
+    fail_on: str = typer.Option(
+        "High", help="comma-separated severities that make the gate fail; '' never fails"),
+    include_suppressed: bool = typer.Option(
+        False, help="include findings the verifier rejected"),
+) -> None:
+    """Turn a run into a deliverable. SARIF feeds GitHub code scanning.
+
+    Exit status is the gate: 1 when any finding at a `--fail-on` severity survived
+    verification, 0 otherwise. Rejected verdicts never fail a build -- failing on a
+    finding our own refutation pass argued away is how a security gate gets
+    switched off.
+    """
+    from .emit import gate_summary, to_json, to_markdown, to_sarif
+    from .runstore import RunStore
+
+    store = RunStore(RUNS / run)
+    findings = store.load_findings()
+    if not findings:
+        typer.secho(f"no findings in {RUNS / run}", fg=typer.colors.YELLOW, err=True)
+
+    if fmt == "sarif":
+        # The detector prompts become the SARIF rule descriptions, so an alert is
+        # reviewable in the GitHub UI without cloning this repository.
+        help_text = {}
+        for d in _detector_dirs(True):
+            for md in d.glob("*.md"):
+                help_text[md.stem] = md.read_text(encoding="utf-8", errors="replace")[:4000]
+        body = json.dumps(to_sarif(findings, detector_help=help_text,
+                                   include_suppressed=include_suppressed,
+                                   run_id=run), indent=2)
+        ext = "sarif"
+    elif fmt == "md":
+        body = to_markdown(findings, title=f"Bastet-CC report — {run}",
+                           repo_url=repo_url, include_suppressed=include_suppressed)
+        ext = "md"
+    elif fmt == "json":
+        body = to_json(findings, include_suppressed=include_suppressed)
+        ext = "json"
+    else:
+        raise typer.BadParameter("format must be sarif, md or json")
+
+    target = out or (RUNS / run / f"report.{ext}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+
+    levels = tuple(s.strip() for s in fail_on.split(",") if s.strip())
+    summary = gate_summary(findings, fail_on=levels)
+    typer.echo(f"wrote {target}")
+    loc = summary["localisation"]
+    typer.echo(f"  {summary['total']} findings  {summary['counts'] or '{}'}"
+               + (f"  suppressed {summary['suppressed']}" if summary["suppressed"] else ""))
+    typer.echo(f"  localisation: {loc.get('parser', 0)} exact, "
+               f"{loc.get('site', 0)} function-matched (line asserted by the model), "
+               f"{loc.get('none', 0)} file-level only")
+    if levels and not summary["passed"]:
+        typer.secho(f"gate FAILED: {summary['blocking']} finding(s) at "
+                    f"{'/'.join(levels)}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+    typer.secho("gate passed", fg=typer.colors.GREEN)
+
+
+@app.command("diff-scan")
+def diff_scan(
+    base: str = typer.Argument(..., help="git ref to diff against (e.g. origin/main)"),
+    head: str = typer.Option("", help="second ref; omit to diff the working tree"),
+    repo: Path = typer.Option(Path("."), help="repository to index and diff"),
+    synth: bool = typer.Option(True, help="include synthesised detectors"),
+    closure: bool = typer.Option(True, help="attach one-hop callees to each slice"),
+    out: Path = typer.Option(None, help="write the scope and plan as JSON"),
+) -> None:
+    """Plan a scan of only the functions a diff touched — the PR gate.
+
+    Prints the plan and its cost against what a whole-repository scan would cost,
+    and does not call the model: the point of a gate is to know the bill before
+    paying it. Feed the same scope to `scan` to execute it.
+
+    Upstream's action scans the entire checkout on every pull request, so its cost
+    is a property of the repository rather than of the change. This makes it a
+    property of the change.
+    """
+    from .diffscan import git_diff, parse_diff, restrict_index, scope_from_diff
+    from .plan import plan
+    from .routing import broadcast_cost, cost, fit
+    from .solidity import index_repo
+
+    repo = repo.resolve()
+    try:
+        diff_text = git_diff(base, head, repo_root=repo)
+    except RuntimeError as e:
+        typer.secho(str(e), fg=typer.colors.RED, err=True)
+        raise typer.Exit(2)
+
+    changed = parse_diff(diff_text)
+    if not changed:
+        typer.secho(f"no added or modified files between {base} and "
+                    f"{head or 'the working tree'}", fg=typer.colors.YELLOW)
+        raise typer.Exit(0)
+
+    ix = index_repo(repo)
+    scope = scope_from_diff(changed, ix)
+
+    typer.echo(f"{scope.changed_files} changed file(s), "
+               f"{scope.changed_sol_files} Solidity, {scope.added_lines} added line(s)")
+    typer.echo(f"touched {scope.n_functions} indexed function(s) in "
+               f"{len(scope.touched)} file(s)")
+    for path, fns in sorted(scope.touched.items()):
+        typer.echo(f"  {path}: {', '.join(sorted(fns))}")
+
+    if scope.unscanned_reasons:
+        typer.echo("\nnot scanned:")
+        for reason, items in sorted(scope.unscanned_reasons.items()):
+            typer.echo(f"  {reason}")
+            for item in sorted(items)[:8]:
+                typer.echo(f"    {item}")
+            if len(items) > 8:
+                typer.echo(f"    ... and {len(items) - 8} more")
+
+    if not scope.n_functions:
+        typer.secho("\nnothing to scan. This is not the same as 'no vulnerabilities' — "
+                    "see the reasons above.", fg=typer.colors.YELLOW)
+        raise typer.Exit(0)
+
+    dets = _load_detectors(synth)
+    # Fit on the FULL index, not the restricted one. Document frequency is a
+    # property of the codebase; measuring it over three changed functions would make
+    # every identifier look rare and route every detector everywhere.
+    fit(dets, [ix])
+    scoped = restrict_index(ix, scope)
+
+    tasks = plan("routed", dets, repo, repo_index=scoped, closure=closure)
+    diff_cost = cost(tasks)
+    full_tasks = plan("routed", dets, repo, repo_index=ix, closure=closure)
+    full_cost = cost(full_tasks)
+    bcast = broadcast_cost(dets, ix)
+
+    typer.echo(f"\n{'plan':<28}{'calls':>10}{'input tokens':>15}")
+    typer.echo(f"{'upstream (every file x det)':<28}{bcast['calls']:>10,}"
+               f"{bcast['input_tokens']:>15,}")
+    typer.echo(f"{'routed, whole repo':<28}{full_cost['calls']:>10,}"
+               f"{full_cost['input_tokens']:>15,}")
+    typer.echo(f"{'routed, diff only':<28}{diff_cost['calls']:>10,}"
+               f"{diff_cost['input_tokens']:>15,}")
+    if bcast["calls"]:
+        typer.echo(f"\nvs upstream: {100 * (1 - diff_cost['calls'] / bcast['calls']):.2f}% "
+                   f"fewer calls, "
+                   f"{100 * (1 - diff_cost['input_tokens'] / bcast['input_tokens']):.2f}% "
+                   f"fewer tokens")
+    from .llm import DEFAULT_RPM
+    typer.echo(f"at {DEFAULT_RPM} rpm: upstream "
+               f"{bcast['calls'] / DEFAULT_RPM / 60:.1f} h, "
+               f"diff-scoped {diff_cost['calls'] / DEFAULT_RPM * 60:.0f} s")
+
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({
+            "base": base, "head": head or None, "repo": str(repo),
+            "scope": scope.to_dict(),
+            "cost": {"diff": diff_cost, "routed_full": full_cost, "broadcast": bcast},
+            "closure": closure, "detectors": len(dets),
+        }, indent=2))
+        typer.echo(f"\nwrote {out}")
+
+
+@app.command()
 def audit() -> None:
     """Run the leakage and instrument audits."""
     import subprocess

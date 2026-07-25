@@ -43,6 +43,7 @@ def finding_factory():
             contract=kw.get("contract", "A"), function=kw.get("function", "f"),
             description=kw.get("description", "d"), evidence=kw.get("evidence", "L1-L2"),
             confidence=confidence, verdict=verdict, task_id=kw.get("task_id", ""),
+            start_line=kw.get("start_line", 0), end_line=kw.get("end_line", 0),
         )
     return make
 
