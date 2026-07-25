@@ -47,6 +47,14 @@ files = subprocess.run(["git", "diff", "--cached", "--name-only",
                         "--diff-filter=ACM"],
                        capture_output=True, text=True, cwd=root).stdout.split()
 
+# A file testing the scanner necessarily contains credential-shaped strings, so it
+# would block every commit that touches it and teach everyone to reach for
+# --no-verify -- which disables the guard for the whole commit, including the file
+# that actually leaked. An explicit in-file pragma is narrower and leaves a trace
+# in the diff, so granting it is reviewable. It does NOT excuse a real secret:
+# scan() still runs and its hits are demoted to advisory, not silenced.
+PRAGMA = "pre-commit: allow-credential-fixtures"
+
 blocking, advisory = [], []
 for rel in files:
     if "/figures/" in rel or rel.endswith((".png", ".svg", ".pdf", ".zip")):
@@ -55,8 +63,12 @@ for rel in files:
     if blob.returncode:
         continue
     text = blob.stdout.decode("utf-8", errors="replace")
+    exempt = PRAGMA in text
     for name, sample, is_blocking in scan(text):
-        (blocking if is_blocking else advisory).append((rel, name, sample))
+        if exempt:
+            advisory.append((rel, f"{name} (fixture-exempt)", sample))
+        else:
+            (blocking if is_blocking else advisory).append((rel, name, sample))
 
 for rel, name, sample in advisory[:10]:
     print(f"pre-commit: note  {rel}: high-entropy {name} ({sample}) "

@@ -20,6 +20,8 @@ from pathlib import Path
 
 import typer
 
+from .llm import DEFAULT_RPM
+
 app = typer.Typer(add_completion=False, help="Bastet-CC: routed smart-contract vulnerability detection")
 
 PKG = Path(__file__).resolve().parent
@@ -41,6 +43,33 @@ def _api_key() -> str:
         )
         raise typer.Exit(2)
     return key
+
+
+GROUND_TRUTH = DATA / "train.csv"
+
+
+def _ground_truth():
+    """Load the labelled findings, or explain how to get them and stop.
+
+    Every scoring path needs this file and it is deliberately not redistributed
+    (see .gitignore). Reaching pandas with a missing path produces a forty-line
+    traceback that tells a first-time reader nothing, so the check is explicit
+    and names the command that fixes it.
+    """
+    import pandas as pd
+
+    if not GROUND_TRUTH.exists():
+        typer.secho(f"missing ground truth: {GROUND_TRUTH}", fg=typer.colors.RED, err=True)
+        typer.secho(
+            "  train.csv is the Kaggle competition's labelled findings and is not\n"
+            "  redistributed here. Fetch it from the `onesavie-bastet` Data tab into\n"
+            "  data/train.csv (see README, 'Install').\n"
+            "\n"
+            "  Commands that need no labels: index, route, structural, power, figures.",
+            fg=typer.colors.YELLOW, err=True,
+        )
+        raise typer.Exit(2)
+    return pd.read_csv(GROUND_TRUTH)
 
 
 def _detector_dirs(include_synth: bool) -> list[Path]:
@@ -124,8 +153,12 @@ def scan(
     arm: str = typer.Option("routed", help="routed | broadcast"),
     model: str = typer.Option(DEFAULT_MODEL),
     concurrency: int = typer.Option(16),
+    rpm: int = typer.Option(
+        DEFAULT_RPM, help="request/minute cap; the gateway enforces 120. 0 disables"),
     synth: bool = typer.Option(True, help="include synthesised detectors"),
     verify: bool = typer.Option(True, help="run the refutation pass"),
+    closure: bool = typer.Option(
+        False, help="routed only: append one-hop callees to each slice"),
 ) -> None:
     """Scan repositories and record findings.
 
@@ -142,6 +175,10 @@ def scan(
 
     if arm not in ("routed", "broadcast"):
         raise typer.BadParameter("arm must be 'routed' or 'broadcast'")
+    if closure and arm != "routed":
+        raise typer.BadParameter(
+            "closure is a routed-arm treatment; enabling it on the broadcast "
+            "control would void the comparison")
 
     repos = _split_repos(target) if target in ("train_syn", "dev", "test") else [target]
     paths = [Path(r) if Path(r).is_dir() else _repo_dir(r) for r in repos]
@@ -151,15 +188,21 @@ def scan(
     fit(dets, indexes)
 
     tasks = []
+    closure_stats: list[dict] = []
     for p, ix in zip(paths, indexes):
-        tasks.extend(plan(arm, dets, p, repo_index=ix))
+        tasks.extend(plan(arm, dets, p, repo_index=ix, closure=closure))
+        if closure:
+            from .plan import last_closure_stats
+            closure_stats.append({"repo": ix["repo"], **last_closure_stats()})
 
     store = RunStore(RUNS / run)
     store.write_manifest({
         "arm": arm, "model": model, "prompt_version": PROMPT_VERSION,
         "target": target, "repos": repos, "concurrency": concurrency,
+        "rpm": rpm or None,
         "detectors": len(dets), "detector_dirs": [str(d) for d in _detector_dirs(synth)],
-        "verify": verify,
+        "verify": verify, "closure": closure,
+        "closure_stats": closure_stats or None,
         "splits_sha256": json.loads((DATA / "splits.json").read_text()).get("splits_sha256"),
     })
     store.write_tasks(tasks, model, PROMPT_VERSION)
@@ -167,11 +210,26 @@ def scan(
     done = store.done_ids()
     typer.echo(f"{arm}: {len(tasks)} tasks over {len(repos)} repos, {len(done)} already done")
 
+    # The gateway caps requests per minute, not concurrency, so wall-clock is
+    # governed by the cap once the plan is larger than a minute's worth. Saying
+    # so up front stops a 6-hour run from being started as if it were a 1-hour one.
+    remaining = len(tasks) - len(done)
+    if rpm and remaining:
+        hours = remaining / rpm / 60
+        typer.echo(f"  at {rpm} rpm this is ~{hours:.1f} h of wall clock"
+                   f" ({remaining:,} calls); concurrency={concurrency} bounds memory,"
+                   f" not rate")
+    if closure and closure_stats:
+        added = sum(c.get("added_tokens_est", 0) for c in closure_stats)
+        exp = sum(c.get("slices_expanded", 0) for c in closure_stats)
+        typer.echo(f"  closure: {exp:,} slices expanded, +{added:,} input tokens est")
+
     async def _go() -> None:
         from .executor import run_tasks
         client = LLMClient(
             base_url=DEFAULT_BASE_URL, api_key=_api_key(),
             model=model, max_concurrency=concurrency,
+            rpm=rpm or None,
             log_path=RUNS / run / "llm_log.jsonl",
         )
         try:
@@ -185,6 +243,12 @@ def scan(
                     if subset:
                         await verify_findings(subset, ix, client, store)
         finally:
+            if client.limiter is not None:
+                st = client.limiter.stats()
+                if st["n_waits"]:
+                    print(f"[rate] throttled {st['n_waits']:,} times, "
+                          f"{st['waited_s']:.0f}s total wait at {st['rpm']} rpm",
+                          flush=True)
             await client.aclose()
 
     asyncio.run(_go())
@@ -210,7 +274,7 @@ def evaluate(
     store = RunStore(RUNS / run)
     findings = store.load_findings()
     repos = _split_repos(split)
-    truth_df = pd.read_csv(DATA / "train.csv")
+    truth_df = _ground_truth()
     truth = truth_map(truth_df, repos)
     tags = scoreable_tags(truth, repos)
 
@@ -259,12 +323,13 @@ def calibrate(
     run: str = typer.Option(..., "--run", help="a DEV run to fit on"),
     split: str = typer.Option("dev"),
     out: Path = typer.Option(RUNS / "calibration.json"),
+    sensitivity: bool = typer.Option(
+        False, help="also run the wider grid and report the overfitting headroom"),
 ) -> None:
     """Fit the decision layer on DEV and freeze it for the TEST run."""
     import pandas as pd
-    from dataclasses import asdict
 
-    from .aggregate import format_sweep, grid_search
+    from .aggregate import fit_calibration, format_sweep, grid_search
     from .runstore import RunStore
 
     if split == "test":
@@ -274,24 +339,210 @@ def calibrate(
     store = RunStore(RUNS / run)
     findings = store.load_findings()
     repos = _split_repos(split)
-    truth_df = pd.read_csv(DATA / "train.csv")
+    truth_df = _ground_truth()
 
-    calib, sweep = grid_search(findings, truth_df, repos)
+    # fit_calibration is what ships the number: it sweeps tau only, holding the
+    # prior's smoothing fixed. grid_search additionally sweeps alpha/beta/clip,
+    # which on 10 DEV repositories overfits harder -- aggregate.grid_search says
+    # so in its own docstring ("the honest use is sensitivity analysis"). This
+    # command used to write the grid_search result, so the calibration frozen for
+    # TEST was the overfit one; and because grid_search records `grid_best`
+    # rather than `tau_sweep`, format_sweep printed an empty table beside it.
+    calib = fit_calibration(findings, truth_df, repos)
     typer.echo(format_sweep(calib))
+
+    if sensitivity:
+        best, grid = grid_search(findings, truth_df, repos)
+        gap = (best.diagnostics["grid_best"]["macro_f1"]
+               - (calib.diagnostics.get("best_macro_f1") or 0.0))
+        typer.echo(f"\nsensitivity: {len(grid)} grid points, best macro-F1 "
+                   f"{best.diagnostics['grid_best']['macro_f1']:.4f} at "
+                   f"tau={best.tau} alpha={best.diagnostics['grid_best']['alpha']} "
+                   f"beta={best.diagnostics['grid_best']['beta']}")
+        typer.echo(f"             +{gap:.4f} over the shipped fit -- this is the "
+                   f"overfitting headroom, not an improvement.")
+        calib.diagnostics["sensitivity_grid_best"] = best.diagnostics["grid_best"]
+
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(asdict(calib), indent=2, default=list))
-    typer.echo(f"\nwrote {out}  ({len(sweep)} grid points)")
+    out.write_text(json.dumps(calib.to_dict(), indent=2, default=list))
+    typer.echo(f"\nwrote {out}  (tau={calib.tau}, "
+               f"{len(calib.detector_prior)} detector priors)")
 
 
 @app.command()
-def figures(mode: str = typer.Option("both", help="light | dark | both")) -> None:
-    """Render every figure from the measurement artefacts already on disk."""
-    from .report import build_all
+def figures(outdir: Path = typer.Option(None, help="override the figure directory")) -> None:
+    """Render every figure from the measurement artefacts already on disk.
 
-    paths = build_all()
+    `build_all` emits light and dark variants together, so there is no mode to
+    choose; the flag this used to accept was silently ignored.
+    """
+    from .report import build_all, FIGURE_DIR
+
+    paths = build_all(outdir or FIGURE_DIR)
     for p in paths:
         typer.echo(f"  {p}")
     typer.echo(f"{len(paths)} files")
+
+
+def _structural(a: str, b: str, out: Path | None, quiet: bool) -> dict:
+    """Shared body: `structural` is this alone, `compare` prints it as a preamble."""
+    from .runstore import RunStore
+    from .structural import compare_structural, format_structural, profile
+
+    profiles, findings = {}, {}
+    for name, run_id in (("a", a), ("b", b)):
+        run_dir = RUNS / run_id
+        if not run_dir.is_dir():
+            typer.secho(f"no such run: {run_dir}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(2)
+        findings[name] = RunStore(run_dir).load_findings()
+        profiles[name] = profile(run_id, findings[name], run_dir)
+
+    result = compare_structural(profiles["a"], profiles["b"], findings["a"], findings["b"])
+    if not quiet:
+        typer.echo(format_structural(result, a, b))
+        if not result["comparable"]:
+            typer.secho(
+                "\nthese runs share no repository, so the site agreement above is empty; "
+                "the per-arm columns are still valid.",
+                fg=typer.colors.YELLOW)
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, indent=2))
+        typer.echo(f"\nwrote {out}")
+    return result
+
+
+@app.command()
+def structural(
+    a: str = typer.Option(..., "--a", help="run id for arm A (e.g. the routed arm)"),
+    b: str = typer.Option(..., "--b", help="run id for arm B (e.g. broadcast)"),
+    out: Path = typer.Option(None, help="write the result as JSON"),
+) -> None:
+    """Compare two arms without labels: where findings land, and what they cost.
+
+    Runs from committed `findings.json` alone -- no API key, no train.csv, no
+    6.8 GB corpus. That makes it the one head-to-head a reader who just cloned
+    this repository can reproduce, and the only one available on TEST before the
+    labels are spent. It does not rank detection quality; `compare` does that.
+    """
+    _structural(a, b, out=out, quiet=False)
+
+
+@app.command()
+def compare(
+    a: str = typer.Option(..., "--a", help="run id for arm A (e.g. the routed arm)"),
+    b: str = typer.Option(..., "--b", help="run id for arm B (e.g. broadcast)"),
+    split: str = typer.Option("dev"),
+    calibration: Path = typer.Option(None, help="frozen calibration; required for TEST"),
+    out: Path = typer.Option(None, help="write the result as JSON"),
+) -> None:
+    """Paired comparison of two arms: McNemar, sign test, and power.
+
+    Both arms scored the same repositories with the same model, so the
+    comparison must be paired. A two-sample test would pay for
+    between-repository variance, which dominates here -- repositories differ
+    enormously in size and tag load -- and on a 12-repository TEST split that
+    difference decides whether anything is resolvable at all.
+    """
+    from .aggregate import (Calibration, aggregate, fit_calibration, macro_f1,
+                            confusion_by_tag, scoreable_tags, truth_map)
+    from .runstore import RunStore
+    from .stats import describe_paired, format_mcnemar, mcnemar
+
+    repos = _split_repos(split)
+    # The label-free half costs nothing and needs no corpus, so it runs first and
+    # is printed either way: without it, a reader with no train.csv gets an error
+    # and no comparison at all, which is the common case for anyone cloning this.
+    _structural(a, b, out=None, quiet=False)
+    typer.echo("")
+    truth_df = _ground_truth()
+    truth = truth_map(truth_df, repos)
+    tags = scoreable_tags(truth, repos)
+
+    if split == "test" and calibration is None:
+        typer.secho("TEST requires --calibration frozen on DEV", fg=typer.colors.RED,
+                    err=True)
+        raise typer.Exit(2)
+
+    arms: dict[str, list] = {}
+    for name, run_id in (("a", a), ("b", b)):
+        findings = RunStore(RUNS / run_id).load_findings()
+        calib = (Calibration.from_dict(json.loads(calibration.read_text()))
+                 if calibration else fit_calibration(findings, truth_df, repos))
+        arms[name] = aggregate(findings, calib, repos, tags)
+
+    # One decision per (repo, tag) cell, correct-or-not under each arm.
+    pairs, per_repo_a, per_repo_b = [], [], []
+    for repo in repos:
+        cm_a = confusion_by_tag({t: {repo: arms["a"][t].get(repo, False)} for t in tags},
+                                truth, [repo], tags)
+        cm_b = confusion_by_tag({t: {repo: arms["b"][t].get(repo, False)} for t in tags},
+                                truth, [repo], tags)
+        per_repo_a.append(macro_f1(cm_a))
+        per_repo_b.append(macro_f1(cm_b))
+        for tag in tags:
+            actual = tag in truth.get(repo, set())
+            pairs.append((arms["a"][tag].get(repo, False) == actual,
+                          arms["b"][tag].get(repo, False) == actual))
+
+    m = mcnemar(pairs)
+    typer.echo(f"arm A = {a}   arm B = {b}   split={split} "
+               f"({len(repos)} repos x {len(tags)} tags)")
+    typer.echo("")
+    typer.echo(format_mcnemar(m, label_a=a, label_b=b))
+
+    # Repository-level macro-F1, bootstrapped over repositories rather than
+    # decisions: decisions inside one repo share a codebase and a model pass.
+    typer.echo("\nper-repository macro-F1, paired:")
+    paired = describe_paired(per_repo_a, per_repo_b, label_a=a, label_b=b)
+    typer.echo(f"  mean difference : {paired['mean_difference']:+.4f}")
+    typer.echo(f"  wins/losses/ties: {paired['wins']}/{paired['losses']}/{paired['ties']}")
+    typer.echo(f"  sign test p     : {paired['sign_test_p']:.4f}")
+    if paired["bootstrap"]:
+        bs = paired["bootstrap"]
+        typer.echo(f"  95% CI          : [{bs['lo']:+.4f}, {bs['hi']:+.4f}]"
+                   f"  {'excludes' if bs['excludes_zero'] else 'includes'} zero")
+    else:
+        typer.echo(f"  bootstrap declined: {paired['bootstrap_declined'].splitlines()[0]}")
+        typer.echo(f"  differences     : "
+                   f"{[f'{d:+.3f}' for d in paired['differences']]}")
+
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(
+            {"arm_a": a, "arm_b": b, "split": split, "n_repos": len(repos),
+             "n_tags": len(tags), "mcnemar": m.to_dict(), "paired_macro_f1": paired},
+            indent=2))
+        typer.echo(f"\nwrote {out}")
+
+
+@app.command()
+def power(
+    decisions: int = typer.Option(240, help="paired decisions, i.e. repos x tags"),
+    discordance: float = typer.Option(
+        0.25, help="assumed fraction of decisions where the arms disagree"),
+) -> None:
+    """What effect size the design can resolve, before spending the TEST scan.
+
+    Run this on D2, not D5. If the answer is "only a landslide registers", that
+    is a fact about the experiment and it is cheaper to learn now -- the response
+    is to widen the decision set (more tags scored) rather than to hope.
+    """
+    from .stats import mde
+
+    n_disc = max(0, int(decisions * discordance))
+    typer.echo(f"{decisions} paired decisions, {discordance:.0%} discordant "
+               f"-> {n_disc} informative pairs\n")
+    typer.echo(f"{'discordant':>12}{'MDE b/(b+c)':>14}   interpretation")
+    for n in sorted({10, 25, 50, 100, n_disc, decisions}):
+        v = mde(n)
+        note = ("landslide only" if v > 0.85 else
+                "large effects only" if v > 0.70 else "workable")
+        mark = "  <-- your design" if n == n_disc else ""
+        typer.echo(f"{n:>12}{v:>14.3f}   {note}{mark}")
+    typer.echo("\nMDE is the share of *disagreements* the better arm must win at"
+               "\n80% power, alpha 0.05. Concordant decisions carry no evidence.")
 
 
 @app.command()
