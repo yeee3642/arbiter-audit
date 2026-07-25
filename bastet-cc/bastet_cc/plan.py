@@ -6,7 +6,8 @@ therefore be attributable to what happens in this file, so the two branches are 
 deliberately asymmetric in fidelity:
 
 - routed: delegates to routing.route() over a tree-sitter index, then applies the
-  required_hints all-of gate (DESIGN 1.2). This arm is ours; it may be smart.
+  required_hints all-of gate (DESIGN 1.2), then optionally one-hop call closure.
+  This arm is ours; it may be smart.
 - broadcast: replicates upstream Bastet's cli/commands/scan/scan.py: a recursive
   glob("**/*.sol") with NO vendor/test exclusion and NO scope.txt, the whole file as
   payload, one call per (file, detector). This arm must NOT be helped -- any filter
@@ -71,13 +72,37 @@ def _apply_required_hints(tasks: list[Task], repo_index: dict) -> list[Task]:
     return kept
 
 
-def _plan_routed(detectors: list[Detector], repo_index: dict) -> list[Task]:
+def _plan_routed(detectors: list[Detector], repo_index: dict,
+                 closure: bool = False) -> list[Task]:
     unfitted = [d.id for d in detectors if d.signature is None]
     if unfitted:
         raise ValueError(
             f"routed plan requires routing.fit() to have run first; unfitted detectors: "
             f"{unfitted[:5]}{'...' if len(unfitted) > 5 else ''}")
-    return _apply_required_hints(routing.route(detectors, repo_index), repo_index)
+    tasks = _apply_required_hints(routing.route(detectors, repo_index), repo_index)
+    if closure:
+        # Ablation arm R3 (DESIGN 3.2): same routing decision, larger payload. It
+        # changes what each call *sees*, never which calls happen -- so a delta
+        # between this and plain routed is attributable to context alone, and the
+        # call-count comparison against broadcast is unaffected.
+        from .callgraph import expand_tasks
+        stats = expand_tasks(tasks, repo_index)
+        log.info("call closure: %d/%d slices expanded, +%d tokens est",
+                 stats["slices_expanded"], stats["slices"], stats["added_tokens_est"])
+        _LAST_CLOSURE_STATS.clear()
+        _LAST_CLOSURE_STATS.update(stats)
+    return tasks
+
+
+# Written by _plan_routed so the caller can record closure cost in the run
+# manifest without plan() growing a second return value that every call site
+# would have to unpack.
+_LAST_CLOSURE_STATS: dict = {}
+
+
+def last_closure_stats() -> dict:
+    """Closure cost from the most recent routed plan; empty when closure was off."""
+    return dict(_LAST_CLOSURE_STATS)
 
 
 def _plan_broadcast(detectors: list[Detector], repo_root: Path) -> list[Task]:
@@ -120,14 +145,25 @@ def plan(mode: Literal["routed", "broadcast"],
          detectors: list[Detector],
          repo_root: Path,
          repo_index: dict | None = None,
-         signatures: dict | None = None) -> list[Task]:
+         signatures: dict | None = None,
+         closure: bool = False) -> list[Task]:
     """Build the call plan for one repo. `signatures` is the stats dict returned by
     routing.fit() -- fit() itself mutates the detectors, so the dict is accepted only
-    for manifest bookkeeping and is not consulted here."""
+    for manifest bookkeeping and is not consulted here.
+
+    `closure` is routed-only and rejected on the broadcast arm rather than
+    ignored: silently accepting a flag that helps the control condition is
+    exactly the smuggling this module exists to prevent, and a caller that passes
+    it has misunderstood the experiment.
+    """
     if mode == "routed":
         if repo_index is None:
             raise ValueError("routed plan requires a repo_index from solidity.index_repo()")
-        return _plan_routed(detectors, repo_index)
+        return _plan_routed(detectors, repo_index, closure=closure)
     if mode == "broadcast":
+        if closure:
+            raise ValueError(
+                "closure is a routed-arm treatment; enabling it on the broadcast "
+                "control would void the comparison (see module docstring)")
         return _plan_broadcast(detectors, repo_root)
     raise ValueError(f"unknown mode {mode!r}")
