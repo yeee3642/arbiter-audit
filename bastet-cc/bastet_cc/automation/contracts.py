@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 AIS3_BASE_URL = "https://llm-api.zoolab.org/v1"
 AIS3_PINNED_MODEL = "ais3/llama-3.1-8b"
-PROFILE_VERSION = "ais3-fair-ab-v1"
+PROFILE_VERSION = "ais3-fair-ab-v2"
 ADAPTER_VERSION = "dual-surface-v2"
 SCHEMA_VERSION = "bastet-audit-v1"
 SUPPORTED_WORKFLOW = "flashloan"
@@ -189,11 +189,20 @@ class GatewayProfile:
             "adapter_version": self.adapter_version,
             "schema_version": self.schema_version,
             "budget": self.budget.to_dict(),
+            "claim_level": self.claim_level,
         }
 
     @property
     def fingerprint(self) -> str:
         return sha256_json(self.fingerprint_payload())
+
+    @property
+    def claim_level(self) -> str:
+        return (
+            "pipeline-readiness-only"
+            if self.provider_mode == "mock"
+            else "live-provider-evidence"
+        )
 
     def manifest(self) -> dict[str, Any]:
         return {
@@ -203,9 +212,6 @@ class GatewayProfile:
             "credential_source": "environment:AIS3_API_KEY"
             if self.provider_mode == "live"
             else "none:deterministic-mock",
-            "claim_level": "pipeline-readiness-only"
-            if self.provider_mode == "mock"
-            else "live-smoke-not-a-win-claim",
         }
 
 

@@ -264,7 +264,10 @@ bastet_cc/
   executor.py    concurrent execution, resumable
   llm.py         OpenAI-compatible client, lenient JSON recovery, 120 rpm token bucket
   automation/    pinned dual-surface gateway, fair budgets, workflow shim, audit ledger
-  verify.py      single-round refutation pass
+  hermes.py      deterministic target/modifier/caller/callee/state evidence packets
+  twincourt.py   same-model Skeptic verdicts with citation and causality gates
+  verify.py      legacy refutation + durable HERMES/TwinCourt adjudication overlay
+  quality_benchmark.py  shared-calibration fairness audit and paired claim guardrails
   aggregate.py   repo-level decision layer; upstream == prior=1, tau->0
   evaluate.py    corrected scorer + faithful replica of upstream's
   stats.py       paired inference: exact McNemar, sign test, power, n-guarded bootstrap
@@ -326,7 +329,12 @@ bastet-cc power                              # what the TEST design can resolve 
 bastet-cc scan   dev --run dev-routed --arm routed
 bastet-cc scan   dev --run dev-bcast  --arm broadcast     # the control condition
 bastet-cc scan   dev --run dev-closure --arm routed --closure   # ablation R3
+bastet-cc scan   dev --run dev-hermes --arm routed \
+  --quality-treatment hermes_twincourt
 bastet-cc calibrate --run dev-routed         # fit the decision layer on DEV only
+bastet-cc quality-calibrate --run dev-routed # one shared, provenance-carrying DEV fit
+bastet-cc quality-compare --a dev-routed --b dev-hermes \
+  --calibration runs/quality-calibration.json
 bastet-cc evaluate  --run dev-routed --scorer both
 bastet-cc structural --a dev-routed --b dev-bcast         # label-free head to head
 bastet-cc compare   --a dev-routed --b dev-bcast          # paired McNemar + power
@@ -338,6 +346,46 @@ bastet-cc audit                              # leakage + instrument audits
 resulting wall-clock estimate before it starts, so a six-hour run is not begun
 under the impression that it is a one-hour run. `--concurrency` bounds memory;
 it does not bound rate.
+
+### HERMES/TwinCourt quality treatment
+
+`--quality-treatment hermes_twincourt` is an opt-in routed verification
+treatment. HERMES resolves the reported function from the existing tree-sitter
+index, then spends a hard character budget on parser-backed modifier, caller,
+callee, and same-contract state relations. It never substitutes physically
+nearby functions when a relation is missing. TwinCourt sends that packet to an
+isolated Skeptic request on the same configured model; confirmed and rejected
+answers are downgraded to uncertain unless their causal or counter-evidence
+requirements cite real packet fragment IDs.
+
+Detector output remains append-only in `results.jsonl`. Adjudications are
+fsynced to `verify.jsonl` and overlaid when findings are reloaded, so evaluation,
+JSON, Markdown, SARIF, and restart/export all see the same verdict without
+rewriting the raw detector record.
+
+The treatment is rejected on the frozen broadcast control, when verification is
+disabled, or when call closure is also enabled. `quality-compare` refuses
+mismatched models, endpoints/gateway profiles, budgets, subjects, repositories,
+splits, or calibration provenance. DEV is always exploratory. A TEST
+`surpasses` status is possible only after every pre-registered McNemar,
+macro-F1, precision, and false-positive guard passes; otherwise the result is
+explicitly underpowered, inconclusive, inferior, or unfair. Implementation and
+offline tests therefore do not by themselves establish superiority. Mock
+gateway runs can exercise DEV exploration, but a claim-bearing automation TEST
+comparison requires complete nested automation evidence for both arms,
+`provider_mode=live`, and the gateway's fingerprinted
+`live-provider-evidence` claim level. Endpoint-only TEST manifests are refused.
+
+Resume and comparison are fail-closed. A run ID cannot be rebound to a changed
+provider profile, treatment, task plan, or scan configuration. Detection task
+IDs retain their frozen model-and-prompt identity; provider provenance is bound
+by the immutable run manifest. The manifest records a hashed plan and an
+execution summary. `quality-compare` recomputes that summary from
+`tasks.jsonl` and `results.jsonl`, then refuses missing, failed, incomplete, or
+unexpected tasks and any result row without a valid planned task ID. Automation
+fingerprints are recomputed from the full
+immutable gateway payload during both scan and comparison rather than trusted
+as opaque strings.
 
 ### Same-model automation gateway
 

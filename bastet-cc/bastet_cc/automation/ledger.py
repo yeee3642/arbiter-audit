@@ -10,7 +10,7 @@ from threading import RLock
 from typing import Any
 
 from ..redact import redact
-from .contracts import ConfigurationMismatch, GatewayProfile
+from .contracts import ConfigurationMismatch, GatewayProfile, sha256_json
 
 _SENSITIVE_KEYS = frozenset(
     {"authorization", "api_key", "password", "access_token", "refresh_token"}
@@ -164,7 +164,21 @@ def ensure_manifest(path: Path, profile: GatewayProfile) -> dict[str, Any]:
             raise ConfigurationMismatch("existing manifest is unreadable") from exc
         if not isinstance(existing, dict):
             raise ConfigurationMismatch("existing manifest must be a JSON object")
-        if existing.get("fingerprint") != profile.fingerprint:
+        expected_payload = profile.fingerprint_payload()
+        existing_payload = {
+            key: existing.get(key) for key in expected_payload
+        }
+        existing_fingerprint = existing.get("fingerprint")
+        if (
+            not isinstance(existing_fingerprint, str)
+            or sha256_json(existing_payload) != existing_fingerprint
+        ):
+            raise ConfigurationMismatch(
+                "existing manifest fingerprint differs (invalid payload binding)")
+        if (
+            existing_payload != expected_payload
+            or existing_fingerprint != profile.fingerprint
+        ):
             raise ConfigurationMismatch("existing manifest fingerprint differs")
         return existing
 

@@ -80,7 +80,10 @@ async def run_tasks(tasks: list[Task], client: LLMClient, store: RunStore,
         if result.error in TRANSIENT_ERRORS:
             errors[result.error] += 1  # not persisted: the next resume retries it
         else:
-            found = [to_dict(f) for f in parse_findings(t, result)]
+            found = [
+                to_dict(f) for f in parse_findings(
+                    t, result, resolved_task_id=tid)
+            ]
             # Persist before counting: a crash after this line costs nothing on resume.
             store.append(tid, result, found)
             if result.error:

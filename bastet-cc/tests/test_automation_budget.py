@@ -424,6 +424,14 @@ class TestLedger:
                 "fingerprint": "3" * 64,
             },
             lambda profile: {**profile.manifest(), "fingerprint": "0" * 64},
+            lambda profile: {
+                **profile.manifest(),
+                "provider_mode": "live",
+            },
+            lambda profile: {
+                **profile.manifest(),
+                "claim_level": "live-provider-evidence",
+            },
         ],
     )
     def test_ensure_manifest_rejects_immutable_manifest_mismatch(

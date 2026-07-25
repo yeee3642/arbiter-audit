@@ -13,10 +13,13 @@ arm and not the other belongs in `plan.py` or it does not belong at all.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 import typer
 
@@ -38,6 +41,185 @@ RUNS = ROOT / "runs"
 DEFAULT_MODEL = AIS3_PINNED_MODEL
 DEFAULT_BASE_URL = AIS3_BASE_URL
 PROMPT_VERSION = "v1"
+QUALITY_TREATMENTS = ("none", "hermes_twincourt")
+
+
+def _canonical_fingerprint(payload: dict[str, Any]) -> str:
+    body = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+def _gateway_root(url: str) -> str:
+    root = url.strip().rstrip("/")
+    return root[:-3] if root.endswith("/v1") else root
+
+
+def _provider_profile(
+    *, automation_url: str | None, experiment: str | None,
+    subject: str | None, model: str,
+) -> tuple[str, dict[str, Any] | None]:
+    """Return a cache fingerprint and claim-audit evidence without credentials."""
+    if not automation_url:
+        fingerprint = _canonical_fingerprint({
+            "mode": "direct",
+            "endpoint": DEFAULT_BASE_URL,
+            "model": model,
+        })
+        return fingerprint, None
+
+    import httpx
+
+    gateway_root = _gateway_root(automation_url)
+    parsed_url = urlparse(gateway_root)
+    if (
+        parsed_url.scheme != "http"
+        or parsed_url.hostname not in {"127.0.0.1", "localhost", "::1"}
+    ):
+        raise typer.BadParameter(
+            "--automation-url must be a loopback HTTP gateway")
+    manifest_url = gateway_root + "/manifest"
+    try:
+        response = httpx.get(manifest_url, timeout=10.0)
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise typer.BadParameter(
+            f"could not read automation fairness manifest at {manifest_url}: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise typer.BadParameter(
+            "automation fairness manifest must be a JSON object")
+
+    fingerprint_fields = (
+        "experiment_id",
+        "subject_id",
+        "endpoint",
+        "model",
+        "provider_mode",
+        "selected_workflow",
+        "workflow_sha256",
+        "prompt_sha256",
+        "profile_version",
+        "adapter_version",
+        "schema_version",
+        "budget",
+        "claim_level",
+    )
+    required = ("fingerprint", *fingerprint_fields)
+    missing = [name for name in required if payload.get(name) in (None, "")]
+    if missing:
+        raise typer.BadParameter(
+            "automation fairness manifest is non-claimable; missing "
+            + ", ".join(missing))
+    if payload["model"] != model:
+        raise typer.BadParameter(
+            f"gateway manifest model {payload['model']!r} does not match {model!r}")
+    if str(payload["endpoint"]).rstrip("/") != AIS3_BASE_URL:
+        raise typer.BadParameter(
+            f"gateway manifest endpoint must be pinned to {AIS3_BASE_URL}")
+    claim_levels = {
+        "mock": "pipeline-readiness-only",
+        "live": "live-provider-evidence",
+    }
+    if payload["provider_mode"] not in claim_levels:
+        raise typer.BadParameter(
+            "gateway manifest provider_mode must be 'mock' or 'live'")
+    if payload["claim_level"] != claim_levels[payload["provider_mode"]]:
+        raise typer.BadParameter(
+            "gateway manifest claim_level does not match provider_mode")
+    if payload["experiment_id"] != experiment:
+        raise typer.BadParameter(
+            "gateway manifest experiment_id does not match "
+            "--automation-experiment")
+    if payload["subject_id"] != subject:
+        raise typer.BadParameter(
+            "gateway manifest subject_id does not match --automation-subject")
+    if not isinstance(payload["budget"], dict):
+        raise typer.BadParameter(
+            "automation fairness manifest budget must be a JSON object")
+    from .automation.contracts import BudgetLimits
+    budget_fields = set(BudgetLimits.__dataclass_fields__)
+    if set(payload["budget"]) != budget_fields or any(
+        type(value) is not int or value <= 0
+        for value in payload["budget"].values()
+    ):
+        raise typer.BadParameter(
+            "automation fairness manifest budget must contain exactly "
+            "global_calls, global_tokens, per_arm_calls, and per_arm_tokens "
+            "as positive integers")
+    try:
+        validated_budget = BudgetLimits(**payload["budget"]).to_dict()
+    except (TypeError, ValueError) as exc:
+        raise typer.BadParameter(
+            f"automation fairness manifest budget is invalid: {exc}") from exc
+    expected_fingerprint = _canonical_fingerprint({
+        name: payload[name] for name in fingerprint_fields
+    })
+    if payload["fingerprint"] != expected_fingerprint:
+        raise typer.BadParameter(
+            "automation fairness manifest fingerprint does not match its payload")
+
+    audit = {
+        **{name: payload[name] for name in fingerprint_fields},
+        "fingerprint": payload["fingerprint"],
+        "budget": validated_budget,
+        "evidence_complete": True,
+    }
+    return str(payload["fingerprint"]), audit
+
+
+def _validate_quality_options(
+    *, treatment: str, budget_chars: int, arm: str,
+    verify: bool, closure: bool,
+) -> str:
+    normalized = treatment.strip().lower()
+    if normalized not in QUALITY_TREATMENTS:
+        raise typer.BadParameter(
+            "quality treatment must be 'none' or 'hermes_twincourt'")
+    if budget_chars <= 0:
+        raise typer.BadParameter("--quality-budget-chars must be positive")
+    if normalized != "none":
+        if arm != "routed":
+            raise typer.BadParameter(
+                "HERMES/TwinCourt is a routed-arm treatment; broadcast is the "
+                "frozen control")
+        if not verify:
+            raise typer.BadParameter(
+                "HERMES/TwinCourt requires verification to be enabled")
+        if closure:
+            raise typer.BadParameter(
+                "closure and HERMES/TwinCourt are separate treatments; run "
+                "them independently")
+    return normalized
+
+
+def _quality_manifest_fields(
+    *, treatment: str, budget_chars: int, provider_fingerprint: str,
+) -> dict[str, Any]:
+    from .hermes import HERMES_VERSION
+    from .twincourt import (
+        OVERLAY_SCHEMA_VERSION,
+        TWINCOURT_PROMPT_VERSION,
+        TWINCOURT_SCHEMA_VERSION,
+        TWINCOURT_VERSION,
+    )
+
+    return {
+        "provider_profile": {
+            "fingerprint": provider_fingerprint,
+            "credential_recorded": False,
+        },
+        "quality_treatment": treatment,
+        "quality_budget_chars": budget_chars,
+        "quality_versions": {
+            "hermes": HERMES_VERSION,
+            "twincourt": TWINCOURT_VERSION,
+            "twincourt_prompt": TWINCOURT_PROMPT_VERSION,
+            "twincourt_schema": TWINCOURT_SCHEMA_VERSION,
+            "overlay_schema": OVERLAY_SCHEMA_VERSION,
+        } if treatment != "none" else None,
+    }
 
 
 def _api_key() -> str:
@@ -165,6 +347,16 @@ def scan(
     verify: bool = typer.Option(True, help="run the refutation pass"),
     closure: bool = typer.Option(
         False, help="routed only: append one-hop callees to each slice"),
+    quality_treatment: str = typer.Option(
+        "none",
+        "--quality-treatment",
+        help="none | hermes_twincourt (routed verification treatment)",
+    ),
+    quality_budget_chars: int = typer.Option(
+        24_000,
+        "--quality-budget-chars",
+        help="hard HERMES/legacy verifier context budget in characters",
+    ),
     automation_url: str | None = typer.Option(
         None,
         "--automation-url",
@@ -187,7 +379,12 @@ def scan(
     from .llm import LLMClient
     from .plan import plan
     from .routing import fit
-    from .runstore import RunStore
+    from .runstore import (
+        RunConfigurationMismatch,
+        RunStore,
+        task_id as make_task_id,
+        task_plan_sha256,
+    )
     from .solidity import index_repo
 
     if arm not in ("routed", "broadcast"):
@@ -207,6 +404,19 @@ def scan(
     if automation_url and model != AIS3_PINNED_MODEL:
         raise typer.BadParameter(
             f"automation mode requires model {AIS3_PINNED_MODEL}")
+    quality_treatment = _validate_quality_options(
+        treatment=quality_treatment,
+        budget_chars=quality_budget_chars,
+        arm=arm,
+        verify=verify,
+        closure=closure,
+    )
+    provider_fingerprint, automation_audit = _provider_profile(
+        automation_url=automation_url,
+        experiment=automation_experiment,
+        subject=automation_subject,
+        model=model,
+    )
 
     repos = _split_repos(target) if target in ("train_syn", "dev", "test") else [target]
     paths = [Path(r) if Path(r).is_dir() else _repo_dir(r) for r in repos]
@@ -223,8 +433,12 @@ def scan(
             from .plan import last_closure_stats
             closure_stats.append({"repo": ix["repo"], **last_closure_stats()})
 
+    planned_ids = {
+        make_task_id(task, model, PROMPT_VERSION)
+        for task in tasks
+    }
     store = RunStore(RUNS / run)
-    store.write_manifest({
+    manifest_cfg = {
         "arm": arm, "model": model, "prompt_version": PROMPT_VERSION,
         "target": target, "repos": repos, "concurrency": concurrency,
         "rpm": None if automation_url else (rpm or None),
@@ -233,24 +447,37 @@ def scan(
             if automation_url and not automation_url.rstrip("/").endswith("/v1")
             else automation_url or DEFAULT_BASE_URL
         ),
-        "automation": {
-            "experiment_id": automation_experiment,
-            "subject_id": automation_subject,
-        } if automation_url else None,
+        "automation": automation_audit,
         "detectors": len(dets), "detector_dirs": [str(d) for d in _detector_dirs(synth)],
+        "planned_tasks": len(planned_ids),
+        "task_plan_sha256": task_plan_sha256(planned_ids),
         "verify": verify, "closure": closure,
+        **_quality_manifest_fields(
+            treatment=quality_treatment,
+            budget_chars=quality_budget_chars,
+            provider_fingerprint=provider_fingerprint,
+        ),
         "closure_stats": closure_stats or None,
         "splits_sha256": json.loads((DATA / "splits.json").read_text()).get("splits_sha256"),
-    })
+    }
+    try:
+        store.write_manifest(manifest_cfg, strict_resume=True)
+    except RunConfigurationMismatch as exc:
+        raise typer.BadParameter(
+            f"run {run!r} cannot resume under a different profile: {exc}"
+        ) from exc
     store.write_tasks(tasks, model, PROMPT_VERSION)
 
     done = store.done_ids()
-    typer.echo(f"{arm}: {len(tasks)} tasks over {len(repos)} repos, {len(done)} already done")
+    planned_done = done & planned_ids
+    typer.echo(
+        f"{arm}: {len(planned_ids)} tasks over {len(repos)} repos, "
+        f"{len(planned_done)} already done")
 
     # The gateway caps requests per minute, not concurrency, so wall-clock is
     # governed by the cap once the plan is larger than a minute's worth. Saying
     # so up front stops a 6-hour run from being started as if it were a 1-hour one.
-    remaining = len(tasks) - len(done)
+    remaining = len(planned_ids) - len(planned_done)
     if rpm and remaining and not automation_url:
         hours = remaining / rpm / 60
         typer.echo(f"  at {rpm} rpm this is ~{hours:.1f} h of wall clock"
@@ -290,15 +517,36 @@ def scan(
                 log_path=RUNS / run / "llm_log.jsonl",
             )
         try:
-            await run_tasks(tasks, client, store)
+            try:
+                await run_tasks(tasks, client, store)
+            finally:
+                execution = store.result_summary(planned_ids)
+                execution["scan_completed"] = False
+                store.update_execution(execution)
             if verify:
-                from .verify import verify_findings
-                findings = store.load_findings()
+                from .verify import VerifyPolicy, verify_findings
+                findings = store.load_findings(apply_verification=False)
                 by_repo = {ix["repo"]: ix for ix in indexes}
                 for repo_name, ix in by_repo.items():
                     subset = [f for f in findings if getattr(f, "repo", None) == repo_name]
                     if subset:
-                        await verify_findings(subset, ix, client, store)
+                        await verify_findings(
+                            subset,
+                            ix,
+                            client,
+                            store,
+                            policy=(
+                                VerifyPolicy.all_on()
+                                if quality_treatment != "none"
+                                else None
+                            ),
+                            treatment=quality_treatment,
+                            context_chars=quality_budget_chars,
+                            provider_fingerprint=provider_fingerprint,
+                        )
+            execution = store.result_summary(planned_ids)
+            execution["scan_completed"] = True
+            store.update_execution(execution)
         finally:
             if client.limiter is not None:
                 st = client.limiter.stats()
@@ -419,6 +667,178 @@ def calibrate(
     out.write_text(json.dumps(calib.to_dict(), indent=2, default=list))
     typer.echo(f"\nwrote {out}  (tau={calib.tau}, "
                f"{len(calib.detector_prior)} detector priors)")
+
+
+def _quality_calibration(path: Path):
+    from .aggregate import Calibration
+    from .quality_benchmark import freeze_calibration
+
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise typer.BadParameter(
+            f"quality calibration is unreadable: {path}") from exc
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("calibration"), dict
+    ):
+        raise typer.BadParameter(
+            "quality calibration must contain calibration, sha256, "
+            "source_run, and source_split")
+    return freeze_calibration(
+        Calibration.from_dict(payload["calibration"]),
+        source_run=str(payload.get("source_run") or ""),
+        source_split=str(payload.get("source_split") or ""),
+        sha256=str(payload.get("sha256") or ""),
+    )
+
+
+def _usage_cost(path: Path, *id_fields: str) -> dict[str, int]:
+    totals = {
+        "completed_items": 0,
+        "model_calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
+    if not path.exists():
+        return totals
+    seen: set[str] = set()
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            item_id = next(
+                (str(row.get(field)) for field in id_fields if row.get(field)),
+                "",
+            )
+            if not item_id or item_id in seen:
+                continue
+            seen.add(item_id)
+            usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+            totals["completed_items"] += 1
+            totals["model_calls"] += int(usage.get("attempts") or 1)
+            totals["input_tokens"] += int(usage.get("input_tokens") or 0)
+            totals["output_tokens"] += int(usage.get("output_tokens") or 0)
+    return totals
+
+
+def _run_quality_cost(run_dir: Path) -> dict[str, int]:
+    detect = _usage_cost(run_dir / "results.jsonl", "task_id")
+    verify = _usage_cost(
+        run_dir / "verify.jsonl", "adjudication_id", "verify_id")
+    return {
+        "detection_items": detect["completed_items"],
+        "verification_items": verify["completed_items"],
+        "model_calls": detect["model_calls"] + verify["model_calls"],
+        "input_tokens": detect["input_tokens"] + verify["input_tokens"],
+        "output_tokens": detect["output_tokens"] + verify["output_tokens"],
+    }
+
+
+@app.command("quality-calibrate")
+def quality_calibrate(
+    run: str = typer.Option(..., "--run", help="DEV run used for calibration"),
+    split: str = typer.Option("dev", help="must be dev"),
+    out: Path = typer.Option(RUNS / "quality-calibration.json"),
+) -> None:
+    """Freeze one provenance-carrying DEV calibration for both quality arms."""
+    from .aggregate import fit_calibration
+    from .quality_benchmark import audit_execution, freeze_calibration
+    from .runstore import RunStore
+
+    if split != "dev":
+        raise typer.BadParameter(
+            "quality calibration is frozen on DEV; split must be 'dev'")
+    store = RunStore(RUNS / run)
+    if not store.manifest_path.exists():
+        raise typer.BadParameter(f"run has no manifest: {run}")
+    manifest = store.claim_manifest()
+    if str(manifest.get("target") or "").lower() != split:
+        raise typer.BadParameter(
+            f"run {run!r} targets {manifest.get('target')!r}, not {split!r}")
+    execution = audit_execution(manifest)
+    if execution["status"] != "ok":
+        raise typer.BadParameter(
+            f"run {run!r} is incomplete and cannot calibrate: "
+            f"{execution['message']}")
+    findings = store.load_findings(
+        allowed_task_ids=store.planned_ids())
+    calibration = fit_calibration(
+        findings, _ground_truth(), _split_repos(split))
+    artifact = freeze_calibration(
+        calibration, source_run=run, source_split=split)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(artifact.to_dict(), indent=2, default=list),
+        encoding="utf-8",
+    )
+    typer.echo(f"wrote {out}")
+    typer.echo(f"  sha256={artifact.sha256} source={run}:{split}")
+
+
+@app.command("quality-compare")
+def quality_compare(
+    a: str = typer.Option(..., "--a", help="baseline run id"),
+    b: str = typer.Option(..., "--b", help="treatment run id"),
+    calibration: Path = typer.Option(
+        ..., help="shared quality-calibration artifact frozen on DEV"),
+    out: Path = typer.Option(None, help="write the audited result as JSON"),
+) -> None:
+    """Fair paired quality comparison with explicit claim/refusal status."""
+    from .quality_benchmark import BenchmarkArm, benchmark_quality
+    from .runstore import RunStore
+
+    stores: dict[str, RunStore] = {}
+    for label, run_id in (("a", a), ("b", b)):
+        store = RunStore(RUNS / run_id)
+        if not store.manifest_path.exists():
+            raise typer.BadParameter(f"run {run_id!r} has no manifest")
+        stores[label] = store
+
+    result = benchmark_quality(
+        BenchmarkArm(
+            label=a,
+            manifest=stores["a"].claim_manifest(),
+            findings=stores["a"].load_findings(
+                allowed_task_ids=stores["a"].planned_ids()),
+            cost=_run_quality_cost(stores["a"].run_dir),
+        ),
+        BenchmarkArm(
+            label=b,
+            manifest=stores["b"].claim_manifest(),
+            findings=stores["b"].load_findings(
+                allowed_task_ids=stores["b"].planned_ids()),
+            cost=_run_quality_cost(stores["b"].run_dir),
+        ),
+        _ground_truth(),
+        _quality_calibration(calibration),
+    )
+
+    target = out or RUNS / f"quality-{a}-vs-{b}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(result, indent=2, default=list),
+        encoding="utf-8",
+    )
+    typer.echo(f"claim_status={result['claim_status']}")
+    if result["claim_status"] == "unfair_comparison":
+        for reason in result["audit"]["refusal"]["reasons"]:
+            typer.secho(f"  refused: {reason}", fg=typer.colors.RED)
+        typer.echo(f"wrote {target}")
+        raise typer.Exit(2)
+
+    arms = result["arms"]
+    assert isinstance(arms, dict)
+    typer.echo(
+        f"  {a}: macro-F1={arms['a']['quality']['macro_f1']:.4f} "
+        f"findings={arms['a']['findings']['n_findings']}")
+    typer.echo(
+        f"  {b}: macro-F1={arms['b']['quality']['macro_f1']:.4f} "
+        f"findings={arms['b']['findings']['n_findings']}")
+    typer.echo(f"wrote {target}")
 
 
 @app.command()
@@ -834,7 +1254,7 @@ def automation_serve(
         f"({service.profile.provider_mode}, {AIS3_PINNED_MODEL})"
     )
     typer.echo(f"manifest: {experiment_dir / 'manifest.json'}")
-    typer.echo("claim boundary: pipeline/live-smoke readiness only; no win claim")
+    typer.echo("claim boundary: pipeline/provider evidence only; no win claim")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

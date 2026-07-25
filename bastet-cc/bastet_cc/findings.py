@@ -14,8 +14,10 @@ to check it.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, fields
 
 from .routing import Task
 from .llm import LLMResult
@@ -48,6 +50,13 @@ class Finding:
     start_line: int = 0
     end_line: int = 0
 
+    # Compact view of the latest durable verifier overlay. Rich TwinCourt
+    # evidence stays in verify.jsonl; keeping only these identifiers here avoids
+    # duplicating source context into every JSON/SARIF/report export.
+    adjudication_id: str = ""
+    adjudication_reason: str = ""
+    adjudication_version: str = ""
+
 
 _FIELD_NAMES = {f.name for f in fields(Finding)}
 
@@ -74,7 +83,12 @@ def _clamp_confidence(raw: object) -> float:
     return min(1.0, max(0.0, v))
 
 
-def parse_findings(task: Task, result: LLMResult) -> list[Finding]:
+def parse_findings(
+    task: Task,
+    result: LLMResult,
+    *,
+    resolved_task_id: str | None = None,
+) -> list[Finding]:
     """LLM output -> normalized Findings for one task. Never raises: garbage in,
     empty list out, and the error is already recorded on the LLMResult."""
     if result.parsed is None or not isinstance(result.parsed, dict):
@@ -87,7 +101,8 @@ def parse_findings(task: Task, result: LLMResult) -> list[Finding]:
     # not exist at module load time.
     from .prompts import PROMPT_VERSION
     from .runstore import task_id as make_task_id
-    tid = make_task_id(task, result.model, PROMPT_VERSION)
+    tid = resolved_task_id or make_task_id(
+        task, result.model, PROMPT_VERSION)
 
     repo = task.slices[0].repo if task.slices else ""
     tag = canonical_tag(task.detector.tags[0]) if task.detector.tags else ""
@@ -139,6 +154,38 @@ def parse_findings(task: Task, result: LLMResult) -> list[Finding]:
 
 def to_dict(finding: Finding) -> dict:
     return asdict(finding)
+
+
+FINDING_KEY_VERSION = "finding-key-v1"
+
+
+def finding_key(finding: Finding) -> str:
+    """Stable identity for one claim, independent of its verifier verdict.
+
+    A task can legitimately return several findings, so task_id is not a finding
+    key. The claim text and parser-backed location are included to keep distinct
+    reports from the same detector call separate. Verdict/adjudication fields are
+    deliberately excluded so an overlay can be found again after restart.
+    """
+    payload = {
+        "version": FINDING_KEY_VERSION,
+        "repo": finding.repo,
+        "task_id": finding.task_id,
+        "detector_id": finding.detector_id,
+        "tag": finding.tag,
+        "subtag": finding.subtag,
+        "severity": finding.severity,
+        "path": finding.path,
+        "contract": finding.contract,
+        "function": finding.function,
+        "description": finding.description,
+        "evidence": finding.evidence,
+        "start_line": finding.start_line,
+        "end_line": finding.end_line,
+    }
+    canonical = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:24]
 
 
 def from_dict(d: dict) -> Finding:

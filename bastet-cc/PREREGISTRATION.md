@@ -131,3 +131,49 @@ The test suite (157 tests) is the guard: `upstream_equivalence_report` in
 particular pins the control arm to upstream's literal rule, and if that identity
 breaks, every A/B number is comparing against something that is no longer the
 baseline.
+
+## 8. 2026-07-25 quality-treatment benchmark addendum
+
+Frozen on 2026-07-25, before any quality-treatment TEST comparison is executed.
+
+Quality scoring is refused unless both run manifests prove the same fairness
+envelope. Non-automation runs may be used for exploratory non-TEST scoring and
+must share `model`, `base_url`, `repos`, split name, and split SHA-256. Every
+claim-bearing TEST comparison must instead provide complete automation evidence
+for both arms: the same profile `fingerprint`, immutable `budget`, `subject_id`,
+`repos`, split name, and split SHA-256. Missing or mismatched evidence is
+reported as an explicit refusal field; it is never silently imputed.
+
+The comparison independently recomputes each automation fingerprint from the
+complete immutable profile payload. Each run ID is bound to one immutable scan
+configuration, while detection task IDs retain their frozen model-and-prompt
+identity. Provider provenance is enforced through the immutable run manifest.
+Both arms must record the same task-plan SHA-256 and an execution summary proving
+that every planned task completed successfully, with zero failed, missing, or
+unexpected task records, and zero valid-JSON rows lacking a planned task ID.
+The comparison recomputes this summary from the task and result logs instead of
+trusting the recorded counters, and loads only findings bound to that plan.
+Otherwise scoring is refused before predictions are constructed.
+
+Mock automation is exploratory only. Every claim-bearing comparison on TEST
+requires both fingerprinted automation manifests to declare
+`provider_mode="live"` and `claim_level="live-provider-evidence"`. That claim
+level establishes provider provenance only; it does not itself establish a
+quality win.
+
+Both arms must share exactly one calibration artefact. The benchmark records that
+artefact's SHA-256 and provenance, and TEST scoring is refused unless the
+calibration source is DEV. The benchmark never fits one calibration per arm and
+never refits on TEST.
+
+Claim language is frozen to deterministic guardrails, with arm A defined as the
+baseline and arm B as `hermes_twincourt`. Non-TEST output is
+`claim_status="exploratory"` and failed fairness evidence is
+`claim_status="unfair_comparison"`. TEST below 25 discordant decisions is
+`underpowered`, regardless of the p-value. At or above that floor, a
+`surpasses` claim requires exact McNemar `p < 0.05` in favour of B, B macro-F1
+not below A, B pooled precision no more than 0.02 below A, and no more than a
+10% false-positive increase. The false-positive limit may be waived only when
+macro-F1 strictly improves and McNemar already significantly favours B.
+Significance in favour of A, or a lower B macro-F1, is `inferior`; all other
+claim-bearing TEST outcomes are `inconclusive`.

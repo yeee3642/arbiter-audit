@@ -12,10 +12,17 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from bastet_cc.findings import Finding
 from bastet_cc.llm import LLMResult
 from bastet_cc.routing import Detector, Slice, Task
-from bastet_cc.runstore import RunStore, task_id
+from bastet_cc.runstore import (
+    RunConfigurationMismatch,
+    RunStore,
+    task_id,
+    task_plan_sha256,
+)
 
 
 def _task(det_id="d1", path="A.sol", repo="r1") -> Task:
@@ -162,3 +169,89 @@ def test_manifest_preserves_created_at_across_resume(tmp_path):
     store.write_manifest({"arm": "routed", "resumed": True})
     assert store.read_manifest()["created_at"] == first
     assert store.read_manifest()["resumed"] is True
+
+
+def test_strict_resume_rejects_provider_profile_changes(tmp_path):
+    store = RunStore(tmp_path / "run")
+    store.write_manifest(
+        {"provider_profile": {"fingerprint": "provider-a"}},
+        strict_resume=True,
+    )
+    store.update_execution({"scan_completed": True})
+    store.write_manifest(
+        {"provider_profile": {"fingerprint": "provider-a"}},
+        strict_resume=True,
+    )
+    assert store.read_manifest()["execution"]["scan_completed"] is True
+
+    with pytest.raises(
+        RunConfigurationMismatch, match="provider_profile"
+    ):
+        store.write_manifest(
+            {"provider_profile": {"fingerprint": "provider-b"}},
+            strict_resume=True,
+        )
+
+
+def test_result_summary_binds_completion_errors_and_plan_hash(tmp_path):
+    store = RunStore(tmp_path / "run")
+    store.append("task-ok", _result(), [])
+    failed = LLMResult(
+        text="{}", parsed={}, model="m", input_tokens=1,
+        output_tokens=1, latency_s=0.1, attempts=1,
+        error="json_invalid",
+    )
+    store.append("task-failed", failed, [])
+    store.append("task-unexpected", _result(), [])
+    planned = {"task-ok", "task-failed", "task-missing"}
+
+    summary = store.result_summary(planned)
+
+    assert summary["planned_tasks"] == 3
+    assert summary["completed_tasks"] == 2
+    assert summary["successful_tasks"] == 1
+    assert summary["failed_tasks"] == 1
+    assert summary["missing_tasks"] == 1
+    assert summary["unexpected_tasks"] == 1
+    assert summary["invalid_result_rows"] == 0
+    assert summary["error_counts"] == {"json_invalid": 1}
+    assert summary["planned_task_ids_sha256"] == task_plan_sha256(planned)
+
+
+def test_claim_manifest_recomputes_logs_and_invalidates_stale_summary(tmp_path):
+    store = RunStore(tmp_path / "run")
+    task = _task()
+    tid = task_id(task, "m", "v1")
+    store.write_manifest({
+        "planned_tasks": 1,
+        "task_plan_sha256": task_plan_sha256({tid}),
+    })
+    store.write_tasks([task], "m", "v1")
+    store.append(tid, _result(), [])
+    summary = store.result_summary({tid})
+    summary["scan_completed"] = True
+    store.update_execution(summary)
+    assert store.claim_manifest()["execution"]["scan_completed"] is True
+
+    store.append("unexpected", _result(), [])
+    audited = store.claim_manifest()["execution"]
+    assert audited["unexpected_tasks"] == 1
+    assert audited["scan_completed"] is False
+
+
+def test_invalid_task_id_rows_are_counted_and_cannot_inject_findings(tmp_path):
+    store = RunStore(tmp_path / "run")
+    task = _task()
+    tid = task_id(task, "m", "v1")
+    store.write_tasks([task], "m", "v1")
+    store.append(tid, _result(), [])
+    with store.results_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({
+            "error": None,
+            "findings": [_finding_dict(description="injected")],
+        }) + "\n")
+
+    summary = store.result_summary({tid})
+
+    assert summary["invalid_result_rows"] == 1
+    assert store.load_findings(allowed_task_ids={tid}) == []
