@@ -1,0 +1,523 @@
+[
+ {
+  "id": "synth__accounting_error",
+  "name": "Accounting Error",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Accounting Error"
+  ],
+  "routing_hints": [
+   "totalAssets",
+   "exchangeRate",
+   "accrue",
+   "totalBorrows",
+   "parameter",
+   "totalShares",
+   "safeCall",
+   "dai",
+   "_burn",
+   "shares",
+   "tokenAddresses",
+   "SafeERC20",
+   "_updateRewardsPerToken",
+   "ethDelta"
+  ],
+  "prompt_chars": 4753,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__bridge",
+  "name": "Bridge-HardcodedPredicateAddress",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Bridge"
+  ],
+  "routing_hints": [
+   "finalizeWithdrawal",
+   "l1Token",
+   "l2Token",
+   "POS_BRIDGE"
+  ],
+  "prompt_chars": 4978,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__compound",
+  "name": "Compound-Reward Manipulation via Exchange Rate",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Compound"
+  ],
+  "routing_hints": [
+   "Comptroller",
+   "cToken",
+   "CErc20",
+   "exchangeRateStored",
+   "borrowIndex",
+   "CToken",
+   "CTokenInterface",
+   "ComptrollerInterface"
+  ],
+  "prompt_chars": 5707,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__cross_chain",
+  "name": "Cross-Chain Vulnerabilities",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Cross-Chain"
+  ],
+  "routing_hints": [
+   "chainId",
+   "sourceAddress",
+   "sourceChain",
+   "commandId",
+   "destinationChain",
+   "payloadHash",
+   "isCommandExecuted",
+   "callContract",
+   "callContractWithToken"
+  ],
+  "prompt_chars": 7085,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__dao",
+  "name": "DAO-Governance Logic Flaws",
+  "source_workflow": "synthesized",
+  "tags": [
+   "DAO"
+  ],
+  "routing_hints": [
+   "propose",
+   "quorum",
+   "shares",
+   "delegate",
+   "Cohort",
+   "proposalThresholdBps",
+   "removeMember",
+   "proposalThreshold",
+   "addMember",
+   "getVotes",
+   "cancel"
+  ],
+  "prompt_chars": 5518,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__eip4494",
+  "name": "EIP4494-Permit-Not-EIP-Compliant",
+  "source_workflow": "synthesized",
+  "tags": [
+   "EIP4494"
+  ],
+  "routing_hints": [
+   "permit",
+   "nonces",
+   "DOMAIN_SEPARATOR",
+   "PERMIT_TYPEHASH",
+   "tokenId",
+   "PermitSingle",
+   "block.chainid",
+   "ecrecover"
+  ],
+  "prompt_chars": 5817,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__eip712",
+  "name": "EIP712-Signature-Verification-Flaws",
+  "source_workflow": "synthesized",
+  "tags": [
+   "EIP712"
+  ],
+  "routing_hints": [
+   "DOMAIN_SEPARATOR",
+   "_hashTypedDataV4",
+   "EIP712",
+   "hashStruct",
+   "ecrecover",
+   "signer",
+   "block.chainid"
+  ],
+  "prompt_chars": 4616,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__erc1155",
+  "name": "ERC1155-Standard Compliance and Callback Safety",
+  "source_workflow": "synthesized",
+  "tags": [
+   "ERC1155"
+  ],
+  "routing_hints": [
+   "onERC1155Received",
+   "onERC1155BatchReceived",
+   "safeBatchTransferFrom",
+   "uri",
+   "RentalOrder",
+   "ItemType",
+   "RentalAssetUpdate",
+   "_addTokenEnumeration",
+   "_removeTokenEnumeration",
+   "reclaimRentalOrder",
+   "removeRentals",
+   "rentalId"
+  ],
+  "prompt_chars": 6661,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__erc777",
+  "name": "ERC777-Callback-Reentrancy",
+  "source_workflow": "synthesized",
+  "tags": [
+   "ERC777"
+  ],
+  "routing_hints": [
+   "tokensReceived",
+   "rentalWallet",
+   "_giveToken",
+   "commandId"
+  ],
+  "prompt_chars": 4335,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__gnosis_safe",
+  "name": "Gnosis Safe Extension Missing Authorization and Validation",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Gnosis safe"
+  ],
+  "routing_hints": [
+   "checkSignatures",
+   "getOwners",
+   "isOwner",
+   "Enum.Operation",
+   "checkAfterExecution",
+   "checkTransaction",
+   "enableModule",
+   "fallbackHandler",
+   "stopRent",
+   "setGuard",
+   "execTransactionFromModule",
+   "Errors.GuardPolicy_UnauthorizedSelector",
+   "_calculatePaymentProRata"
+  ],
+  "prompt_chars": 8137,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__governance",
+  "name": "Governance",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Governance"
+  ],
+  "routing_hints": [
+   "propose",
+   "castVote",
+   "quorum",
+   "timelock",
+   "votingPower",
+   "votingPeriod",
+   "executeAction",
+   "votingDelay",
+   "proposal",
+   "activeProposal",
+   "addMember",
+   "setMinimumBidIncrement",
+   "onlySigners"
+  ],
+  "prompt_chars": 5469,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__liquidation",
+  "name": "Liquidation-Process-Flaws",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Liquidation"
+  ],
+  "routing_hints": [
+   "liquidate",
+   "healthFactor",
+   "collateralFactor",
+   "seize",
+   "repay",
+   "id2asset",
+   "NotLiquidatable",
+   "SlippageError",
+   "liquidationCost",
+   "CrTooHigh",
+   "DebtChanged",
+   "FlashCallbackData",
+   "MIN_COLLATERIZATION_RATIO",
+   "_calculateLiquidation"
+  ],
+  "prompt_chars": 6270,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__mev",
+  "name": "MEV-FrontRunAndOrderingDependency",
+  "source_workflow": "synthesized",
+  "tags": [
+   "MEV"
+  ],
+  "routing_hints": [
+   "deadline",
+   "minAmountOut",
+   "swap",
+   "collect",
+   "liquidity",
+   "tokensOwed0",
+   "tokensOwed1",
+   "slot0",
+   "tickLower",
+   "tickUpper",
+   "withdrawApproval",
+   "b"
+  ],
+  "prompt_chars": 4887,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__opensea",
+  "name": "Opensea-Integration-Flaws",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Opensea"
+  ],
+  "routing_hints": [
+   "RentalOrder",
+   "_deriveRentalOrderHash",
+   "rentalWallet",
+   "seaportOrderHash",
+   "isRental",
+   "rentDuration",
+   "toRentalId",
+   "orderType",
+   "PREFIX_CONTRACT_CALL_APPROVED_WITH_MINT"
+  ],
+  "prompt_chars": 5123,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__pause",
+  "name": "Pause",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Pause"
+  ],
+  "routing_hints": [
+   "pause",
+   "unpause",
+   "whenNotPaused",
+   "whenPaused",
+   "Pausable",
+   "ownerOf",
+   "tokenId"
+  ],
+  "prompt_chars": 6940,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__re_org_attack",
+  "name": "Re-org Attack",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Re-org Attack"
+  ],
+  "routing_hints": [
+   "blockhash",
+   "block.number",
+   "governance",
+   "_publications"
+  ],
+  "prompt_chars": 5254,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__replay_attack",
+  "name": "Replay Attack",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Replay Attack"
+  ],
+  "routing_hints": [
+   "nonce",
+   "nonces",
+   "ecrecover",
+   "DOMAIN_SEPARATOR",
+   "signature",
+   "castVoteBySig",
+   "checkAfterExecution"
+  ],
+  "prompt_chars": 5012,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__solidity_version",
+  "name": "Solidity Version",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Solidity Version"
+  ],
+  "routing_hints": [
+   "selfdestruct",
+   "ecrecover",
+   "delegatecall",
+   "ERC20",
+   "ERC721",
+   "Ownable",
+   "ReentrancyGuard",
+   "SafeMath"
+  ],
+  "prompt_chars": 4115,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__solmate",
+  "name": "Solmate-Missing Return Check",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Solmate"
+  ],
+  "routing_hints": [
+   "SafeTransferLib",
+   "safeApprove",
+   "FixedPointMathLib",
+   "ERC20",
+   "createVault"
+  ],
+  "prompt_chars": 3526,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__twap",
+  "name": "TWAP-Missing-Time-Weighting",
+  "source_workflow": "synthesized",
+  "tags": [
+   "TWAP"
+  ],
+  "routing_hints": [
+   "observe",
+   "consult",
+   "twap",
+   "observations",
+   "tickCumulative",
+   "initialized"
+  ],
+  "prompt_chars": 6082,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ },
+ {
+  "id": "synth__uniswap",
+  "name": "Uniswap-Integration-Errors",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Uniswap"
+  ],
+  "routing_hints": [
+   "swapExactTokensForTokens",
+   "getAmountsOut",
+   "IUniswapV2Router02",
+   "slot0",
+   "sqrtPriceX96",
+   "collect",
+   "liquidity",
+   "amount0Min",
+   "amount1Min",
+   "mulDiv",
+   "FullMath",
+   "token0"
+  ],
+  "prompt_chars": 11408,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__upgradeable",
+  "name": "Upgradeable",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Upgradeable"
+  ],
+  "routing_hints": [
+   "initializer",
+   "_authorizeUpgrade",
+   "upgradeTo",
+   "UUPSUpgradeable",
+   "data.length",
+   "diamondCut",
+   "removeRentals"
+  ],
+  "prompt_chars": 7418,
+  "required_hints": [],
+  "gated": false,
+  "synthesized": true
+ },
+ {
+  "id": "synth__zksync",
+  "name": "Zksync-Incorrect Block Period Constant",
+  "source_workflow": "synthesized",
+  "tags": [
+   "Zksync"
+  ],
+  "routing_hints": [
+   "l2TransactionBaseCost",
+   "requestL2Transaction",
+   "priorityQueue",
+   "block.chainid",
+   "chainid"
+  ],
+  "prompt_chars": 4203,
+  "required_hints": [],
+  "gated": true,
+  "synthesized": true
+ }
+]
