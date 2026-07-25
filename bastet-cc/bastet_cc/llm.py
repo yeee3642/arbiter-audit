@@ -8,6 +8,17 @@ without JSON mode the model happily invents its own fenced schema, so the lenien
 parser (fence strip, first-valid-JSON scan, bare-array wrap) is not decoration -- it is
 what keeps the llama/gemma comparison arms on the same code path.
 
+Concurrency alone is the wrong control. The gateway enforces a *request-rate* cap
+(`Current limit: 120` requests/minute, measured -- runs/probe/phase7_sustained_w32.json),
+and a semaphore cannot see it: 16 workers at ~3.5 s each offer ~275 rpm, so the
+excess comes back as 429s that the retry ladder then absorbs at 2/8/32 s. The run
+still completes, but throughput collapses to whatever the backoff happens to
+settle at, the log fills with retries, and the wall-clock estimate in any plan
+built from single-call latency is wrong by a factor of two or more. So the client
+carries a token bucket as well, and the semaphore is left to bound memory rather
+than rate. `phase7_sustained_w16` recorded zero errors only because it ran 21.95 s
+and never crossed a minute boundary; the cap is real over any longer horizon.
+
 Every call is one JSONL line in the log; cost charts aggregate that file directly
 (DESIGN §1.5). Failures come back as `LLMResult(error=...)`, never exceptions:
 the executor's only job is to append whatever it gets.
@@ -29,7 +40,66 @@ import httpx
 # retry k. len() == default max_retries, i.e. 4 attempts total.
 BACKOFF_S = [2.0, 8.0, 32.0]
 
+# Measured gateway cap, runs/probe/phase7_sustained_w32.json: 120 requests/minute
+# per key. Default a hair under it -- the bucket and the server's window are not
+# phase-aligned, and being throttled costs more than the two requests saved.
+DEFAULT_RPM = 115
+
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+
+class RateLimiter:
+    """Token bucket, shared by every in-flight call.
+
+    Deliberately not a semaphore. A semaphore bounds *simultaneity*; the cap
+    being enforced here is on *arrivals per minute*, and the two only coincide
+    when latency is constant, which it is not (measured 0.89 s to 9.5 s).
+
+    Burst capacity is a fraction of the cap, not the whole of it. The gateway's
+    429 body reports `Current limit: 120, Remaining: 0, Limit resets at: <ts>` --
+    a *fixed window* counter, not a leaky bucket. A client starting with a full
+    bucket would fire a whole window's worth of requests in the first second,
+    and if the server's window happens to be half-consumed at that moment, the
+    tail of that burst is exactly the 429 storm the limiter exists to prevent.
+    Starting at a quarter costs a few seconds once, on a run measured in hours.
+    """
+
+    def __init__(self, rpm: int = DEFAULT_RPM, window_s: float = 60.0,
+                 burst: int | None = None):
+        self.rpm = max(1, int(rpm))
+        self.window_s = window_s
+        self.burst = max(1, int(burst if burst is not None else self.rpm // 4))
+        self._tokens = float(self.burst)
+        self._updated = time.monotonic()
+        self._lock = asyncio.Lock()
+        self.waited_s = 0.0          # cumulative sleep, reported in run manifests
+        self.n_waits = 0
+
+    async def acquire(self) -> None:
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                # Refill continuously rather than per-window: a fixed window lets
+                # 2x the cap through across a boundary, which is exactly the burst
+                # that earned the 429s in the first place.
+                self._tokens = min(
+                    float(self.burst),
+                    self._tokens + (now - self._updated) * self.rpm / self.window_s,
+                )
+                self._updated = now
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return
+                deficit = 1.0 - self._tokens
+                sleep_s = deficit * self.window_s / self.rpm
+                self.waited_s += sleep_s
+                self.n_waits += 1
+            # Sleep outside the lock so other coroutines can keep draining.
+            await asyncio.sleep(sleep_s)
+
+    def stats(self) -> dict:
+        return {"rpm": self.rpm, "burst": self.burst, "n_waits": self.n_waits,
+                "waited_s": round(self.waited_s, 1)}
 
 
 @dataclass
@@ -86,13 +156,16 @@ def _classify_http(status: int, body: str) -> tuple[str, bool]:
 class LLMClient:
     def __init__(self, base_url: str, api_key: str, model: str,
                  max_concurrency: int = 32, timeout_s: int = 120,
-                 max_retries: int = 3, log_path: Path | None = None):
+                 max_retries: int = 3, log_path: Path | None = None,
+                 rpm: int | None = DEFAULT_RPM):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
         self.max_retries = max_retries
         self.log_path = Path(log_path) if log_path else None
         self._sem = asyncio.Semaphore(max_concurrency)
+        # rpm=None disables the bucket, for a different endpoint or an offline test.
+        self.limiter = RateLimiter(rpm) if rpm else None
         self._http = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_s),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -116,6 +189,10 @@ class LLMClient:
             result = await self._complete_inner(system, user, schema, temperature, max_tokens)
         self._log(task_id, result)
         return result
+
+    async def _throttle(self) -> None:
+        if self.limiter is not None:
+            await self.limiter.acquire()
 
     async def complete_many(self, calls: list[dict]) -> list[LLMResult]:
         """Concurrent batch: each dict is kwargs for `complete`. Order preserved;
@@ -228,7 +305,14 @@ class LLMClient:
         return None
 
     async def _post(self, body: dict) -> tuple[int, dict | str, str | None]:
-        """One HTTP round-trip; network-level failures come back as labels."""
+        """One HTTP round-trip; network-level failures come back as labels.
+
+        The bucket is drained here rather than in `complete()` so that retries and
+        the JSON-repair round-trip also pay for themselves -- they are requests the
+        gateway counts, and a run that retries heavily would otherwise sail past
+        the cap and earn more 429s, which is the failure loop this prevents.
+        """
+        await self._throttle()
         try:
             r = await self._http.post(f"{self.base_url}/chat/completions", json=body)
         except httpx.TimeoutException:
