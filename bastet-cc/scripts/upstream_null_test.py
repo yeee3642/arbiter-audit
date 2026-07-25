@@ -12,8 +12,14 @@ draws from the same protocol, which is exactly the variance a single published n
 hides.
 
 The comparison is one-sample: every run is scored against the same analytic floor, so
-a paired test would be comparing a distribution against a constant. A bootstrap over
-runs gives the CI on the mean gap.
+a paired test would be comparing a distribution against a constant.
+
+Interval estimation is delegated to `bastet_cc.stats`, which **refuses** to bootstrap
+below n=10. An earlier version of this script reported 95% CIs from four draws; a
+bootstrap resamples only the values it was given, so with n=4 the interval is bounded
+by the sample's own range and the "95%" claimed more than had been measured. Below the
+threshold the raw per-draw values are printed instead, which is what four numbers can
+honestly support.
 
 Two caveats belong in any writeup of this number: it covers one tag with one detector,
 and it uses the Kaggle corpus rather than the `dataset_0831` corpus upstream published
@@ -37,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bastet_cc.evaluate import Confusion  # noqa: E402
+from bastet_cc.stats import MIN_BOOTSTRAP_N, paired_bootstrap  # noqa: E402
 
 UPSTREAM = Path("/home/e0pwr/ais3-2026/upstream-bastet")
 OUT = Path(__file__).resolve().parents[1] / "runs" / "upstream_null"
@@ -85,12 +92,16 @@ def run_once(index: int) -> dict | None:
 
 
 def bootstrap_ci(values: list[float], reps: int = 10_000, seed: int = 20260725):
-    rng = random.Random(seed)
-    n = len(values)
-    means = sorted(
-        sum(values[rng.randrange(n)] for _ in range(n)) / n for _ in range(reps)
-    )
-    return means[int(0.025 * reps)], means[int(0.975 * reps)]
+    """CI on the mean, or None when n is too small for one to mean anything.
+
+    Delegates to stats.paired_bootstrap against a zero comparator, so the n
+    threshold is enforced in exactly one place for the whole project.
+    """
+    try:
+        iv = paired_bootstrap(values, [0.0] * len(values), reps=reps, seed=seed)
+    except ValueError:
+        return None
+    return iv.lo, iv.hi
 
 
 def analyse() -> int:
@@ -132,7 +143,14 @@ def analyse() -> int:
     print()
     for name, gaps in [("F1", gaps_f1), ("accuracy", gaps_acc)]:
         m = st.mean(gaps)
-        lo, hi = bootstrap_ci(gaps)
+        ci = bootstrap_ci(gaps)
+        if ci is None:
+            print(f"gain over floor, {name:<9} {m:>+8.4f}   n={len(gaps)} < "
+                  f"{MIN_BOOTSTRAP_N}, no interval reported")
+            print(f"{'':<25}per-draw: "
+                  f"{', '.join(f'{g:+.4f}' for g in gaps)}")
+            continue
+        lo, hi = ci
         verdict = (
             "excludes zero -- real signal" if lo > 0 else
             "excludes zero -- worse than the floor" if hi < 0 else
@@ -156,9 +174,13 @@ def analyse() -> int:
         "mean_f1": st.mean(f1), "sd_f1": st.stdev(f1) if len(f1) > 1 else 0.0,
         "mean_accuracy": st.mean(acc),
         "floor_f1": floor.f1, "floor_accuracy": floor.accuracy,
-        "gain_f1": st.mean(gaps_f1), "gain_f1_ci95": list(bootstrap_ci(gaps_f1)),
+        "gain_f1": st.mean(gaps_f1),
+        "gain_f1_ci95": list(bootstrap_ci(gaps_f1) or ()) or None,
         "gain_accuracy": st.mean(gaps_acc),
-        "gain_accuracy_ci95": list(bootstrap_ci(gaps_acc)),
+        "gain_accuracy_ci95": list(bootstrap_ci(gaps_acc) or ()) or None,
+        "gain_f1_per_draw": [round(g, 6) for g in gaps_f1],
+        "gain_accuracy_per_draw": [round(g, 6) for g in gaps_acc],
+        "min_bootstrap_n": MIN_BOOTSTRAP_N,
         "f1_spread": spread,
         "caveats": [
             "single tag (Slippage), single detector (slippage_min_amount)",

@@ -1,9 +1,318 @@
 {
-  "status": "PASS",
+  "status": "INCONCLUSIVE",
   "violations": 0,
   "splits_frozen": true,
   "pairwise_overlap": [],
-  "detectors": [],
+  "detectors": [
+    {
+      "detector": "synth__accounting_error",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "134",
+        "18",
+        "198",
+        "228",
+        "251",
+        "297",
+        "34",
+        "387",
+        "450",
+        "51"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__bridge",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "488"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__compound",
+      "provenance_source": "no_training_material",
+      "cited_repos": 0,
+      "unresolved_ids": [],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__cross_chain",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "116",
+        "292",
+        "295",
+        "296",
+        "386",
+        "387",
+        "388"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__dao",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "211",
+        "223",
+        "330",
+        "331"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__eip4494",
+      "provenance_source": "no_training_material",
+      "cited_repos": 0,
+      "unresolved_ids": [],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__eip712",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "303",
+        "304",
+        "481"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__erc1155",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "247",
+        "249",
+        "250",
+        "466",
+        "468",
+        "471"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__erc777",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "190",
+        "286",
+        "287",
+        "289",
+        "475",
+        "476"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__gnosis_safe",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "465",
+        "486"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__governance",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "182",
+        "185",
+        "188",
+        "212",
+        "217",
+        "234",
+        "294",
+        "330",
+        "406",
+        "407"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__liquidation",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "335",
+        "349",
+        "362",
+        "367",
+        "372",
+        "375"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__mev",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "171",
+        "242",
+        "29",
+        "363",
+        "37",
+        "57"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__opensea",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "296",
+        "464",
+        "469"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__pause",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "208",
+        "221",
+        "301",
+        "350"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__re_org_attack",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "298"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__replay_attack",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "483"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__solidity_version",
+      "provenance_source": "no_training_material",
+      "cited_repos": 0,
+      "unresolved_ids": [],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__solmate",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "143",
+        "173"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__twap",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "179"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__uniswap",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "243",
+        "339",
+        "64"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__upgradeable",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "235",
+        "45",
+        "477",
+        "480"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    },
+    {
+      "detector": "synth__zksync",
+      "provenance_source": "front_matter_finding_ids",
+      "cited_repos": 0,
+      "unresolved_ids": [
+        "236"
+      ],
+      "from_train_syn": 0,
+      "from_dev": [],
+      "from_test": []
+    }
+  ],
   "runs": [
     {
       "run": "d1_broadcast_dev1",
@@ -24,46 +333,7 @@
       "test": []
     }
   ],
-  "thin_tags": [
-    {
-      "tag": "Bridge",
-      "n_repos": 1
-    },
-    {
-      "tag": "Gnosis safe",
-      "n_repos": 1
-    },
-    {
-      "tag": "Multisig",
-      "n_repos": 1
-    },
-    {
-      "tag": "RCE",
-      "n_repos": 1
-    },
-    {
-      "tag": "Re-org Attack",
-      "n_repos": 1
-    },
-    {
-      "tag": "Rebalance",
-      "n_repos": 1
-    },
-    {
-      "tag": "TWAP",
-      "n_repos": 1
-    },
-    {
-      "tag": "XSS Attack",
-      "n_repos": 1
-    },
-    {
-      "tag": "Zksync",
-      "n_repos": 1
-    },
-    {
-      "tag": "call / delegatecall",
-      "n_repos": 1
-    }
-  ]
+  "thin_tags": [],
+  "thin_tags_available": false,
+  "inconclusive": true
 }
