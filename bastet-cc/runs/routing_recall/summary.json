@@ -1,0 +1,12 @@
+{
+  "split": "train_syn",
+  "n_repos_indexed": 32,
+  "n_detectors": 56,
+  "n_tags_with_detector": 15,
+  "positives": 195,
+  "unreachable_no_detector": 67,
+  "unreachable_not_routed": 0,
+  "reachable": 128,
+  "coverage_ceiling": 0.6564102564102564,
+  "routing_ceiling_given_detector": 1.0
+}

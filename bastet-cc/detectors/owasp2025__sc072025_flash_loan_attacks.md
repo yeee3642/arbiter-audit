@@ -1,0 +1,118 @@
+---
+id: owasp2025__sc072025_flash_loan_attacks
+name: "SC07:2025 - Flash Loan Attacks"
+source_workflow: owasp2025
+upstream_model: gpt-4o-mini
+tags: ["Flashloan"]
+routing_hints: ["prices"]
+prompt_chars: 2478
+---
+
+# SC07:2025 - Flash Loan Attacks
+
+## Detection prompt
+
+You are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.
+
+### Vulnerability Knowledge
+
+**Flash Loan Attacks**
+Flash loan attacks exploit the ability to borrow large sums of funds without collateral within a single transaction. These attacks leverage the atomic nature of blockchain transactions, where all operations must succeed or fail together. By combining flash loans with other vulnerabilities like oracle manipulation, reentrancy, or faulty logic, attackers can manipulate contract behavior and drain funds.
+
+Examples of Flash Loan Exploits:
+*Oracle Manipulation: Using borrowed funds to skew price oracles, triggering under-collateralized liquidations.
+*Liquidity Pool Draining: Leveraging flash loans to remove liquidity or exploit poorly designed AMM mechanics.
+*Arbitrage Exploits: Exploiting price discrepancies across platforms by manipulating liquidity.
+
+Impact:
+*Loss of Funds: Exploiters can drain protocol reserves or manipulate collateralized loans to steal assets.
+*Market Disruptions: Temporary price manipulation or liquidity depletion affecting users and platforms.
+*Ecosystem Damage: Loss of trust in protocols, resulting in reduced user adoption and financial impact.
+
+**Suggestion**
+
+*Avoid reliance on flash loans in critical logic: Restrict sensitive functions to operate only within validated and predictable conditions.
+*Robust Oracle Design: Use time-weighted average prices (TWAP) or decentralized oracles resistant to manipulation.
+*Comprehensive Testing: Include tests simulating flash loan scenarios and edge cases.
+Access Control: Limit access to critical functions to prevent unauthorized or malicious transactions.
+
+### Task to Perform
+Follow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.
+
+### Output Format
+
+If NO concrete vulnerability found, output a empty array
+
+Otherwise, follow the format below:
+
+```
+[
+    {
+        "summary":  "summary of the vulnerabilities",
+        "vulnerability_details": {
+            "function_name": "Name of the function",
+            "description": "a brief description of the vulnerability"
+        },
+    
+        "code_snippet": [
+            "code snippet in the file"
+        ],
+    
+        "recommendation": "recommendation of how to fix the vulnerability"
+    
+    }
+]
+```
+
+## Output schema
+
+```json
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "summary": {
+        "type": "string",
+        "description": "Brief summary of the vulnerability"
+      },
+      "severity": {
+        "type": "string",
+        "items": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "description": "Severity level of the vulnerability"
+      },
+      "vulnerability_details": {
+        "type": "object",
+        "properties": {
+          "function_name": {
+            "type": "string",
+            "description": "Function name where the vulnerability is found"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the vulnerability"
+          }
+        },
+        "required": ["function_name", "description"]
+      },
+      "code_snippet": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Code snippet showing the vulnerability",
+        "default": []
+      },
+      "recommendation": {
+        "type": "string",
+        "description": "Recommendation to fix the vulnerability"
+      }
+    },
+    "required": ["summary", "severity", "vulnerability_details", "code_snippet", "recommendation"]
+  },
+  "additionalProperties": false
+}
+```

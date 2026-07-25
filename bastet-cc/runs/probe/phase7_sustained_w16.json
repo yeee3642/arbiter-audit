@@ -1,0 +1,998 @@
+{
+  "workers": 16,
+  "total": 96,
+  "wall_s": 21.95,
+  "api_ok": 96,
+  "schema_ok": 96,
+  "errors": 0,
+  "error_rate": 0.0,
+  "error_kinds": {},
+  "sample_errors": [],
+  "throughput_rps": 4.373,
+  "latency_s": {
+    "n": 96,
+    "min": 1.44,
+    "p50": 2.995,
+    "mean": 3.541,
+    "max": 9.5,
+    "stdev": 1.681
+  },
+  "prompt_tokens": {
+    "n": 96,
+    "min": 2070,
+    "p50": 2071.0,
+    "mean": 2070.896,
+    "max": 2071,
+    "stdev": 0.307
+  },
+  "completion_tokens": {
+    "n": 96,
+    "min": 204,
+    "p50": 252.0,
+    "mean": 256.469,
+    "max": 480,
+    "stdev": 42.815
+  },
+  "rows": [
+    {
+      "k": 0,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.38,
+      "finish_reason": "stop",
+      "completion_tokens": 215,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 1,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.66,
+      "finish_reason": "stop",
+      "completion_tokens": 212,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 2,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.79,
+      "finish_reason": "stop",
+      "completion_tokens": 279,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 3,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 5.4,
+      "finish_reason": "stop",
+      "completion_tokens": 247,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 4,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.12,
+      "finish_reason": "stop",
+      "completion_tokens": 231,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 5,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 6.46,
+      "finish_reason": "stop",
+      "completion_tokens": 271,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 6,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.82,
+      "finish_reason": "stop",
+      "completion_tokens": 276,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 7,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.84,
+      "finish_reason": "stop",
+      "completion_tokens": 261,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 8,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.86,
+      "finish_reason": "stop",
+      "completion_tokens": 264,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 9,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 5.86,
+      "finish_reason": "stop",
+      "completion_tokens": 285,
+      "prompt_tokens": 2070,
+      "error": null
+    },
+    {
+      "k": 10,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.67,
+      "finish_reason": "stop",
+      "completion_tokens": 224,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 11,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.42,
+      "finish_reason": "stop",
+      "completion_tokens": 275,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 12,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.65,
+      "finish_reason": "stop",
+      "completion_tokens": 216,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 13,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.54,
+      "finish_reason": "stop",
+      "completion_tokens": 270,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 14,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.39,
+      "finish_reason": "stop",
+      "completion_tokens": 212,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 15,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.82,
+      "finish_reason": "stop",
+      "completion_tokens": 275,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 16,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.8,
+      "finish_reason": "stop",
+      "completion_tokens": 286,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 17,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.79,
+      "finish_reason": "stop",
+      "completion_tokens": 267,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 18,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.18,
+      "finish_reason": "stop",
+      "completion_tokens": 221,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 19,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.34,
+      "finish_reason": "stop",
+      "completion_tokens": 292,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 20,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.79,
+      "finish_reason": "stop",
+      "completion_tokens": 248,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 21,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.43,
+      "finish_reason": "stop",
+      "completion_tokens": 232,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 22,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.95,
+      "finish_reason": "stop",
+      "completion_tokens": 247,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 23,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 9.5,
+      "finish_reason": "stop",
+      "completion_tokens": 275,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 24,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.9,
+      "finish_reason": "stop",
+      "completion_tokens": 252,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 25,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.71,
+      "finish_reason": "stop",
+      "completion_tokens": 208,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 26,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.91,
+      "finish_reason": "stop",
+      "completion_tokens": 204,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 27,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.5,
+      "finish_reason": "stop",
+      "completion_tokens": 248,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 28,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.85,
+      "finish_reason": "stop",
+      "completion_tokens": 224,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 29,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.98,
+      "finish_reason": "stop",
+      "completion_tokens": 230,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 30,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.65,
+      "finish_reason": "stop",
+      "completion_tokens": 212,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 31,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.89,
+      "finish_reason": "stop",
+      "completion_tokens": 221,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 32,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.07,
+      "finish_reason": "stop",
+      "completion_tokens": 224,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 33,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.72,
+      "finish_reason": "stop",
+      "completion_tokens": 222,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 34,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.03,
+      "finish_reason": "stop",
+      "completion_tokens": 230,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 35,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.55,
+      "finish_reason": "stop",
+      "completion_tokens": 212,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 36,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.35,
+      "finish_reason": "stop",
+      "completion_tokens": 273,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 37,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.96,
+      "finish_reason": "stop",
+      "completion_tokens": 335,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 38,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.27,
+      "finish_reason": "stop",
+      "completion_tokens": 216,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 39,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.32,
+      "finish_reason": "stop",
+      "completion_tokens": 287,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 40,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.64,
+      "finish_reason": "stop",
+      "completion_tokens": 211,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 41,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.1,
+      "finish_reason": "stop",
+      "completion_tokens": 251,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 42,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.93,
+      "finish_reason": "stop",
+      "completion_tokens": 249,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 43,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.76,
+      "finish_reason": "stop",
+      "completion_tokens": 242,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 44,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.96,
+      "finish_reason": "stop",
+      "completion_tokens": 282,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 45,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.53,
+      "finish_reason": "stop",
+      "completion_tokens": 214,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 46,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.01,
+      "finish_reason": "stop",
+      "completion_tokens": 227,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 47,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.82,
+      "finish_reason": "stop",
+      "completion_tokens": 276,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 48,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.32,
+      "finish_reason": "stop",
+      "completion_tokens": 260,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 49,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.43,
+      "finish_reason": "stop",
+      "completion_tokens": 214,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 50,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.97,
+      "finish_reason": "stop",
+      "completion_tokens": 252,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 51,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.98,
+      "finish_reason": "stop",
+      "completion_tokens": 285,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 52,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 1.95,
+      "finish_reason": "stop",
+      "completion_tokens": 220,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 53,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.83,
+      "finish_reason": "stop",
+      "completion_tokens": 269,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 54,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.4,
+      "finish_reason": "stop",
+      "completion_tokens": 309,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 55,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.29,
+      "finish_reason": "stop",
+      "completion_tokens": 260,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 56,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.95,
+      "finish_reason": "stop",
+      "completion_tokens": 290,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 57,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.79,
+      "finish_reason": "stop",
+      "completion_tokens": 254,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 58,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 1.68,
+      "finish_reason": "stop",
+      "completion_tokens": 211,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 59,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.6,
+      "finish_reason": "stop",
+      "completion_tokens": 313,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 60,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.64,
+      "finish_reason": "stop",
+      "completion_tokens": 274,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 61,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.15,
+      "finish_reason": "stop",
+      "completion_tokens": 248,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 62,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.08,
+      "finish_reason": "stop",
+      "completion_tokens": 237,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 63,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.49,
+      "finish_reason": "stop",
+      "completion_tokens": 296,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 64,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.17,
+      "finish_reason": "stop",
+      "completion_tokens": 216,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 65,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.23,
+      "finish_reason": "stop",
+      "completion_tokens": 222,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 66,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 8.29,
+      "finish_reason": "stop",
+      "completion_tokens": 340,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 67,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.08,
+      "finish_reason": "stop",
+      "completion_tokens": 212,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 68,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.88,
+      "finish_reason": "stop",
+      "completion_tokens": 264,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 69,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.76,
+      "finish_reason": "stop",
+      "completion_tokens": 270,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 70,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.94,
+      "finish_reason": "stop",
+      "completion_tokens": 389,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 71,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.43,
+      "finish_reason": "stop",
+      "completion_tokens": 250,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 72,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.25,
+      "finish_reason": "stop",
+      "completion_tokens": 278,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 73,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.72,
+      "finish_reason": "stop",
+      "completion_tokens": 289,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 74,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.57,
+      "finish_reason": "stop",
+      "completion_tokens": 251,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 75,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.74,
+      "finish_reason": "stop",
+      "completion_tokens": 266,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 76,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.61,
+      "finish_reason": "stop",
+      "completion_tokens": 265,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 77,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.99,
+      "finish_reason": "stop",
+      "completion_tokens": 250,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 78,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.0,
+      "finish_reason": "stop",
+      "completion_tokens": 222,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 79,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.12,
+      "finish_reason": "stop",
+      "completion_tokens": 294,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 80,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.41,
+      "finish_reason": "stop",
+      "completion_tokens": 480,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 81,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.71,
+      "finish_reason": "stop",
+      "completion_tokens": 255,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 82,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.07,
+      "finish_reason": "stop",
+      "completion_tokens": 214,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 83,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.11,
+      "finish_reason": "stop",
+      "completion_tokens": 216,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 84,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 4.42,
+      "finish_reason": "stop",
+      "completion_tokens": 323,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 85,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.7,
+      "finish_reason": "stop",
+      "completion_tokens": 321,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 86,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.58,
+      "finish_reason": "stop",
+      "completion_tokens": 252,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 87,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 3.5,
+      "finish_reason": "stop",
+      "completion_tokens": 259,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 88,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.82,
+      "finish_reason": "stop",
+      "completion_tokens": 292,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 89,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.05,
+      "finish_reason": "stop",
+      "completion_tokens": 211,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 90,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.04,
+      "finish_reason": "stop",
+      "completion_tokens": 217,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 91,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.22,
+      "finish_reason": "stop",
+      "completion_tokens": 265,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 92,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 2.4,
+      "finish_reason": "stop",
+      "completion_tokens": 338,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 93,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 1.44,
+      "finish_reason": "stop",
+      "completion_tokens": 208,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 94,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 1.69,
+      "finish_reason": "stop",
+      "completion_tokens": 255,
+      "prompt_tokens": 2071,
+      "error": null
+    },
+    {
+      "k": 95,
+      "api_ok": true,
+      "schema_ok": true,
+      "latency_s": 1.61,
+      "finish_reason": "stop",
+      "completion_tokens": 214,
+      "prompt_tokens": 2071,
+      "error": null
+    }
+  ]
+}

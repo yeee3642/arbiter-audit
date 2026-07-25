@@ -1,0 +1,69 @@
+{
+ "tag": "ERC777",
+ "mode": "s2",
+ "detector": {
+  "name": "ERC777-Callback-Reentrancy",
+  "vulnerability_knowledge": "ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that execute arbitrary code during `transfer`, `send`, and `operatorSend` calls. If a contract performs sensitive state updates (accounting, debt reduction, flow recording, rental cleanup) *after* an external ERC777 transfer, a malicious recipient or operator can re-enter the same or a related function via the hook and observe or manipulate intermediate state. This violates the Checks-Effects-Interactions pattern and enables cross-function reentrancy, inflated balance calculations, double payouts, or permanent asset lockup when a hook reverts. The vulnerability is not limited to the transferring function; any function that reads balances or state mutated by the transfer is at risk if the transfer precedes the state update.",
+  "checks": [
+   "External ERC777 transfer (`safeTransferFrom`, `transfer`, `send`, `operatorSend`, or low-level `call`) occurs before critical state mutations (balance accounting, debt reduction, flow updates, rental removal, hook disabling).",
+   "Received amount is calculated as `balanceAfter - balanceBefore` around an external transfer, allowing a `tokensToSend` hook to re-enter and alter the balance mid-execution.",
+   "Virtual or unprotected internal function (`_executeWithToken`, `_giveToken`, `_reclaimRentedItems`) is called after an external transfer, enabling reentrancy into the same entry point with the same identifiers (e.g., `commandId`).",
+   "Settlement or cleanup logic (`ESCRW.settlePayment`, `STORE.removeRentals`, `_removeHooks`) is placed after token transfers that may trigger ERC777 callbacks, so a revert in `tokensReceived` blocks finalization and locks assets.",
+   "Missing `nonReentrant` modifier on functions that perform external ERC777 transfers followed by state changes, or `nonReentrant` applied only to the outer function while cross-function reentrancy remains possible via shared state.",
+   "Hook enablement checks (`STORE.hookOnStop`) are performed at execution time without a mechanism to disable hooks atomically with rental creation, allowing a previously enabled hook to become disabled and cause a revert that bricks the rental stop flow.",
+   "Flow or accounting updates (`_addFlowIn`, `reserveDebt` decrement, `totalDebt` decrement) are performed after the external transfer instead of before, so reentrant calls see stale or inflated values.",
+   "Use of `try/catch` around hook calls (`IHook(target).onStop`) without ensuring that a caught revert does not leave the rental in an inconsistent state (e.g., hooks partially removed, assets not reclaimed)."
+  ],
+  "incorrect_example": {
+   "code": "function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {\n    if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();\n    uint256 prevBalance = token_.balanceOf(address(this));\n    token_.safeTransferFrom(msg.sender, address(this), amount_);\n    uint256 received = token_.balanceOf(address(this)) - prevBalance;\n    reserveDebt[token_][msg.sender] -= received;\n    totalDebt[token_] -= received;\n    emit DebtRepaid(token_, msg.sender, received);\n}",
+   "explanation": "Balance-difference accounting after `safeTransferFrom` lets an ERC777 `tokensToSend` hook re-enter `repayLoan` (or a cross-function like `withdrawReserves`) and mutate `reserveDebt`/`totalDebt` before the subtraction, inflating `received` and understating debt."
+  },
+  "correct_example": {
+   "code": "function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {\n    if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();\n    token_.safeTransferFrom(msg.sender, address(this), amount_);\n    uint256 received = amount_; // trust the requested amount or use a pull pattern\n    reserveDebt[token_][msg.sender] -= received;\n    totalDebt[token_] -= received;\n    emit DebtRepaid(token_, msg.sender, received);\n}",
+   "explanation": "State updates (debt reduction) use the trusted `amount_` parameter instead of a post-transfer balance delta, eliminating the reentrancy window; `nonReentrant` guards the whole function."
+  },
+  "routing_hint_candidates": [
+   "repayLoan",
+   "reserveDebt",
+   "totalDebt",
+   "safeTransferFrom",
+   "balanceOf",
+   "tokensToSend",
+   "tokensReceived",
+   "giveToken",
+   "_giveToken",
+   "_addFlowIn",
+   "expressExecuteWithToken",
+   "_transferFromExecutor",
+   "_executeWithToken",
+   "commandId",
+   "gateway",
+   "isCommandExecuted",
+   "stopRent",
+   "ESCRW",
+   "settlePayment",
+   "STORE",
+   "removeRentals",
+   "_removeHooks",
+   "hookOnStop",
+   "onStop",
+   "IHook",
+   "rentalWallet",
+   "rentalAssetUpdates",
+   "_reclaimRentedItems",
+   "_validateRentalCanBeStoped",
+   "nonReentrant"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "190",
+  "289",
+  "286",
+  "475",
+  "287",
+  "476"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

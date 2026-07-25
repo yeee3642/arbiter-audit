@@ -1,0 +1,93 @@
+{
+  "system_prompt_chars": 7396,
+  "code_chars": 896,
+  "latency_s": {
+    "n": 5,
+    "min": 0.89,
+    "p50": 0.96,
+    "mean": 1.07,
+    "max": 1.54,
+    "stdev": 0.269
+  },
+  "prompt_tokens": {
+    "n": 5,
+    "min": 2146,
+    "p50": 2146,
+    "mean": 2146.0,
+    "max": 2146,
+    "stdev": 0.0
+  },
+  "completion_tokens": {
+    "n": 5,
+    "min": 204,
+    "p50": 221,
+    "mean": 218.6,
+    "max": 238,
+    "stdev": 13.993
+  },
+  "tok_per_s": {
+    "n": 5,
+    "min": 143.42,
+    "p50": 228.6,
+    "mean": 211.478,
+    "max": 234.32,
+    "stdev": 38.373
+  },
+  "rows": [
+    {
+      "trial": 0,
+      "latency_s": 1.54,
+      "prompt_tokens": 2146,
+      "completion_tokens": 221,
+      "finish_reason": "stop",
+      "schema_ok": true,
+      "detected_vuln": true,
+      "tok_per_s": 143.42,
+      "content_head": "[\n    {\n        \"summary\": \"No slippage protection in harvest function when swapping reward tokens\",\n        \"severity\": \"high\",\n        \"vulnerability_details\": {\n            \"function_name\": \"harves"
+    },
+    {
+      "trial": 1,
+      "latency_s": 0.92,
+      "prompt_tokens": 2146,
+      "completion_tokens": 204,
+      "finish_reason": "stop",
+      "schema_ok": true,
+      "detected_vuln": true,
+      "tok_per_s": 220.6,
+      "content_head": "[\n    {\n        \"summary\": \"No slippage protection in harvest function when swapping reward tokens\",\n        \"severity\": \"high\",\n        \"vulnerability_details\": {\n            \"function_name\": \"harves"
+    },
+    {
+      "trial": 2,
+      "latency_s": 0.96,
+      "prompt_tokens": 2146,
+      "completion_tokens": 224,
+      "finish_reason": "stop",
+      "schema_ok": true,
+      "detected_vuln": true,
+      "tok_per_s": 234.32,
+      "content_head": "[\n    {\n        \"summary\": \"No slippage protection in harvest function when swapping reward tokens to asset\",\n        \"severity\": \"high\",\n        \"vulnerability_details\": {\n            \"function_name\""
+    },
+    {
+      "trial": 3,
+      "latency_s": 0.89,
+      "prompt_tokens": 2146,
+      "completion_tokens": 206,
+      "finish_reason": "stop",
+      "schema_ok": true,
+      "detected_vuln": true,
+      "tok_per_s": 230.45,
+      "content_head": "[\n    {\n        \"summary\": \"No slippage protection in harvest function when swapping reward tokens\",\n        \"severity\": \"high\",\n        \"vulnerability_details\": {\n            \"function_name\": \"harves"
+    },
+    {
+      "trial": 4,
+      "latency_s": 1.04,
+      "prompt_tokens": 2146,
+      "completion_tokens": 238,
+      "finish_reason": "stop",
+      "schema_ok": true,
+      "detected_vuln": true,
+      "tok_per_s": 228.6,
+      "content_head": "[\n    {\n        \"summary\": \"No slippage protection in reward token swaps during harvest\",\n        \"severity\": \"high\",\n        \"vulnerability_details\": {\n            \"function_name\": \"harvest\",\n       "
+    }
+  ]
+}

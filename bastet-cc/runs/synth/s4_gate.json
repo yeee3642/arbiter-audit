@@ -1,0 +1,88 @@
+{
+ "ERC777": {
+  "tag": "ERC777",
+  "loro": true,
+  "folds": [
+   {
+    "repo": "2c2d03025183",
+    "variant_id": "synth__erc777__gate_2c2d03025183_r1",
+    "mode": "s2",
+    "hints": [
+     "rentalAssetUpdates",
+     "Errors.Shared_HookFailBytes",
+     "Errors.Shared_HookFailString",
+     "rentalWallet",
+     "Errors.Shared_DisabledHook",
+     "hookOnStop",
+     "removeRentals",
+     "reserveDebt"
+    ],
+    "hit": false,
+    "n_pos_findings": 0,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 0
+   },
+   {
+    "repo": "82a1b82850c4",
+    "variant_id": "synth__erc777__gate_82a1b82850c4_r1",
+    "mode": "s2",
+    "hints": [
+     "RentalOrder",
+     "Item",
+     "Hook",
+     "_convertToStatic",
+     "_deriveRentalOrderHash",
+     "rentalWallet",
+     "seaportOrderHash",
+     "_giveToken"
+    ],
+    "hit": false,
+    "n_pos_findings": 0,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 0
+   },
+   {
+    "repo": "fccd852beaa3",
+    "variant_id": "synth__erc777__gate_fccd852beaa3_r1",
+    "mode": "s2",
+    "hints": [
+     "callback",
+     "_giveToken",
+     "flowLimit",
+     "reserveDebt",
+     "_setExpressExecutorWithToken",
+     "repayLoan",
+     "gateway",
+     "expressExecuteWithToken"
+    ],
+    "hit": false,
+    "n_pos_findings": 0,
+    "neg": {
+     "1150ac69e096": false,
+     "19000d572f72": false
+    },
+    "n_calls": 1
+   }
+  ],
+  "hit_mean": 0.0,
+  "fp_mean": 0.0,
+  "passed": false,
+  "repaired": true,
+  "required_hints": [],
+  "feedback": [
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Transfers tokens from the executor to the contract before calling the unprotected virtual _executeWithToken, allowing reentrancy into executeWithToken which pays out the executor again for the same commandId.):\n```solidity\nfunction expressExecuteWithToken(\n        bytes32 commandId,\n        string calldata sourceChain,\n        string calldata sourceAddress,\n        bytes calldata payload,\n        string calldata symbol,\n        uint256 amount\n    ) external payable virtual {\n        if (gateway.isCommandExecuted(commandId)) revert AlreadyExecuted();\n\n        address expressExecutor = msg.sender;\n\n        {\n            (address tokenAddress, uint256 value) = contractCallWithTokenValue(sourceChain, sourceAddress, payload, symbol, amount);\n            _transferFromExecutor(expressExecutor, tokenAddress, value);\n        }\n\n        {\n            address gatewayToken = gateway.tokenAddresses(symbol);\n            IERC20(gatewayToken).safeTransferFrom(expressExecutor, address(this), amount);\n        }\n\n        bytes32 payloadHash = keccak256(payload);\n\n        _setExpressExecutorWithToken(commandId, sourceChain, sourceAddress, payloadHash, symbol, amount, expressExecutor);\n\n        _executeWithToken(sourceChain, sourceAddress, payload, symbol, amount);\n\n        emit ExpressExecutedWithToken(commandId, sourceChain, sourceAddress, payloadHash, symbol, amount, expressExecutor);\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function calls _giveToken which may trigger an ERC777 tokensReceived callback before updating flow accounting via _addFlowIn, allowing reentrant manipulation of the returned amount.):\n```solidity\nfunction giveToken(address destinationAddress, uint256 amount) external onlyService returns (uint256) {\n        amount = _giveToken(destinationAddress, amount);\n        _addFlowIn(amount);\n        return amount;\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function measures received amount by comparing token balance before and after safeTransferFrom, but an ERC777 tokensToSend hook can reenter Operator.swap which calls TRSRY.withdrawReserves, altering the balance mid-execution and inflating the calculated received amount.):\n```solidity\nfunction repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {\n        if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();\n\n        // Deposit from caller first (to handle nonstandard token transfers)\n        uint256 prevBalance = token_.balanceOf(address(this));\n        token_.safeTransferFrom(msg.sender, address(this), amount_);\n\n        uint256 received = token_.balanceOf(address(this)) - prevBalance;\n\n        // Subtract debt from caller\n        reserveDebt[token_][msg.sender] -= received;\n        totalDebt[token_] -= received;\n\n        emit DebtRepaid(token_, msg.sender, received);\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: The function checks STORE.hookOnStop(target) before calling onStop, but there is no mechanism to disable hooks after rental creation, so if hookOnStop returns false for a previously enabled hook, stopRent reverts with Errors.Shared_DisabledHook, locking assets and funds.):\n```solidity\nfunction _removeHooks(\n        Hook[] calldata hooks,\n        Item[] calldata rentalItems,\n        address rentalWallet\n    ) internal {\n        // Define hook target, item index, and item.\n        address target;\n        uint256 itemIndex;\n        Item memory item;\n\n        // Loop through each hook in the payload.\n        for (uint256 i = 0; i < hooks.length; ++i) {\n            // Get the hook address.\n            target = hooks[i].target;\n\n            // Check that the hook is reNFT-approved to execute on rental stop.\n            if (!STORE.hookOnStop(target)) {\n                revert Errors.Shared_DisabledHook(target);\n            }\n\n            // Get the rental item index for this hook.\n            itemIndex = hooks[i].itemIndex;\n\n            // Get the rental item for this hook.\n            item = rentalItems[itemIndex];\n\n            // Make sure the item is a rented item.\n            if (!item.isRental()) {\n                revert Errors.Shared_NonRentalHookItem(itemIndex);\n            }\n\n            // Call the hook with data about the rented item.\n            try\n                IHook(target).onStop(\n                    rentalWallet,\n                    item.token,\n                    item.identifier,\n                    item.amount,\n                    hooks[i].extraData\n                )\n            {} catch Error(string memory revertReason) {\n                // Revert with reason given.\n                revert Errors.Shared_HookFailString(revertReason);\n            } catch Panic(uint256 errorCode) {\n                // Convert solidity panic code to string.\n                string memory stringErrorCode = LibString.toString(errorCode);\n\n                // Revert with panic code.\n                revert Errors.Shared_HookFailString(\n                    string.concat(\"Hook reverted: Panic code \", stringErrorCode)\n                );\n            } catch (bytes memory revertData) {\n                // Fallback to an error that returns the byte data.\n                revert Errors.Shared_HookFailBytes(revertData);\n            }\n        }\n    }\n```\nRevise the checks so this is caught.",
+   "MISSED vulnerability. Your detector failed to fire on this real vulnerable function (fault: Calls ESCRW.settlePayment (which transfers ERC777 tokens to lender/renter via _safeTransfer) before STORE.removeRentals, allowing a malicious renter to revert in tokensReceived() hook and permanently lock lender assets by preventing rental cleanup.):\n```solidity\nfunction stopRent(RentalOrder calldata order) external {\n        // Check that the rental can be stopped.\n        _validateRentalCanBeStoped(order.orderType, order.endTimestamp, order.lender);\n\n        // Create an accumulator which will hold all of the rental asset updates, consisting of IDs and\n        // the rented amount. From this point on, new memory cannot be safely allocated until the\n        // accumulator no longer needs to include elements.\n        bytes memory rentalAssetUpdates = new bytes(0);\n\n        // Check if each item in the order is a rental. If so, then generate the rental asset update.\n        // Memory will become safe again after this block.\n        for (uint256 i; i < order.items.length; ++i) {\n            if (order.items[i].isRental()) {\n                // Insert the rental asset update into the dynamic array.\n                _insert(\n                    rentalAssetUpdates,\n                    order.items[i].toRentalId(order.rentalWallet),\n                    order.items[i].amount\n                );\n            }\n        }\n\n        // Interaction: process hooks so they no longer exist for the renter.\n        if (order.hooks.length > 0) {\n            _removeHooks(order.hooks, order.items, order.rentalWallet);\n        }\n\n        // Interaction: Transfer rentals from the renter back to lender.\n        _reclaimRentedItems(order);\n\n        // Interaction: Transfer ERC20 payments from the escrow contract to the respective recipients.\n        ESCRW.settlePayment(order);\n\n        // Interaction: Remove rentals from storage by computing the order hash.\n        STORE.removeRentals(\n            _deriveRentalOrderHash(order),\n            _convertToStatic(rentalAssetUpdates)\n        );\n\n        // Emit rental order stopped.\n        _emitRentalOrderStopped(order.seaportOrderHash, msg.sender);\n    }\n```\nRevise the checks so this is caught.",
+   "FALSE POSITIVE. Your detector wrongly flagged this function (its claim: The function marks a command as executed via `_setCommandExecuted(commandId, true)` before making an external call to execute the command. If the called function (e.g., `approveContractCallWithMint` o):\n```solidity\nfunction _execute(bytes memory data, bytes[] memory signatures) internal {\n        uint256 signatureCount = signatures.length;\n\n        address[] memory signers = new address[](signatureCount);\n\n        for (uint256 i; i < signatureCount; i++) {\n            signers[i] = ECDSA.recover(ECDSA.toEthSignedMessageHash(keccak256(data)), signatures[i]);\n        }\n\n        (\n            uint256 chainId,\n            Role signersRole,\n            bytes32[] memory commandIds,\n            string[] memory commands,\n            bytes[] memory params\n        ) = abi.decode(data, (uint256, Role, bytes32[], string[], bytes[]));\n\n        if (chainId != block.chainid) revert InvalidChainId();\n\n        if (!_isSortedAscAndContainsNoDuplicate(signers)) revert MalformedSigners();\n\n        uint256 commandsLength = commandIds.length;\n\n        if (commandsLength != commands.length || commandsLength != params.length) revert InvalidCommands();\n\n        bool areValidCurrentOwners;\n        bool areValidRecentOwners;\n        bool areValidRecentOperators;\n\n        if (signersRole == Role.Owner) {\n            areValidCurrentOwners = _areValidOwnersInEpoch(_ownerEpoch(), signers);\n            areValidRecentOwners = areValidCurrentOwners || _areValidPreviousOwners(signers);\n        } else if (signersRole == Role.Operator) {\n            areValidRecentOperators = _areValidRecentOperators(signers);\n        }\n\n        for (uint256 i; i < commandsLength; i++) {\n            bytes32 commandId = commandIds[i];\n\n            if (isCommandExecuted(commandId)) continue; /* Ignore if duplicate commandId received */\n\n            bytes4 commandSelector;\n            bytes32 commandHash = keccak256(abi.encodePacked(commands[i]));\n\n            if (commandHash == SELECTOR_DEPLOY_TOKEN) {\n                if (!areValidRecentOwners) continue;\n\n                commandSelector = AxelarGatewayMultisig.deployToken.selector;\n            } else if (commandHash == SELECTOR_MINT_TOKEN) {\n                if (!areValidRecentOperators && !areValidRecentOwners) continue;\n\n                commandSelector = AxelarGatewayMultisig.mintToken.selector;\n            } else if (commandHash == SELECTOR_APPROVE_CONTRACT_CALL) {\n                if (!areValidRecentOperators && !areValidRecentOwners) continue;\n\n                commandSelector = AxelarGatewayMultisig.approveContractCall.selector;\n            } else if (commandHash == SELECTOR_APPROVE_CONTRACT_CALL_WITH_MINT) {\n                if (!areValidRecentOperators && !areValidRecentOwners) continue;\n\n                commandSelector = AxelarGatewayMultisig.approveContractCallWithMint.selector;\n```\nTighten the checks so safe code like this is not reported."
+  ],
+  "n_calls": 1
+ }
+}
