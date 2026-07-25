@@ -1,23 +1,32 @@
 [project]
 name = "bastet-cc"
-version = "0.1.0"
+version = "0.2.0"
 description = "Routed smart-contract vulnerability detection, and an audit of the benchmark it is scored on"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "AIS3 2026 Team 011" }]
 
+# pydantic, scikit-learn and tiktoken were declared but never imported anywhere in
+# bastet_cc/ or scripts/. Dropped rather than left as scaffolding: scikit-learn
+# alone is a large wheel for a project whose statistics are exact binomial sums in
+# bastet_cc/stats.py, and an unused dependency is a supply-chain surface and a
+# reproducibility hazard for no benefit.
 dependencies = [
     "httpx>=0.27",
     "matplotlib>=3.8",
     "pandas>=2.2",
-    "pydantic>=2.7",
-    "scikit-learn>=1.5",
-    "tiktoken>=0.7",
     "tree-sitter>=0.23",
     "tree-sitter-solidity>=1.2",
     "typer>=0.12",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# probe_model.py drives the endpoint through the OpenAI SDK rather than through
+# the project's own client, deliberately: it measures the endpoint, so it must
+# not inherit our retry, throttling or parsing behaviour.
+probe = ["openai>=1.40"]
 
 [project.scripts]
 bastet-cc = "bastet_cc.cli:main"
@@ -28,3 +37,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bastet_cc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "needs_corpus: requires data/train.csv and the extracted repositories",
+]
