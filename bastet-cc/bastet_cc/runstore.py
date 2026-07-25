@@ -114,11 +114,19 @@ class RunStore:
     def load_findings(self) -> list[Finding]:
         """All findings from results.jsonl, first record per task_id winning: resume
         after a crash may append a duplicate, and the earlier line is the one whose
-        write completed."""
+        write completed.
+
+        Falls back to findings.json when results.jsonl is absent. This is not a
+        convenience: results.jsonl embeds contract source verbatim and is
+        gitignored, so on a fresh clone it is the *only* artefact a run has.
+        Without the fallback every scoring and comparison command reports zero
+        findings for every committed run, and nothing in this repository is
+        reproducible by a reader who does not also hold the 6.8 GB corpus.
+        """
         out: list[Finding] = []
         seen: set[str] = set()
         if not self.results_path.exists():
-            return out
+            return self._load_exported()
         with self.results_path.open() as fh:
             for line in fh:
                 try:
@@ -133,6 +141,31 @@ class RunStore:
                     if isinstance(d, dict):
                         out.append(findings_mod.from_dict(d))
         return out
+
+    def _load_exported(self) -> list[Finding]:
+        """findings.json, the committed view of a run.
+
+        Deliberately no task_id deduplication: export_findings() already applied
+        it when the file was written, and re-applying it here would silently drop
+        findings from any run whose exporter predated task_id being recorded.
+        """
+        if not self.findings_path.exists():
+            return []
+        try:
+            data = json.loads(self.findings_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [findings_mod.from_dict(d) for d in data if isinstance(d, dict)]
+
+    def has_results(self) -> bool:
+        """True when the raw append-only log exists, i.e. this run can be resumed.
+
+        A run loaded from findings.json alone is scoreable but not resumable --
+        done_ids() has nothing to read, so resuming would redo every task.
+        """
+        return self.results_path.exists()
 
     def export_findings(self) -> Path:
         """Write findings.json (end-of-run convenience view over results.jsonl)."""
