@@ -1,0 +1,68 @@
+{
+ "tag": "ERC777",
+ "mode": "s2",
+ "detector": {
+  "name": "ERC777-Callback-Reentrancy",
+  "vulnerability_knowledge": "ERC777 tokens implement `tokensReceived` and `tokensToSend` hooks that are invoked during `transfer`, `send`, and `operatorSend` calls. When a contract performs an ERC777 transfer before updating its own accounting state (balances, flow limits, rental records, command execution flags), the recipient contract can re-enter the vulnerable function or a related function via the hook. This violates the Checks-Effects-Interactions pattern: the external call (Interaction) happens before the state update (Effect). Attackers exploit this to double-spend, inflate balances, bypass flow limits, or lock assets by reverting inside the hook. The vulnerability is amplified when the callback can trigger the same entry point (direct reentrancy) or a different function that shares state (cross-function reentrancy). A `revert` inside `tokensReceived` can also cause a permanent DoS if the caller does not handle the failure gracefully and the state required for cleanup is updated only after the transfer.",
+  "checks": [
+   "External ERC777 transfer (`safeTransfer`, `safeTransferFrom`, `transfer`, `send`, `operatorSend`, or low-level `call` to an ERC777 address) occurs before the function updates critical storage variables (balances, flow counters, rental mappings, command execution flags).",
+   "The function lacks a `nonReentrant` modifier (e.g., OpenZeppelin `ReentrancyGuard`) on the entry point and on any other function that reads/writes the same state variables.",
+   "State variables that track inbound/outbound asset flows (`_addFlowIn`, `_addFlowOut`, balance increments/decrements, `settlePayment` accounting) are written after the external token transfer.",
+   "A `try/catch` or low-level `call` wraps a hook invocation (`onStop`, `onStart`, generic `ICallback`) but the surrounding function continues execution or reverts in a way that leaves storage inconsistent if the hook reverts.",
+   "The function calls an external contract (`ESCRW.settlePayment`, `_giveToken`, `_reclaimRentedItems`, `_executeWithToken`) that internally performs ERC777 transfers before the caller finishes its own state updates.",
+   "A `revert` or custom error is triggered based on a hook registry check (`STORE.hookOnStop`) after the hook was previously enabled, creating a DoS vector if the hook cannot be disabled.",
+   "The function returns a value derived from the transfer (`amount = _giveToken(...)`) and uses it for subsequent accounting (`_addFlowIn(amount)`), allowing the reentrant call to manipulate the returned amount.",
+   "Cross-function reentrancy: a virtual/internal function (`_executeWithToken`, `_removeHooks`) called after the transfer can be overridden or invoked directly to re-enter the protocol while the first invocation's state is still stale."
+  ],
+  "incorrect_example": {
+   "code": "function giveToken(address destinationAddress, uint256 amount) external onlyService returns (uint256) {\n    amount = _giveToken(destinationAddress, amount); // ERC777 transfer -> tokensReceived hook\n    _addFlowIn(amount); // state update AFTER interaction\n    return amount;\n}\n\nfunction _giveToken(address to, uint256 amount) internal returns (uint256) {\n    IERC20(token).safeTransfer(to, amount); // may be ERC777\n    return amount;\n}",
+   "explanation": "The ERC777 transfer in `_giveToken` triggers `tokensReceived` before `_addFlowIn` records the flow, allowing the recipient to re-enter `giveToken` and manipulate its balance or flow accounting."
+  },
+  "correct_example": {
+   "code": "function giveToken(address destinationAddress, uint256 amount) external onlyService nonReentrant returns (uint256) {\n    _addFlowIn(amount); // state update BEFORE interaction (CEI)\n    _giveToken(destinationAddress, amount); // ERC777 transfer\n    return amount;\n}\n\nfunction _giveToken(address to, uint256 amount) internal {\n    IERC20(token).safeTransfer(to, amount);\n}",
+   "explanation": "Flow accounting (`_addFlowIn`) is performed before the external ERC777 transfer, and `nonReentrant` prevents reentrant calls from executing while state is inconsistent."
+  },
+  "routing_hint_candidates": [
+   "_giveToken",
+   "_addFlowIn",
+   "_executeWithToken",
+   "expressExecuteWithToken",
+   "settlePayment",
+   "stopRent",
+   "_removeHooks",
+   "_reclaimRentedItems",
+   "tokensReceived",
+   "tokensToSend",
+   "hookOnStop",
+   "onStop",
+   "IHook",
+   "ESCRW",
+   "STORE",
+   "rentalAssetUpdates",
+   "_deriveRentalOrderHash",
+   "_convertToStatic",
+   "_validateRentalCanBeStoped",
+   "_insert",
+   "_setExpressExecutorWithToken",
+   "contractCallWithTokenValue",
+   "_transferFromExecutor",
+   "gateway",
+   "commandId",
+   "expressExecutor",
+   "nonReentrant",
+   "ReentrancyGuard",
+   "safeTransfer",
+   "safeTransferFrom"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "289",
+  "286",
+  "287",
+  "476",
+  "475"
+ ],
+ "exclude_repo": "82a1b82850c4",
+ "error": null
+}

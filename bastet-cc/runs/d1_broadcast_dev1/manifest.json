@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-07-25T03:40:10+00:00",
+  "mode": "broadcast",
+  "model": "ais3/nemotron-3-ultra-550b",
+  "notes": "D1 plan/executor acceptance: one DEV repo, both arms",
+  "planned_tasks": 672,
+  "prompt_version": "v1",
+  "repos": [
+    "e5f8a519b24f"
+  ],
+  "run_id": "d1_broadcast_dev1",
+  "splits_hash": "4b3d5279e6ca9f9ce591474e11ef35375aea47a950a48ea9e2359c5241134295",
+  "temperature": 0.0
+}

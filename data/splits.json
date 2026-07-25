@@ -1,0 +1,336 @@
+{
+  "dev": [
+    "1be7a2863fe1",
+    "2b7ce0d78309",
+    "2cceea6fb3e4",
+    "33f83c1b20b8",
+    "4bea68ae8bc5",
+    "5e41ded6a8cd",
+    "b2ae5242870b",
+    "c9e8bb39a8ae",
+    "e5f8a519b24f",
+    "f3d2dbfd99ea"
+  ],
+  "n_repos": 54,
+  "per_tag_counts": {
+    "Access Control": {
+      "dev": 5,
+      "test": 7,
+      "train_syn": 17
+    },
+    "Accounting Error": {
+      "dev": 2,
+      "test": 6,
+      "train_syn": 16
+    },
+    "Arithmetic": {
+      "dev": 5,
+      "test": 5,
+      "train_syn": 15
+    },
+    "Bad Randomness": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 0
+    },
+    "Bridge": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Chainlink": {
+      "dev": 3,
+      "test": 3,
+      "train_syn": 2
+    },
+    "Compound": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 0
+    },
+    "Cross-Chain": {
+      "dev": 2,
+      "test": 2,
+      "train_syn": 3
+    },
+    "DAO": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 2
+    },
+    "DoS": {
+      "dev": 6,
+      "test": 8,
+      "train_syn": 21
+    },
+    "EIP4494": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 0
+    },
+    "EIP712": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 3
+    },
+    "ERC1155": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 2
+    },
+    "ERC20": {
+      "dev": 2,
+      "test": 4,
+      "train_syn": 13
+    },
+    "ERC4626": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 3
+    },
+    "ERC721": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 5
+    },
+    "ERC777": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 3
+    },
+    "Flashloan": {
+      "dev": 2,
+      "test": 0,
+      "train_syn": 4
+    },
+    "Gnosis safe": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Governance": {
+      "dev": 1,
+      "test": 3,
+      "train_syn": 5
+    },
+    "Input Validation": {
+      "dev": 5,
+      "test": 5,
+      "train_syn": 16
+    },
+    "Liquidation": {
+      "dev": 2,
+      "test": 1,
+      "train_syn": 2
+    },
+    "Logic Error": {
+      "dev": 2,
+      "test": 4,
+      "train_syn": 15
+    },
+    "MEV": {
+      "dev": 0,
+      "test": 2,
+      "train_syn": 5
+    },
+    "Multisig": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Opensea": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 2
+    },
+    "Oracle": {
+      "dev": 3,
+      "test": 2,
+      "train_syn": 4
+    },
+    "Pause": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 3
+    },
+    "RCE": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Re-org Attack": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Rebalance": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Reentrancy": {
+      "dev": 0,
+      "test": 2,
+      "train_syn": 7
+    },
+    "Replay Attack": {
+      "dev": 2,
+      "test": 0,
+      "train_syn": 2
+    },
+    "Slippage": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 5
+    },
+    "Solidity Version": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 0
+    },
+    "Solmate": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 2
+    },
+    "TWAP": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Uniswap": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 3
+    },
+    "Upgradeable": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 5
+    },
+    "XSS Attack": {
+      "dev": 0,
+      "test": 0,
+      "train_syn": 1
+    },
+    "Zksync": {
+      "dev": 1,
+      "test": 0,
+      "train_syn": 1
+    },
+    "call / delegatecall": {
+      "dev": 0,
+      "test": 1,
+      "train_syn": 1
+    }
+  },
+  "seed": 20260725,
+  "sizes": {
+    "dev": 10,
+    "test": 12,
+    "train_syn": 32
+  },
+  "source_csv": "/home/e0pwr/ais3-2026/data/train.csv",
+  "source_sha256": "403d0519a12b6343e88c49432727845a2e53bc16c17da3743cadeab387b1c024",
+  "splits_sha256": "4b3d5279e6ca9f9ce591474e11ef35375aea47a950a48ea9e2359c5241134295",
+  "test": [
+    "347d893744f1",
+    "727004c1c07c",
+    "794c62261b8d",
+    "8b0abbf14c91",
+    "9e1a7f778757",
+    "b30036fd8ad6",
+    "b7a4028d825e",
+    "c192cb02636e",
+    "d52ee365a168",
+    "dc783f2b0ddc",
+    "ec394ead8172",
+    "edf1b6dd23d6"
+  ],
+  "train_syn": [
+    "1150ac69e096",
+    "19000d572f72",
+    "1aee004bafff",
+    "22ad8fd6e044",
+    "289d8258d7b3",
+    "29aba850d512",
+    "2c2d03025183",
+    "37dd0c2e7de6",
+    "3a8408b6f3d4",
+    "4561d049a9da",
+    "4dd1b2af57b2",
+    "50015cf871a0",
+    "529b81f6eb01",
+    "57feee7d5701",
+    "668a8ea1ed7c",
+    "6a503b3dea2b",
+    "70080e8fc005",
+    "82a1b82850c4",
+    "8ce9aae8427c",
+    "9007dfde367e",
+    "966f040d9bc8",
+    "a8a9998bfe4a",
+    "ac5c6d4a2ace",
+    "b0b4fa38c58e",
+    "b78ed0629056",
+    "bb9c2df58c59",
+    "bc50c508bb4d",
+    "d5aa11e316e7",
+    "e269b2c934ee",
+    "e68d196f2fbd",
+    "f4d8a18e633f",
+    "fccd852beaa3"
+  ],
+  "uncovered": {
+    "dev": [
+      "Reentrancy",
+      "MEV",
+      "Upgradeable",
+      "ERC4626",
+      "EIP712",
+      "ERC1155",
+      "ERC777",
+      "Opensea",
+      "Solmate",
+      "call / delegatecall",
+      "Compound",
+      "EIP4494",
+      "Gnosis safe",
+      "Multisig",
+      "RCE",
+      "Re-org Attack",
+      "Rebalance",
+      "Solidity Version",
+      "XSS Attack"
+    ],
+    "test": [
+      "ERC721",
+      "Flashloan",
+      "Slippage",
+      "Pause",
+      "Replay Attack",
+      "Uniswap",
+      "DAO",
+      "EIP712",
+      "ERC777",
+      "Bridge",
+      "Opensea",
+      "Solmate",
+      "TWAP",
+      "Zksync",
+      "Bad Randomness",
+      "Gnosis safe",
+      "Multisig",
+      "RCE",
+      "Re-org Attack",
+      "Rebalance",
+      "XSS Attack"
+    ],
+    "train_syn": [
+      "Bad Randomness",
+      "Compound",
+      "EIP4494",
+      "Solidity Version"
+    ]
+  }
+}

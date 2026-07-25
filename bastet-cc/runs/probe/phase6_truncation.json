@@ -1,0 +1,70 @@
+{
+  "rows": [
+    {
+      "max_tokens": 16,
+      "api_ok": true,
+      "error": null,
+      "finish_reason": "length",
+      "completion_tokens": 16,
+      "content_is_none": false,
+      "content_len": 70,
+      "parse_error": "unparseable",
+      "schema_ok": false,
+      "tail": "[\n    {\n        \"summary\": \"No slippage protection in harvest function"
+    },
+    {
+      "max_tokens": 64,
+      "api_ok": true,
+      "error": null,
+      "finish_reason": "length",
+      "completion_tokens": 64,
+      "content_is_none": false,
+      "content_len": 290,
+      "parse_error": "unparseable",
+      "schema_ok": false,
+      "tail": "       \"vulnerability_details\": {\n            \"function_name\": \"harvest\",\n            \"description\": \"The harvest function swaps reward tokens to the base asset"
+    },
+    {
+      "max_tokens": 256,
+      "api_ok": true,
+      "error": null,
+      "finish_reason": "stop",
+      "completion_tokens": 210,
+      "content_is_none": false,
+      "content_len": 949,
+      "parse_error": null,
+      "schema_ok": true,
+      "tail": "t using an oracle or on-chain TWAP. Pass this minimum amount to swapExactTokensForTokens instead of 0 to protect against slippage and sandwich attacks.\"\n    }\n]"
+    },
+    {
+      "max_tokens": 1024,
+      "api_ok": true,
+      "error": null,
+      "finish_reason": "stop",
+      "completion_tokens": 193,
+      "content_is_none": false,
+      "content_len": 879,
+      "parse_error": null,
+      "schema_ok": true,
+      "tail": "ction or calculate a minimum expected output using an oracle or on-chain price feed. Pass this minimum amount to swapExactTokensForTokens instead of 0.\"\n    }\n]"
+    },
+    {
+      "max_tokens": 4096,
+      "api_ok": true,
+      "error": null,
+      "finish_reason": "stop",
+      "completion_tokens": 237,
+      "content_is_none": false,
+      "content_len": 1051,
+      "parse_error": null,
+      "schema_ok": true,
+      "tail": "a slippage tolerance (e.g., 99% of expected output) to set a meaningful minimum amount. Pass this calculated minimum to the swap function instead of 0.\"\n    }\n]"
+    }
+  ],
+  "oversized_context_probe": {
+    "api_ok": false,
+    "error": "BadRequestError: Error code: 400 - {'error': {'message': 'litellm.ContextWindowExceededError: litellm.BadRequestError: ContextWindowExceededError: Hosted_vllmException - {\"error\":{\"message\":\"This model\\'s maximum context length is 262144 tokens. However, you requested 16 output tokens and your prompt contains at least 262129 input tokens, for a total of at least 262145 tokens. Please reduce the length of the input",
+    "prompt_tokens": null,
+    "finish_reason": null
+  }
+}

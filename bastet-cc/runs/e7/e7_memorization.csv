@@ -1,0 +1,11 @@
+repo,recognised,project_guess,n_true,model_jaccard,model_recall,baseline_jaccard,baseline_recall,predicted
+1be7a2863fe1,True,Predy,10,0.3333333333333333,0.4,0.3333333333333333,0.4,"Accounting Error, Liquidation, Logic Error, Oracle, Reentrancy, Uniswap"
+2b7ce0d78309,True,Moonwell,12,0.2,0.25,0.2857142857142857,0.3333333333333333,"Access Control, Compound, Cross-Chain, Governance, Logic Error, Oracle"
+2cceea6fb3e4,True,Beebots,6,0.5,0.6666666666666666,0.3333333333333333,0.5,"Access Control, Bad Randomness, DoS, ERC721, Logic Error, Reentrancy"
+33f83c1b20b8,False,,1,0.0,0.0,0.16666666666666666,1.0,
+4bea68ae8bc5,True,Perennial Finance,5,0.5714285714285714,0.8,0.375,0.6,"Access Control, Accounting Error, Input Validation, Logic Error, Oracle, Reentrancy"
+5e41ded6a8cd,True,zkSync Era System Contracts,5,0.5714285714285714,0.8,0.5714285714285714,0.8,"Access Control, Accounting Error, Input Validation, Logic Error, Reentrancy, Zksync"
+b2ae5242870b,True,Coinbase Smart Wallet,3,0.14285714285714285,0.3333333333333333,0.125,0.3333333333333333,"Access Control, Input Validation, Logic Error, Replay Attack, Upgradeable"
+c9e8bb39a8ae,False,,2,0.0,0.0,0.14285714285714285,0.5,
+e5f8a519b24f,True,FIAT DAO veFDT,5,0.375,0.6,0.2222222222222222,0.4,"Access Control, Accounting Error, ERC20, Governance, Logic Error, Reentrancy"
+f3d2dbfd99ea,True,Index Coop / Morpho Leverage Strategy,2,0.0,0.0,0.3333333333333333,1.0,"Access Control, Liquidation, Logic Error, Oracle, Rebalance, Slippage"

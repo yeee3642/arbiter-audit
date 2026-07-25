@@ -1,0 +1,73 @@
+{
+ "tag": "Accounting Error",
+ "mode": "s2",
+ "detector": {
+  "name": "Accounting Error",
+  "vulnerability_knowledge": "Accounting errors occur when a protocol's internal records diverge from actual asset movements or when numerical logic fails to reflect the true behavior of tokens. Common root causes include: (1) assuming `transfer`/`transferFrom` moves exactly the requested amount, which breaks with fee-on-transfer or rebasing tokens; (2) updating state before or after external calls in the wrong order, enabling reentrancy or double-counting; (3) using stale cached values (e.g., `totalSupply`, `balanceOf`) instead of reading live balances after transfers; (4) omitting updates to aggregate counters (e.g., `totalSupply`, `rewardsPerToken.lastUpdated`) during edge cases like zero-supply or first deposit; (5) applying fees or rewards on inflated bases that already include prior fees, causing exponential compounding; (6) trusting external price oracles without conversion steps (e.g., wstETH\u2192stETH\u2192WETH); and (7) depositing imbalanced asset ratios into multi-asset pools (Curve, Balancer) without proportional checks, minting fewer LP tokens than the deposited value. Auditors must trace every asset movement, verify that each state variable mirrors on-chain reality at the exact program point, and confirm that formulas match the documented economic model.",
+  "checks": [
+   "Verify that every ERC20 `transfer`/`transferFrom`/`safeTransfer`/`safeTransferFrom` is followed by a balance delta check (`balanceAfter - balanceBefore`) rather than trusting the input amount, especially for tokens that may be fee-on-transfer or rebasing.",
+   "Ensure state variables tracking totals (`totalSupply`, `totalAssets`, `totalShares`, `rewardsPerToken.accumulated`, `rewardsPerToken.lastUpdated`) are updated in the same transaction and in the correct order relative to external calls \u2014 typically after incoming transfers and before outgoing transfers.",
+   "Check that functions returning early on edge conditions (e.g., `_totalSupply == 0`, `block.timestamp < start`) still update baseline timestamps or accumulators so the first user cannot claim unearned rewards.",
+   "Confirm that fee or reward calculations use a base that excludes the fee/reward being minted (e.g., `totalShares()` before protocol fee mint) to prevent recursive compounding.",
+   "Validate that price-returning functions perform all necessary conversion hops (e.g., wstETH \u2192 stETH via `getStEthByWstEth`, then stETH \u2192 WETH via Curve/Uniswap oracle) and return the unit the rest of the protocol expects.",
+   "Ensure multi-asset liquidity additions (Curve `add_liquidity`, Balancer `joinPool`) compute amounts proportional to the pool\u2019s current balances or target weights instead of dumping raw contract balances.",
+   "Verify that `burn`/`_burn` hooks decrement all supply-tracking variables (`totalSupply`, `totalShares`, queue counters) and that no mapping or counter is left stale.",
+   "Check that cross-module calls (e.g., `shareManager.mint`, `feeManager.updateState`, `queue.handleReport`) are sequenced so that each module sees a consistent view of state \u2014 no module reads pre-update values while another has already written post-update values."
+  ],
+  "incorrect_example": {
+   "code": "function deposit() external {\n    uint256 amount = msg.value;\n    // Vulnerable: assumes WETH transfer equals msg.value, no fee-on-transfer check\n    IERC20(weth).safeTransferFrom(msg.sender, address(this), amount);\n    shares[msg.sender] += amount; // accounting error if fee-on-transfer\n    totalShares += amount;\n}",
+   "explanation": "The function trusts the input `amount` instead of measuring the actual token balance increase, so fee-on-transfer tokens cause `shares` and `totalShares` to overstate real deposits."
+  },
+  "correct_example": {
+   "code": "function deposit() external {\n    uint256 amount = msg.value;\n    uint256 balBefore = IERC20(weth).balanceOf(address(this));\n    IERC20(weth).safeTransferFrom(msg.sender, address(this), amount);\n    uint256 balAfter = IERC20(weth).balanceOf(address(this));\n    uint256 received = balAfter - balBefore;\n    shares[msg.sender] += received;\n    totalShares += received;\n}",
+   "explanation": "Measuring the actual balance delta (`received`) ensures accounting stays accurate even with fee-on-transfer or rebasing tokens."
+  },
+  "routing_hint_candidates": [
+   "withdrawReserves",
+   "_checkApproval",
+   "withdrawApproval",
+   "rewardsPerToken",
+   "lastUpdated",
+   "_totalSupply",
+   "rewardsPeriod",
+   "accumulated",
+   "rate",
+   "deploy",
+   "parameter",
+   "optionFactory",
+   "token0",
+   "token1",
+   "safeTransferFrom",
+   "SafeTokenCall",
+   "safeCall",
+   "price",
+   "getStEthByWstEth",
+   "SafeERC20",
+   "expectDecimals",
+   "handleReport",
+   "totalShares",
+   "calculateFee",
+   "mint",
+   "feeRecipient",
+   "updateState",
+   "queues",
+   "burn",
+   "settings"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [
+  "198",
+  "18",
+  "251",
+  "297",
+  "134",
+  "450",
+  "51",
+  "228",
+  "34",
+  "387"
+ ],
+ "exclude_repo": null,
+ "error": null
+}

@@ -1,0 +1,60 @@
+{
+ "tag": "Compound",
+ "mode": "s2b",
+ "detector": {
+  "name": "Compound-Reward Manipulation via Exchange Rate",
+  "vulnerability_knowledge": "Compound's cToken exchange rate (exchangeRateStored/exchangeRateCurrent) increases monotonically as interest accrues. Protocols that integrate with Compound often calculate reward distributions, collateral values, or liquidation thresholds by reading this rate. If a contract snapshots the exchange rate before a user action (deposit, borrow, redeem) but applies the reward logic after the action, an attacker can manipulate the effective rate by sandwiching a large deposit/withdrawal or by calling accrueInterest directly. Because accrueInterest is permissionless and updates the supply index, a single transaction can inflate the rate, causing the protocol to over-reward the attacker or under-collateralize a position. The core flaw is using a stale or pre-action exchange rate for post-action accounting without re-reading the rate after state changes or without guarding against intra-block rate manipulation.",
+  "checks": [
+   "Contract reads cToken.exchangeRateStored() or exchangeRateCurrent() before a state-changing interaction (mint, redeem, borrow, repayBorrow) and uses that cached value for reward or collateral calculations after the interaction.",
+   "Contract calls accrueInterest() on a cToken but does not re-read the exchange rate afterward before using it in math.",
+   "Reward distribution logic uses a snapshot of totalSupply or totalBorrows taken before accrueInterest or user mint/redeem, causing the denominator to be stale.",
+   "Liquidation or health-factor checks compute collateral value using an exchange rate read prior to the liquidator's seizeTokens call, which itself triggers accrueInterest.",
+   "Contract implements a \"claim rewards\" function that multiplies user balance by a cached exchangeRate instead of calling balanceOfUnderlying after the latest accrueInterest.",
+   "Governance or admin functions that update reward speeds or emission rates do not enforce a timelock or require a prior accrueInterest call, allowing rate manipulation in the same block.",
+   "Contract uses cToken.balanceOfUnderlying(account) without ensuring accrueInterest was called in the same transaction after the last state change.",
+   "Math operations divide by exchangeRate (e.g., underlying = cTokenAmount * 1e18 / exchangeRate) without checking for zero or overflow after a potential rate jump."
+  ],
+  "incorrect_example": {
+   "code": "contract RewardDistributor {\n    CToken public cDAI;\n    uint256 public lastExchangeRate;\n    \n    function snapshotRate() external {\n        lastExchangeRate = cDAI.exchangeRateStored(); // @audit cached before user action\n    }\n    \n    function depositAndClaim(uint256 amount) external {\n        cDAI.mint(amount);\n        uint256 underlying = (cDAI.balanceOf(msg.sender) * 1e18) / lastExchangeRate; // @audit uses stale rate\n        uint256 reward = underlying * rewardPerToken / 1e18;\n        rewardToken.mint(msg.sender, reward);\n    }\n}",
+   "explanation": "The contract caches exchangeRateStored before the mint, then uses it after mint to compute underlying value and rewards, allowing an attacker to inflate the rate via a sandwich deposit and claim excess rewards."
+  },
+  "correct_example": {
+   "code": "contract RewardDistributor {\n    CToken public cDAI;\n    \n    function depositAndClaim(uint256 amount) external {\n        cDAI.mint(amount);\n        cDAI.accrueInterest(); // ensure latest index\n        uint256 underlying = cDAI.balanceOfUnderlying(msg.sender); // @audit reads post-action rate\n        uint256 reward = underlying * rewardPerToken / 1e18;\n        rewardToken.mint(msg.sender, reward);\n    }\n}",
+   "explanation": "The fix calls accrueInterest after the state change and uses balanceOfUnderlying (which reads the current exchange rate) instead of a cached snapshot, preventing intra-block rate manipulation."
+  },
+  "routing_hint_candidates": [
+   "exchangeRateStored",
+   "exchangeRateCurrent",
+   "accrueInterest",
+   "balanceOfUnderlying",
+   "mint",
+   "redeem",
+   "borrow",
+   "repayBorrow",
+   "seizeTokens",
+   "totalSupply",
+   "totalBorrows",
+   "supplyIndex",
+   "borrowIndex",
+   "cToken",
+   "CToken",
+   "Comptroller",
+   "rewardPerToken",
+   "rewardSpeed",
+   "claimRewards",
+   "distributeRewards",
+   "liquidateBorrow",
+   "healthFactor",
+   "collateralFactor",
+   "underlying",
+   "cash",
+   "reserves",
+   "blockNumber",
+   "timestamp"
+  ]
+ },
+ "fallback": false,
+ "triples_used": [],
+ "exclude_repo": null,
+ "error": null
+}
