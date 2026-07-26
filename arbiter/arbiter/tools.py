@@ -529,10 +529,21 @@ class ToolDispatcher:
             )
             self._poc_by_name[name] = record
             self.outcome.pocs.append(record)
+            # Show the composed file, numbered. The agent supplies fragments and the
+            # harness assembles them, so solc's line numbers refer to a file the agent
+            # has never seen -- without this it is debugging blind, and repeated compile
+            # failures were the single largest cause of missed vulnerable samples.
+            listing = "\n".join(
+                f"{i:>3}| {line}" for i, line in enumerate(solidity.splitlines(), 1)
+            )
             return (
-                "COMPILATION FAILED. Fix the attacker contract or the deployment and "
-                "call run_exploit again. Remember the harness already supplies the "
-                "pragma, the imports and the success check.\n\n" + _tail(build.combined),
+                "COMPILATION FAILED. Below is the COMPLETE file the harness assembled "
+                "from your fragments -- the compiler's line numbers refer to this, not "
+                "to what you sent. Read the error, find that line here, and call "
+                "run_exploit again with corrected fragments. Do not add a pragma, an "
+                "import, or a success check; the harness owns those lines.\n\n"
+                "----- composed exploit -----\n" + listing[:7000] +
+                "\n----- compiler output -----\n" + _tail(build.combined),
                 False,
             )
 
@@ -555,8 +566,18 @@ class ToolDispatcher:
                 f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}. The "
                 "attacker gained nothing, or the state you named did not move. Either "
                 "the attack is wrong, or the contract genuinely resists it. Look at the "
-                "revert reason: a message starting 'ARBITER:' means your attack ran but "
-                "produced no gain, which is evidence of safety.\n\n"
+                "revert reason.\n"
+                "  'attacker did no better than an honest user' -- the attack ran but "
+                "gained no more than honest_body did. Either the attack is not actually "
+                "an exploit, or your honest_body is doing too much: it should be the "
+                "MINIMAL intended use, not a maximal one.\n"
+                "  'ordinary use already moves this state' -- the getter you chose is "
+                "not privileged, because honest_body moved it too. Pick state only an "
+                "authorised party should be able to change, such as an owner or a role.\n"
+                "  'privileged state did not change' -- the attack left it alone.\n"
+                "  anything else -- the target reverted, so a guard stopped you.\n"
+                "A guard stopping you is evidence of safety, not a failure on your "
+                "part.\n\n"
             )
             if repeated:
                 head += (
