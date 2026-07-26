@@ -49,6 +49,7 @@ def run_arbiter(
     rpm: int = 45,
     workspace_root: Path | None = None,
     proposals_path: Path | None = None,
+    carry_ruled_out: bool = False,
     api_key: str | None = None,
 ) -> dict[str, Any]:
     meta, items = load_evalset(evalset)
@@ -113,7 +114,7 @@ def run_arbiter(
                     max_turns=max_turns,
                     max_tokens=max_tokens,
                     trace_sink=attempt_trace,
-                    ruled_out=ruled_out,
+                    ruled_out=ruled_out if carry_ruled_out else None,
                     proposals=proposal_block(hits.get(item['id'], []), rare) if hits else "",
                 )
             except Exception as exc:  # noqa: BLE001
@@ -134,9 +135,10 @@ def run_arbiter(
             trace = attempt_trace
             if outcome.proven:
                 break
-            # Carry this attempt's dead ends into the next one. Deduplicated on a
-            # normalised prefix so ten restatements of the same reentrancy idea occupy
-            # one line rather than ten.
+            # Dead ends carried into the next attempt. OFF by default: measured, this
+            # halved recall (0.450 -> 0.200) because an exploit that fails does not tell
+            # you whether the hypothesis was wrong or merely badly built, so banning it
+            # bans correct answers too. Kept behind the flag as a recorded negative.
             for poc in outcome.pocs:
                 if not poc.adjudicated or poc.passed:
                     continue
@@ -199,6 +201,7 @@ def run_arbiter(
         "repeats": repeats,
         "attempts_per_sample": attempts,
         "proposals_from": str(proposals_path) if proposals_path else None,
+        "carry_ruled_out": carry_ruled_out,
         "max_turns": max_turns,
         "max_tokens": max_tokens,
         "wall_clock_s": round(time.monotonic() - started, 1),

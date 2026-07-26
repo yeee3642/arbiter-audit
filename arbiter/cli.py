@@ -35,6 +35,8 @@ def main() -> int:
     r.add_argument("--max-turns", type=int, default=16)
     r.add_argument("--max-tokens", type=int, default=4096)
     r.add_argument("--rpm", type=int, default=45)
+    r.add_argument("--carry-ruled-out", action="store_true",
+                   help="carry failed hypotheses between attempts (measured harmful; off)")
     r.add_argument("--proposals", type=Path, default=None,
                    help="Bastet jobs.jsonl; enables cascade mode (detector hits become hypotheses)")
 
@@ -89,6 +91,7 @@ def main() -> int:
             max_tokens=args.max_tokens,
             rpm=args.rpm,
             proposals_path=args.proposals,
+            carry_ruled_out=args.carry_ruled_out,
         )
         _, items = load_evalset(args.evalset)
         truth = truth_map(items)
