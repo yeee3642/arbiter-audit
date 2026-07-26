@@ -74,9 +74,12 @@ def tool_schemas() -> list[dict[str, Any]]:
             "function": {
                 "name": "run_poc",
                 "description": (
+                    "EXPLORATION ONLY -- a passing run_poc cannot back a finding, "
+                    "because you write its success condition yourself. Use it to probe "
+                    "behaviour, confirm how a function reacts, or check an assumption "
+                    "cheaply; then prove the actual exploit with run_exploit. "
                     "Write a Solidity proof-of-concept, compile it, and execute it "
-                    "against the contract under audit on a real EVM. This is the only "
-                    "way to establish that a vulnerability is real. The contract under "
+                    "against the contract under audit on a real EVM. The contract under "
                     "audit is at src/Target.sol and you import it with "
                     "'import \"../src/Target.sol\";'. Foundry cheatcodes are available "
                     "with 'import \"./Vm.sol\";' and inheriting Harness, which gives you "
@@ -119,11 +122,76 @@ def tool_schemas() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "run_exploit",
+                "description": (
+                    "Run an adjudicated exploit. THIS IS THE ONLY EVIDENCE THAT CAN "
+                    "BACK A FINDING. You supply the deployment and an attacker "
+                    "contract; the harness writes the success condition itself and you "
+                    "cannot change it. Requirements: (a) deploy_code must assign the "
+                    "contract under audit to a local variable literally named 'target', "
+                    "e.g. 'UtopiaVault target = new UtopiaVault{value: 10 ether}();'; "
+                    "(b) attacker_code must define a contract literally named 'Attacker' "
+                    "with 'constructor(address)' and a function 'attack() external'; it "
+                    "may also define helper contracts and a receive() function. The "
+                    "harness funds the Attacker, records the measurement, calls "
+                    "attack(), and then checks the predicate. Choose eth_profit to prove "
+                    "the attacker ends up with more ether than it was given, or "
+                    "state_change to prove privileged state moved when an unprivileged "
+                    "account acted."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "deploy_code": {
+                            "type": "string",
+                            "description": (
+                                "Solidity statements that create the contract under "
+                                "audit in a variable named 'target'."
+                            ),
+                        },
+                        "attacker_code": {
+                            "type": "string",
+                            "description": (
+                                "Full source of a contract named 'Attacker' with "
+                                "constructor(address) and attack() external. No pragma "
+                                "and no imports -- the harness supplies both."
+                            ),
+                        },
+                        "predicate": {
+                            "type": "string",
+                            "enum": ["eth_profit", "state_change"],
+                        },
+                        "observed_getter": {
+                            "type": "string",
+                            "description": (
+                                "Required for state_change. A zero-argument public view "
+                                "function with its signature, e.g. 'owner()' or "
+                                "'totalSupply()'."
+                            ),
+                        },
+                        "hypothesis": {"type": "string"},
+                    },
+                    "required": [
+                        "name",
+                        "deploy_code",
+                        "attacker_code",
+                        "predicate",
+                        "hypothesis",
+                    ],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "submit_finding",
                 "description": (
                     "Report a confirmed vulnerability. REJECTED unless poc_name refers "
-                    "to a PoC you already ran and which passed. Do not call this on the "
-                    "strength of a recognised pattern; the pattern is not the bug."
+                    "to a run_exploit that PASSED. A free-form run_poc is exploration "
+                    "and can never back a finding, because you wrote its success "
+                    "condition yourself. Do not call this on the strength of a "
+                    "recognised pattern; the pattern is not the bug."
                 ),
                 "parameters": {
                     "type": "object",
@@ -200,6 +268,10 @@ class PocRecord:
     compiled: bool
     passed: bool
     output: str
+    # True only when the success condition was written by the harness rather than by
+    # the agent. Findings may cite these and nothing else.
+    adjudicated: bool = False
+    predicate: str = ""
 
 
 @dataclass
@@ -216,9 +288,14 @@ class AgentOutcome:
 
     @property
     def proven(self) -> bool:
-        """True when the vulnerable verdict is backed by an executed exploit."""
+        """True when the vulnerable verdict is backed by a harness-adjudicated exploit.
+
+        `adjudicated` is the whole point: a passing test whose assertion the agent chose
+        proves only that the assertion is true, which is how an earlier revision was
+        talked into a false positive on patched code.
+        """
         return self.verdict == "vulnerable" and any(
-            p.passed for p in self.pocs
+            p.passed and p.adjudicated for p in self.pocs
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -236,6 +313,8 @@ class AgentOutcome:
                     "hypothesis": p.hypothesis,
                     "compiled": p.compiled,
                     "passed": p.passed,
+                    "adjudicated": p.adjudicated,
+                    "predicate": p.predicate,
                     "output_tail": p.output[-1200:],
                     "solidity": p.solidity,
                 }
@@ -258,6 +337,7 @@ class ToolDispatcher:
             "read_source": self._read_source,
             "grep_source": self._grep_source,
             "run_poc": self._run_poc,
+            "run_exploit": self._run_exploit,
             "submit_finding": self._submit_finding,
             "conclude_safe": self._conclude_safe,
         }.get(name)
@@ -320,6 +400,76 @@ class ToolDispatcher:
             )
         return head + _tail(run.combined), False
 
+    def _run_exploit(self, args: dict[str, Any]) -> tuple[str, bool]:
+        """Compile and run an exploit whose success condition the harness owns."""
+        raw_name = str(args.get("name") or "exploit")
+        predicate = str(args.get("predicate") or "eth_profit")
+        hypothesis = str(args.get("hypothesis") or "")
+        attacker_code = str(args.get("attacker_code") or "")
+        deploy_code = str(args.get("deploy_code") or "")
+
+        if "contract Attacker" not in attacker_code:
+            return (
+                "error: attacker_code must define a contract named exactly 'Attacker'.",
+                False,
+            )
+        if "target" not in deploy_code:
+            return (
+                "error: deploy_code must assign the contract under audit to a variable "
+                "named exactly 'target'.",
+                False,
+            )
+
+        try:
+            solidity = self.ws.compose_exploit(
+                deploy_code=deploy_code,
+                attacker_code=attacker_code,
+                predicate=predicate,
+                observed_getter=str(args.get("observed_getter") or ""),
+            )
+        except ValueError as exc:
+            return f"error: {exc}", False
+
+        name = self.ws.write_poc(f"{raw_name}Exploit", solidity)
+        build = self.ws.build()
+        if not build.ok:
+            record = PocRecord(
+                name, hypothesis, solidity, False, False, build.combined,
+                adjudicated=True, predicate=predicate,
+            )
+            self._poc_by_name[name] = record
+            self.outcome.pocs.append(record)
+            return (
+                "COMPILATION FAILED. Fix the attacker contract or the deployment and "
+                "call run_exploit again. Remember the harness already supplies the "
+                "pragma, the imports and the success check.\n\n" + _tail(build.combined),
+                False,
+            )
+
+        run = self.ws.run_poc(name)
+        passed = _test_passed(run)
+        record = PocRecord(
+            name, hypothesis, solidity, True, passed, run.combined,
+            adjudicated=True, predicate=predicate,
+        )
+        self._poc_by_name[name] = record
+        self.outcome.pocs.append(record)
+
+        if passed:
+            head = (
+                f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}. This is "
+                "admissible evidence. Call submit_finding citing this name.\n\n"
+            )
+        else:
+            head = (
+                f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}. The "
+                "attacker gained nothing, or the state you named did not move. Either "
+                "the attack is wrong, or the contract genuinely resists it. Look at the "
+                "revert reason: a message starting 'ARBITER:' means your attack ran but "
+                "produced no gain, which is evidence of safety.\n\n"
+            )
+        return head + _tail(run.combined), False
+
     # -- terminal tools ------------------------------------------------------
 
     def _submit_finding(self, args: dict[str, Any]) -> tuple[str, bool]:
@@ -337,6 +487,12 @@ class ToolDispatcher:
 
         if record is None:
             reason = f"no PoC named {args.get('poc_name')!r} has been run"
+        elif not record.adjudicated:
+            reason = (
+                f"{poc_name!r} is a free-form run_poc, not a run_exploit. You wrote its "
+                "success condition yourself, so it proves only that an assertion you "
+                "chose is true. Reproduce the attack with run_exploit"
+            )
         elif not record.compiled:
             reason = f"PoC {poc_name!r} never compiled"
         elif not record.passed:
