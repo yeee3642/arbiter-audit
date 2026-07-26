@@ -27,7 +27,17 @@ TN = 0. F1 = 0.667 is *exactly* the score of answering "vulnerable" every time.
 even a generous 5% per-detector false-positive rate, `1 − 0.95⁵³ = 0.934` — it would
 still flag 93% of safe code. No amount of prompt engineering fixes a disjunction that
 wide, and no new detector can lower it, because a detector can only ever add another
-term. The architecture has no way to say "this code is fine".
+term. The architecture as shipped has no way to say "this code is fine".
+
+> **Correction, after adversarial review.** That argument holds for Bastet's *shipped
+> configuration* and was overstated as a claim about the architecture. Given one tuning
+> decision — score on the single best detector rather than OR-ing 53 — Bastet reaches
+> **F1 0.6909 and MCC +0.227** on the same 40 samples, beating ARBITER's F1 outright.
+> The "structurally uninformative" framing was resting on an untuned baseline. See
+> `RESULTS.md` and `scripts/detector_baselines.py`. Read the whole of `RESULTS.md`
+> before quoting any number from this file: a bootstrap defect was found that had
+> narrowed every confidence interval in this project's favour, and after fixing it the
+> MCC advantage no longer excludes zero.
 
 Two more measured facts point the same way:
 
