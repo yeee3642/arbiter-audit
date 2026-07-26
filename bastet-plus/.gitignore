@@ -1,0 +1,18 @@
+# Secrets. The AIS3 gateway token is issued per team and belongs in the environment.
+.env
+.env.local
+
+# Response cache: content-addressed sqlite holding every prompt and completion
+# verbatim. Local-only -- it is a speed and reproducibility aid, not an artefact.
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ad-hoc scan output. benchmark_results/ is deliberately NOT ignored: RESULTS.md
+# cites those JSONs as the evidence for every number it claims, so they ship.
+scan_report/
+scratch/

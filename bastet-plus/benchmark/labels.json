@@ -1,0 +1,143 @@
+{
+  "_about": "Labelled micro-benchmark for A/B-ing the Bastet harness. The upstream Bastet dataset (450 Code4rena repos) is distributed via Google Drive and is not in the repository, so this self-contained set stands in for it. Every vulnerable case is paired with a functionally equivalent safe case, which is what makes the false-positive rate measurable: a harness that shouts 'slippage!' at every swap scores well on the vulnerable half and terribly here.",
+
+  "classes": ["slippage", "reentrancy", "access_control", "oracle", "randomness", "unchecked_call"],
+
+  "detector_class": {
+    "slippage__0": "slippage", "slippage__1": "slippage", "slippage__2": "slippage",
+    "slippage__3": "slippage", "slippage__4": "slippage", "slippage__5": "slippage",
+    "slippage__6": "slippage", "slippage__7": "slippage", "slippage__8": "slippage",
+    "slippage_min_amount": "slippage",
+    "access_control__0": "access_control",
+    "access_control__1": "access_control",
+    "owasp2025__0": "access_control",
+    "owasp2025__4": "reentrancy",
+    "owasp2025__9": "unchecked_call",
+    "owasp2025__7": "randomness",
+    "owasp2025__1": "oracle",
+    "chainlink__1": "oracle"
+  },
+
+  "cases": [
+    {
+      "file": "slippage_vuln_01.sol",
+      "classes": ["slippage"],
+      "functions": ["harvest"],
+      "note": "swapExactTokensForTokens called with amountOutMin hardcoded to 0"
+    },
+    {
+      "file": "slippage_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "same vault; minWantOut and deadline are caller-supplied and re-checked after the swap"
+    },
+    {
+      "file": "slippage_vuln_02.sol",
+      "classes": ["slippage"],
+      "functions": ["zapIn"],
+      "note": "caller supplies amountAMin/amountBMin but the wrapper passes 0,0 to the router"
+    },
+    {
+      "file": "slippage_safe_02.sol",
+      "classes": [],
+      "functions": [],
+      "note": "same zapper; the caller's bounds are forwarded and re-asserted"
+    },
+    {
+      "file": "reentrancy_vuln_01.sol",
+      "classes": ["reentrancy"],
+      "functions": ["withdraw"],
+      "note": "balance decremented after the msg.sender.call value transfer"
+    },
+    {
+      "file": "reentrancy_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "checks-effects-interactions plus a nonReentrant guard"
+    },
+    {
+      "file": "reentrancy_vuln_02.sol",
+      "classes": ["reentrancy"],
+      "functions": ["claimAndUnstake"],
+      "note": "onERC721Received callback fires before pendingRewards is zeroed"
+    },
+    {
+      "file": "reentrancy_safe_02.sol",
+      "classes": [],
+      "functions": [],
+      "note": "same pool; all accounting settled before the callback, plus a guard"
+    },
+    {
+      "file": "access_control_vuln_01.sol",
+      "classes": ["access_control"],
+      "functions": ["setOwner"],
+      "note": "setOwner has no onlyOwner modifier; anyone can seize the treasury"
+    },
+    {
+      "file": "access_control_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "two-step transferOwnership/acceptOwnership, both gated"
+    },
+    {
+      "file": "access_control_vuln_02.sol",
+      "classes": ["access_control"],
+      "functions": ["upgradeTo"],
+      "note": "upgradeTo is unguarded; any caller can repoint the implementation"
+    },
+    {
+      "file": "access_control_safe_02.sol",
+      "classes": [],
+      "functions": [],
+      "note": "upgrade path is onlyAdmin and timelocked"
+    },
+    {
+      "file": "oracle_vuln_01.sol",
+      "classes": ["oracle"],
+      "functions": ["getPrice"],
+      "note": "latestRoundData answer used without staleness, round-completeness or sign checks"
+    },
+    {
+      "file": "oracle_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "validates answer > 0, updatedAt freshness, round completeness and answeredInRound"
+    },
+    {
+      "file": "randomness_vuln_01.sol",
+      "classes": ["randomness"],
+      "functions": ["drawWinner"],
+      "note": "winner seeded from block.timestamp / prevrandao / blockhash"
+    },
+    {
+      "file": "randomness_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "Chainlink VRF with ticket sales closed before the randomness request"
+    },
+    {
+      "file": "unchecked_call_vuln_01.sol",
+      "classes": ["unchecked_call"],
+      "functions": ["distribute", "refundEther"],
+      "note": "IERC20.transfer return value discarded; low-level call result ignored"
+    },
+    {
+      "file": "unchecked_call_safe_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "every external call result is required to be true"
+    },
+    {
+      "file": "clean_erc20_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "plain correct ERC-20; pure false-positive probe"
+    },
+    {
+      "file": "clean_library_01.sol",
+      "classes": [],
+      "functions": [],
+      "note": "pure library, no state or external calls; pure false-positive probe"
+    }
+  ]
+}
