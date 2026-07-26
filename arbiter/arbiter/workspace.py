@@ -174,7 +174,9 @@ class Workspace:
             # an honest baseline, and it is available because admission can see both
             # halves. An auditing agent cannot: it sees one contract and has no patched
             # twin to compare against, which is exactly why it owes a baseline instead.
-            honest_body = ";"
+            # An empty BLOCK, not a bare semicolon: Solidity has no empty statement,
+            # and ";" made 17 of 20 reference exploits fail to compile.
+            honest_body = "{}"
 
         # How the attacker's holdings are read. Same expression before and after, so the
         # predicate is a strict increase in whatever the attacker actually walks away
