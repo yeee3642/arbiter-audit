@@ -94,6 +94,15 @@ Determine whether it contains an exploitable vulnerability. Prove it with a PoC 
 runs, or clear the contract with conclude_safe. Begin.\
 """
 
+NUDGE_TO_EXPLOIT = """\
+You have not attempted run_exploit yet. Nothing you have run so far can support a \
+finding, because you chose its success condition. If you believe there is a \
+vulnerability, prove it now with run_exploit: write an Attacker contract with \
+constructor(address) and attack(), deploy the contract under audit into a variable \
+named target, and pick eth_profit or state_change. If you do not believe there is one, \
+call conclude_safe.\
+"""
+
 FORCE_DECISION = """\
 You have one turn left. Decide now with the evidence you have: call submit_finding if a \
 PoC of yours passed, otherwise call conclude_safe.\
@@ -121,8 +130,22 @@ def audit(
         },
     ]
 
+    nudged = False
     for turn in range(max_turns):
         remaining = max_turns - turn
+
+        # Halfway through with no admissible evidence attempted is the signature of the
+        # failure the pilot exposed: the agent settles into free-form probing, which can
+        # never back a finding, and the turn budget runs out with nothing to show.
+        if (
+            not nudged
+            and turn >= max_turns // 3
+            and not dispatcher.has_tried_exploit
+            and dispatcher.outcome.verdict == "no_verdict"
+        ):
+            nudged = True
+            messages.append({"role": "user", "content": NUDGE_TO_EXPLOIT})
+
         if remaining == 1 and dispatcher.outcome.verdict == "no_verdict":
             messages.append({"role": "user", "content": FORCE_DECISION})
 

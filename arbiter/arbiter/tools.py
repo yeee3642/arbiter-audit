@@ -25,6 +25,7 @@ the turn count for no information gain.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -66,56 +67,6 @@ def tool_schemas() -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {"pattern": {"type": "string"}},
                     "required": ["pattern"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "run_poc",
-                "description": (
-                    "EXPLORATION ONLY -- a passing run_poc cannot back a finding, "
-                    "because you write its success condition yourself. Use it to probe "
-                    "behaviour, confirm how a function reacts, or check an assumption "
-                    "cheaply; then prove the actual exploit with run_exploit. "
-                    "Write a Solidity proof-of-concept, compile it, and execute it "
-                    "against the contract under audit on a real EVM. The contract under "
-                    "audit is at src/Target.sol and you import it with "
-                    "'import \"../src/Target.sol\";'. Foundry cheatcodes are available "
-                    "with 'import \"./Vm.sol\";' and inheriting Harness, which gives you "
-                    "vm.prank, vm.deal, vm.warp, vm.store and assertTrue. Your test "
-                    "contract already holds a large ether balance, so you can fund the "
-                    "target at construction. Name the test contract with a "
-                    "'Test' prefix and the exploit function with a 'test' prefix. "
-                    "Write the test so that IT PASSES ONLY IF THE EXPLOIT SUCCEEDS: end "
-                    "it with require(...) on the post-exploit state, for example "
-                    "require(address(attacker).balance > deposited, 'no drain'). "
-                    "If the code is actually safe, a correct PoC will FAIL, and that "
-                    "failure is the evidence you needed. Returns compiler errors and "
-                    "the full execution trace; iterate on them."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "Short identifier, letters and digits only.",
-                        },
-                        "solidity": {
-                            "type": "string",
-                            "description": (
-                                "Complete Solidity source for the test file, including "
-                                "the pragma and the import of ../src/Target.sol."
-                            ),
-                        },
-                        "hypothesis": {
-                            "type": "string",
-                            "description": (
-                                "What this PoC proves if it passes, in one sentence."
-                            ),
-                        },
-                    },
-                    "required": ["name", "solidity", "hypothesis"],
                 },
             },
         },
@@ -179,6 +130,56 @@ def tool_schemas() -> list[dict[str, Any]]:
                         "predicate",
                         "hypothesis",
                     ],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_poc",
+                "description": (
+                    "EXPLORATION ONLY -- a passing run_poc cannot back a finding, "
+                    "because you write its success condition yourself. Use it to probe "
+                    "behaviour, confirm how a function reacts, or check an assumption "
+                    "cheaply; then prove the actual exploit with run_exploit. "
+                    "Write a Solidity proof-of-concept, compile it, and execute it "
+                    "against the contract under audit on a real EVM. The contract under "
+                    "audit is at src/Target.sol and you import it with "
+                    "'import \"../src/Target.sol\";'. Foundry cheatcodes are available "
+                    "with 'import \"./Vm.sol\";' and inheriting Harness, which gives you "
+                    "vm.prank, vm.deal, vm.warp, vm.store and assertTrue. Your test "
+                    "contract already holds a large ether balance, so you can fund the "
+                    "target at construction. Name the test contract with a "
+                    "'Test' prefix and the exploit function with a 'test' prefix. "
+                    "Write the test so that IT PASSES ONLY IF THE EXPLOIT SUCCEEDS: end "
+                    "it with require(...) on the post-exploit state, for example "
+                    "require(address(attacker).balance > deposited, 'no drain'). "
+                    "If the code is actually safe, a correct PoC will FAIL, and that "
+                    "failure is the evidence you needed. Returns compiler errors and "
+                    "the full execution trace; iterate on them."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Short identifier, letters and digits only.",
+                        },
+                        "solidity": {
+                            "type": "string",
+                            "description": (
+                                "Complete Solidity source for the test file, including "
+                                "the pragma and the import of ../src/Target.sol."
+                            ),
+                        },
+                        "hypothesis": {
+                            "type": "string",
+                            "description": (
+                                "What this PoC proves if it passes, in one sentence."
+                            ),
+                        },
+                    },
+                    "required": ["name", "solidity", "hypothesis"],
                 },
             },
         },
@@ -326,10 +327,24 @@ class AgentOutcome:
 class ToolDispatcher:
     """Executes tool calls against one workspace and accumulates the outcome."""
 
+    # Free-form probes allowed before the tool is withdrawn. The first pilot showed why
+    # a cap is needed: on three of five samples the agent spent all sixteen turns in
+    # run_poc, re-running a near-identical probe up to thirteen times, and never once
+    # called run_exploit -- so it finished with no admissible evidence and the sample
+    # scored negative. Exploration is useful; unbounded exploration is how the run dies.
+    MAX_FREEFORM_POCS = 3
+
     def __init__(self, workspace: Workspace) -> None:
         self.ws = workspace
         self.outcome = AgentOutcome()
         self._poc_by_name: dict[str, PocRecord] = {}
+        self._freeform_calls = 0
+        self._exploit_calls = 0
+        self._hypotheses: list[str] = []
+
+    @property
+    def has_tried_exploit(self) -> bool:
+        return self._exploit_calls > 0
 
     def dispatch(self, name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
         """Run one tool. Returns (result_text, is_terminal)."""
@@ -366,6 +381,17 @@ class ToolDispatcher:
         hypothesis = str(args.get("hypothesis") or "")
         if not solidity.strip():
             return "error: solidity source was empty", False
+
+        self._freeform_calls += 1
+        if self._freeform_calls > self.MAX_FREEFORM_POCS:
+            return (
+                f"run_poc is now CLOSED for this audit; you have used all "
+                f"{self.MAX_FREEFORM_POCS} exploratory probes. Nothing it returns could "
+                "back a finding anyway, because you write its success condition. "
+                "Use run_exploit to prove the attack, or conclude_safe if you have "
+                "none left to try.",
+                False,
+            )
 
         name = self.ws.write_poc(raw_name, solidity)
         build = self.ws.build()
@@ -407,6 +433,13 @@ class ToolDispatcher:
         hypothesis = str(args.get("hypothesis") or "")
         attacker_code = str(args.get("attacker_code") or "")
         deploy_code = str(args.get("deploy_code") or "")
+        self._exploit_calls += 1
+
+        # Repeating a hypothesis verbatim is the failure mode that ate three of five
+        # pilot audits. Say so rather than silently running it again.
+        squashed = re.sub(r"\s+", " ", hypothesis.strip().lower())[:120]
+        repeated = squashed and squashed in self._hypotheses
+        self._hypotheses.append(squashed)
 
         if "contract Attacker" not in attacker_code:
             return (
@@ -468,6 +501,12 @@ class ToolDispatcher:
                 "revert reason: a message starting 'ARBITER:' means your attack ran but "
                 "produced no gain, which is evidence of safety.\n\n"
             )
+            if repeated:
+                head += (
+                    "NOTE: you have already tested this exact hypothesis and it failed. "
+                    "Repeating it will not change the result. Attack a different "
+                    "function or a different invariant, or call conclude_safe.\n\n"
+                )
         return head + _tail(run.combined), False
 
     # -- terminal tools ------------------------------------------------------
