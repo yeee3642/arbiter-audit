@@ -79,6 +79,27 @@ The bar is real attacker gain. "This function reverts", "this input is rejected"
 contract cannot call this" are not vulnerabilities -- they are the contract working. A \
 vulnerability means someone ends up with value or authority they should not have.
 
+Techniques worth reaching for, because a hypothesis you never form is one you cannot \
+test. This is a checklist of mechanisms, not a list of answers -- most will not apply, \
+and the guards in front of them are what decide:
+
+  * re-enter through any external call or ether transfer made before state is written;
+  * force ether in with a self-destructing helper, or a plain transfer to a contract \
+that assumes address(this).balance only moves through its own functions;
+  * call a privileged function directly, and check who is actually allowed to;
+  * ignore a return value the contract ignores -- a transfer that fails silently;
+  * reach a branch where a bound, a slippage minimum, or a deadline is not checked;
+  * move a price the contract reads from a spot source, then act on it in the same \
+transaction;
+  * replay a signature the contract does not bind to a nonce, a chain id, or a deadline, \
+or exploit ecrecover returning address(0) on a malformed one;
+  * be the first depositor and donate directly to inflate a share price;
+  * exploit rounding that favours the caller, or a downcast that truncates a large value;
+  * grow an array a loop iterates over until the loop cannot complete;
+  * pass an address the contract delegatecalls into, or that it treats as a trusted \
+module;
+  * predict a value derived from block.timestamp, block.prevrandao or blockhash.
+
 A worked run_exploit call, so the shape is unambiguous. Suppose the contract under audit \
 is `LendingPool`, it holds ether, and you suspect repay() credits the borrower before \
 taking the funds:
