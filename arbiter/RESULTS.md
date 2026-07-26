@@ -344,3 +344,59 @@ anything at all is k=9. That supports the original diagnosis of the shipped
 configuration while removing any claim that the architecture cannot be tuned.
 
 `runs/bastet_tuned_baselines.txt` holds the full sweep.
+
+---
+
+## The metric the protocol specified and the head-to-head never ran
+
+`BENCH_PROTOCOL.md`, written 2026-07-25 and therefore before any of these experiments,
+names two auxiliary metrics in section 6 that round 1 simply did not compute: a
+false-positive cost-weighted score at "roughly 15 minutes of a human per FP", presented as
+recall@human-budget, and proof rate. Running them now is discharging a pre-registration,
+not shopping for a better number after a disappointing F1 — and they are computed from the
+same confusion matrices, with the same scorer, in `scripts/analyst_cost.py`.
+
+Assumptions are parameters so the reader can disagree with them. An unproven finding costs
+15 minutes to assess whether it is true or false. A finding shipped with an exploit the
+harness already ran costs 2 minutes when genuine — you run the test and watch the balance
+move. **A false positive costs full triage even when it carries a passing exploit**, since
+the reviewer must work out why a passing test is not a vulnerability; that is the
+assumption least favourable to ARBITER and it is the one used.
+
+| arm | reports | real bugs | analyst minutes | **min / real bug** | proof rate |
+|---|---|---|---|---|---|
+| Bastet, shipped 53-way OR | 40 | 20 | 600 | 30.0 | 0% |
+| Bastet, tuned k≥9 | 38 | 20 | 570 | 28.5 | 0% |
+| Bastet, best single detector | 35 | 19 | 525 | 27.6 | 0% |
+| **ARBITER, attempts=3** | **13** | 9 | **78** | **8.7** | **100%** |
+
+**recall@budget** — real bugs surfaced within a fixed analyst budget, findings assumed to
+arrive in random order so no arm is credited with ranking it does not do:
+
+| budget | 60 min | 120 min | 180 min | 240 min | 300 min | 600 min |
+|---|---|---|---|---|---|---|
+| Bastet, tuned k≥9 | 2.1 | 4.2 | 6.3 | 8.4 | 10.5 | **20.0** |
+| **ARBITER** | **6.9** | **9.0** | 9.0 | 9.0 | 9.0 | 9.0 |
+
+Within the first hour ARBITER surfaces **3.3× more real vulnerabilities** than a tuned
+Bastet. The crossover is at **257 analyst minutes**, about 4.3 hours — and that is on 40
+contracts of roughly forty lines each. Sensitivity: even at 5 minutes per false positive,
+an assumption chosen to favour Bastet, the crossover is still 86 minutes.
+
+Stated plainly, because the shape of this result matters more than the ratio: **ARBITER
+finds fewer bugs, and finds them far more cheaply. Bastet wins only for a reviewer who can
+afford to triage every finding it emits.** On 40 toy contracts that is 4.3 hours. Bastet's
+shape on a 200-file repository is 10,600 requests and, at its measured 100% flag rate on
+patched code, a report on essentially every file — so the budget at which it overtakes
+scales with the repository while ARBITER's proven findings stay at 2 minutes each. That
+last sentence is an extrapolation from measured per-sample behaviour, not a measurement,
+and is labelled as such.
+
+`BENCH_PROTOCOL` section 8 also pre-registered a kill criterion: *"if Arm B's proof rate
+falls below 20%, proof-carrying findings do not hold and the claim must be downgraded to a
+ranked hypothesis queue."* Measured proof rate is **100%** by construction of the
+submission gate. That pre-registered check passes.
+
+Proof rate itself is reported as section 6 requires — as a definitional difference rather
+than a like-for-like comparison. Bastet has no execution stage, so its 0% is structural,
+and it would be dishonest to present that as a score it lost.

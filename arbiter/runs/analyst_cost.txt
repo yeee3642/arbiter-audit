@@ -1,0 +1,19 @@
+assumptions: unproven finding = 15.0 min, proven = 2.0 min
+false positives always cost full triage, even when they carry a passing PoC
+
+arm                               reports  bugs  minutes  min/bug  proof
+Bastet, shipped 53-way OR              40    20      600     30.0     0%
+Bastet, tuned k>=9                     38    20      570     28.5     0%
+Bastet, best single detector           35    19      525     27.6     0%
+ARBITER, attempts=3                    13     9       78      8.7   100%
+
+real bugs found within a fixed analyst budget (recall@budget):
+  budget(min)      60     120     180     240     300     420     600
+  Bastet, shipped 53-way     2.0     4.0     6.0     8.0    10.0    14.0    20.0
+  Bastet, tuned k>=9         2.1     4.2     6.3     8.4    10.5    14.7    20.0
+  Bastet, best single de     2.2     4.3     6.5     8.7    10.9    15.2    19.0
+  ARBITER, attempts=3        6.9     9.0     9.0     9.0     9.0     9.0     9.0
+
+tuned Bastet overtakes ARBITER at a budget of about 257 analyst minutes (4.3 hours) on 40 samples.
+Below that budget ARBITER surfaces more real bugs per minute; above it, Bastet's
+higher ceiling wins because it eventually reports every true positive there is.
