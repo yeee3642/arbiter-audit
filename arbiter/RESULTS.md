@@ -400,3 +400,35 @@ submission gate. That pre-registered check passes.
 Proof rate itself is reported as section 6 requires — as a definitional difference rather
 than a like-for-like comparison. Bastet has no execution stage, so its 0% is structural,
 and it would be dishonest to present that as a score it lost.
+
+---
+
+## Negative result: forbidding failed hypotheses made it worse
+
+The fixation diagnosis was right and the fix derived from it was wrong. Carrying each
+attempt's failed hypotheses into the next one, with an instruction not to retry them,
+was committed as an improvement. Measured on the same 40 samples, same model:
+
+| ARBITER configuration | TP | TN | FP | FN | recall | F1 | MCC |
+|---|---|---|---|---|---|---|---|
+| attempts=3 | 9 | 16 | 4 | 11 | 0.450 | 0.5455 | **+0.267** |
+| attempts=5 | 10 | 14 | 6 | 10 | 0.500 | 0.5556 | +0.204 |
+| **attempts=3 + ruled_out** | 4 | 16 | 4 | 16 | **0.200** | 0.2857 | **0.000** |
+
+Recall fell by more than half and MCC landed on exactly 0.000 — the same uninformative
+value the baseline scores, reached from the opposite direction.
+
+The mechanism is clear in hindsight and worth recording, because the reasoning that
+produced it looked sound. A hypothesis can fail for two quite different reasons: it was
+the wrong hypothesis, or it was the right one and the exploit was built badly. The
+diagnostic that motivated this change — seven of ten misses chasing reentrancy — could
+not distinguish them, and the fix assumed the first. Where the truth was the second,
+banning the hypothesis banned the correct answer, and the agent spent its remaining
+attempts on classes it had already ruled out on the merits.
+
+"Do not repeat what failed" is only safe when failure implies wrongness. Under an
+execution gate it usually does not: the gate rejects bad *implementations* of correct
+hypotheses at the same rate it rejects incorrect ones, and it does not report which.
+
+The configuration this project stands behind remains `--attempts 3` with `ruled_out`
+disabled. The change is kept in the tree behind its flag, and this table is why it is off.
