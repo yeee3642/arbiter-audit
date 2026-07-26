@@ -1,0 +1,435 @@
+"""The tool surface the auditor agent is given, and its deterministic dispatcher.
+
+Two things about this file carry the argument against Bastet.
+
+First, `submit_finding` is *gated*. It will not accept a finding unless the named PoC
+has already been compiled and executed and the EVM agreed the exploit worked. The model
+cannot talk its way past this; the gate is a dictionary lookup against results produced
+by `forge`, in this process, from the agent's own code. A finding is therefore not an
+assertion by a language model, it is a transcript of an execution.
+
+Second, `conclude_safe` exists at all. Bastet's decision rule is
+`any(detector_output != [])` over 56 detectors, so it has no representation for "this
+code is fine" -- the only way it can emit a negative is for all 56 detectors to return
+empty simultaneously. That is why its measured TN is 0 and why the arithmetic, not the
+prompt quality, is the problem: even at a generous 5% per-detector false-positive rate,
+1 - 0.95**53 = 0.934, so it would still flag 93% of safe files. Giving the agent an
+explicit, first-class way to answer "no" is a precondition for ever scoring a true
+negative.
+
+Request economy: writing, compiling and running a PoC is a single tool because each
+assistant turn costs one request against a 120 rpm cap, and separating them would triple
+the turn count for no information gain.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from typing import Any
+
+from .workspace import CommandResult, Workspace
+
+MAX_TOOL_OUTPUT = 6000
+
+
+def tool_schemas() -> list[dict[str, Any]]:
+    """OpenAI-style function schemas for the gateway's native tool calling."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_source",
+                "description": (
+                    "Read numbered lines of the contract under audit. Call with no "
+                    "arguments to read the whole file."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "start_line": {"type": "integer", "minimum": 1},
+                        "end_line": {"type": "integer", "minimum": 1},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "grep_source",
+                "description": (
+                    "Regex search the contract. Use it to establish which guards exist "
+                    "before claiming one is missing, e.g. 'require|modifier|onlyOwner|"
+                    "nonReentrant'."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"pattern": {"type": "string"}},
+                    "required": ["pattern"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_poc",
+                "description": (
+                    "Write a Solidity proof-of-concept, compile it, and execute it "
+                    "against the contract under audit on a real EVM. This is the only "
+                    "way to establish that a vulnerability is real. The contract under "
+                    "audit is at src/Target.sol and you import it with "
+                    "'import \"../src/Target.sol\";'. Foundry cheatcodes are available "
+                    "with 'import \"./Vm.sol\";' and inheriting Harness, which gives you "
+                    "vm.prank, vm.deal, vm.warp, vm.store and assertTrue. Your test "
+                    "contract already holds a large ether balance, so you can fund the "
+                    "target at construction. Name the test contract with a "
+                    "'Test' prefix and the exploit function with a 'test' prefix. "
+                    "Write the test so that IT PASSES ONLY IF THE EXPLOIT SUCCEEDS: end "
+                    "it with require(...) on the post-exploit state, for example "
+                    "require(address(attacker).balance > deposited, 'no drain'). "
+                    "If the code is actually safe, a correct PoC will FAIL, and that "
+                    "failure is the evidence you needed. Returns compiler errors and "
+                    "the full execution trace; iterate on them."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Short identifier, letters and digits only.",
+                        },
+                        "solidity": {
+                            "type": "string",
+                            "description": (
+                                "Complete Solidity source for the test file, including "
+                                "the pragma and the import of ../src/Target.sol."
+                            ),
+                        },
+                        "hypothesis": {
+                            "type": "string",
+                            "description": (
+                                "What this PoC proves if it passes, in one sentence."
+                            ),
+                        },
+                    },
+                    "required": ["name", "solidity", "hypothesis"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "submit_finding",
+                "description": (
+                    "Report a confirmed vulnerability. REJECTED unless poc_name refers "
+                    "to a PoC you already ran and which passed. Do not call this on the "
+                    "strength of a recognised pattern; the pattern is not the bug."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "poc_name": {
+                            "type": "string",
+                            "description": "Name of the PoC that passed.",
+                        },
+                        "title": {"type": "string"},
+                        "vulnerable_function": {"type": "string"},
+                        "offending_expression": {
+                            "type": "string",
+                            "description": (
+                                "Copied character-for-character from src/Target.sol. "
+                                "Checked verbatim; an invented expression is rejected."
+                            ),
+                        },
+                        "attack_path": {"type": "string"},
+                        "severity": {
+                            "type": "string",
+                            "enum": ["critical", "high", "medium", "low"],
+                        },
+                    },
+                    "required": [
+                        "poc_name",
+                        "title",
+                        "vulnerable_function",
+                        "offending_expression",
+                        "attack_path",
+                        "severity",
+                    ],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "conclude_safe",
+                "description": (
+                    "Conclude that the contract has no exploitable vulnerability you "
+                    "could demonstrate. This is a legitimate and expected answer. Use it "
+                    "when your PoCs failed because a guard stopped them -- that is "
+                    "evidence of safety, not a failure on your part."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reason": {"type": "string"},
+                        "guards_verified": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Each guard quoted verbatim from the source. Checked."
+                            ),
+                        },
+                        "hypotheses_tested": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "What you tried to exploit and why it failed.",
+                        },
+                    },
+                    "required": ["reason", "guards_verified", "hypotheses_tested"],
+                },
+            },
+        },
+    ]
+
+
+@dataclass
+class PocRecord:
+    name: str
+    hypothesis: str
+    solidity: str
+    compiled: bool
+    passed: bool
+    output: str
+
+
+@dataclass
+class AgentOutcome:
+    """Terminal state of one audit. `verdict` is what gets scored."""
+
+    verdict: str = "no_verdict"  # vulnerable | safe | no_verdict
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    safe_reason: dict[str, Any] | None = None
+    pocs: list[PocRecord] = field(default_factory=list)
+    rejected_submissions: list[dict[str, Any]] = field(default_factory=list)
+    turns: int = 0
+    stop_reason: str = ""
+
+    @property
+    def proven(self) -> bool:
+        """True when the vulnerable verdict is backed by an executed exploit."""
+        return self.verdict == "vulnerable" and any(
+            p.passed for p in self.pocs
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "verdict": self.verdict,
+            "proven": self.proven,
+            "turns": self.turns,
+            "stop_reason": self.stop_reason,
+            "findings": self.findings,
+            "safe_reason": self.safe_reason,
+            "rejected_submissions": self.rejected_submissions,
+            "pocs": [
+                {
+                    "name": p.name,
+                    "hypothesis": p.hypothesis,
+                    "compiled": p.compiled,
+                    "passed": p.passed,
+                    "output_tail": p.output[-1200:],
+                    "solidity": p.solidity,
+                }
+                for p in self.pocs
+            ],
+        }
+
+
+class ToolDispatcher:
+    """Executes tool calls against one workspace and accumulates the outcome."""
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.ws = workspace
+        self.outcome = AgentOutcome()
+        self._poc_by_name: dict[str, PocRecord] = {}
+
+    def dispatch(self, name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
+        """Run one tool. Returns (result_text, is_terminal)."""
+        handler = {
+            "read_source": self._read_source,
+            "grep_source": self._grep_source,
+            "run_poc": self._run_poc,
+            "submit_finding": self._submit_finding,
+            "conclude_safe": self._conclude_safe,
+        }.get(name)
+        if handler is None:
+            return f"error: no such tool {name!r}", False
+        try:
+            return handler(arguments)
+        except Exception as exc:  # noqa: BLE001 - a tool crash must not kill the run
+            return f"error: tool {name} raised {type(exc).__name__}: {exc}", False
+
+    # -- read-only tools, zero cost -----------------------------------------
+
+    def _read_source(self, args: dict[str, Any]) -> tuple[str, bool]:
+        start = int(args.get("start_line") or 1)
+        end = args.get("end_line")
+        return self.ws.read(start, int(end) if end else None)[:MAX_TOOL_OUTPUT], False
+
+    def _grep_source(self, args: dict[str, Any]) -> tuple[str, bool]:
+        return self.ws.grep(str(args.get("pattern", "")))[:MAX_TOOL_OUTPUT], False
+
+    # -- the execution tool --------------------------------------------------
+
+    def _run_poc(self, args: dict[str, Any]) -> tuple[str, bool]:
+        raw_name = str(args.get("name") or "poc")
+        solidity = str(args.get("solidity") or "")
+        hypothesis = str(args.get("hypothesis") or "")
+        if not solidity.strip():
+            return "error: solidity source was empty", False
+
+        name = self.ws.write_poc(raw_name, solidity)
+        build = self.ws.build()
+        if not build.ok:
+            record = PocRecord(name, hypothesis, solidity, False, False, build.combined)
+            self._poc_by_name[name] = record
+            self.outcome.pocs.append(record)
+            return (
+                "COMPILATION FAILED. The PoC does not build. Fix the Solidity and call "
+                "run_poc again.\n\n" + _tail(build.combined),
+                False,
+            )
+
+        run = self.ws.run_poc(name)
+        passed = _test_passed(run)
+        record = PocRecord(name, hypothesis, solidity, True, passed, run.combined)
+        self._poc_by_name[name] = record
+        self.outcome.pocs.append(record)
+
+        if passed:
+            head = (
+                f"PoC {name!r} COMPILED AND PASSED. The exploit executed successfully "
+                "on the EVM. You may now call submit_finding citing this poc_name.\n\n"
+            )
+        else:
+            head = (
+                f"PoC {name!r} compiled but FAILED. The exploit did not work against "
+                "this code. Either your attack was wrong -- in which case try a "
+                "different hypothesis -- or a guard genuinely prevents it, in which "
+                "case that is evidence the contract is safe and you should say so with "
+                "conclude_safe.\n\n"
+            )
+        return head + _tail(run.combined), False
+
+    # -- terminal tools ------------------------------------------------------
+
+    def _submit_finding(self, args: dict[str, Any]) -> tuple[str, bool]:
+        poc_name = str(args.get("poc_name") or "")
+        record = self._poc_by_name.get(poc_name)
+
+        # Try a forgiving match: the model sometimes cites the name it asked for rather
+        # than the sanitised name it got back. This is leniency toward our own arm, but
+        # it only ever helps a finding that a passing execution already backs.
+        if record is None:
+            for key, value in self._poc_by_name.items():
+                if key.lower().startswith(poc_name.lower().replace("poc", "").strip()):
+                    record, poc_name = value, key
+                    break
+
+        if record is None:
+            reason = f"no PoC named {args.get('poc_name')!r} has been run"
+        elif not record.compiled:
+            reason = f"PoC {poc_name!r} never compiled"
+        elif not record.passed:
+            reason = (
+                f"PoC {poc_name!r} ran but FAILED, so the exploit was not demonstrated"
+            )
+        elif not self.ws.contains_verbatim(str(args.get("offending_expression") or "")):
+            reason = (
+                "offending_expression does not appear verbatim in src/Target.sol"
+            )
+        else:
+            reason = ""
+
+        if reason:
+            self.outcome.rejected_submissions.append(
+                {"reason": reason, "submission": args}
+            )
+            return (
+                f"SUBMISSION REJECTED: {reason}. A finding requires a PoC that "
+                "compiled, ran, and passed, plus an offending expression copied "
+                "verbatim from the source. Keep working or call conclude_safe.",
+                False,
+            )
+
+        finding = dict(args)
+        finding["poc_name"] = poc_name
+        finding["poc_hypothesis"] = record.hypothesis
+        self.outcome.findings.append(finding)
+        self.outcome.verdict = "vulnerable"
+        self.outcome.stop_reason = "submit_finding"
+        return "Finding accepted with execution evidence. Audit complete.", True
+
+    def _conclude_safe(self, args: dict[str, Any]) -> tuple[str, bool]:
+        guards = [str(g) for g in (args.get("guards_verified") or [])]
+        verified = [g for g in guards if self.ws.contains_verbatim(g)]
+        invented = [g for g in guards if not self.ws.contains_verbatim(g)]
+        self.outcome.safe_reason = {
+            "reason": args.get("reason"),
+            "guards_claimed": guards,
+            "guards_verified_verbatim": verified,
+            "guards_not_found_in_source": invented,
+            "hypotheses_tested": args.get("hypotheses_tested") or [],
+        }
+        self.outcome.verdict = "safe"
+        self.outcome.stop_reason = "conclude_safe"
+        return "Safe verdict recorded. Audit complete.", True
+
+
+def _tail(text: str) -> str:
+    if len(text) <= MAX_TOOL_OUTPUT:
+        return text
+    return "... output truncated ...\n" + text[-MAX_TOOL_OUTPUT:]
+
+
+def _test_passed(result: CommandResult) -> bool:
+    """Decide whether forge reported a passing test.
+
+    Parsed from forge's summary line rather than from the exit code, because a run with
+    zero matched tests also exits non-zero and must not be read as a failed exploit.
+    """
+    text = result.combined
+    if "No tests match" in text or "0 tests for" in text:
+        return False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[PASS]"):
+            return True
+    return False
+
+
+def parse_arguments(raw: Any) -> dict[str, Any]:
+    """Tolerantly decode a tool call's arguments field."""
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        # Models occasionally emit trailing prose after the JSON object.
+        depth, end = 0, -1
+        for i, ch in enumerate(raw):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end == -1:
+            return {}
+        try:
+            value = json.loads(raw[:end])
+        except json.JSONDecodeError:
+            return {}
+    return value if isinstance(value, dict) else {}
