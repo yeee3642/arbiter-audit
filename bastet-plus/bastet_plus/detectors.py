@@ -51,14 +51,28 @@ class Detector:
     def legacy_prompt(self) -> str:
         return self.raw
 
-    def enhanced_prompt(self) -> str:
+    def enhanced_prompt(self, discipline: bool = True) -> str:
+        """The prompt Bastet+ actually sends.
+
+        Two blocks are appended to the original knowledge section, and they are
+        not equivalent in kind:
+
+        * the output contract is generated from ``schema.py`` and is pure
+          plumbing -- it replaces an output block that disagreed with the schema
+          it was validated against;
+        * the Discipline block is **not** plumbing. It is anti-false-positive
+          detection guidance and plausibly moves precision by itself, which
+          means the legacy-vs-enhanced comparison is not a clean harness-only
+          A/B. ``discipline=False`` strips it so that confound can be measured.
+        """
         body = self.body
         for bad, good in _MOJIBAKE_FIXES:
             body = body.replace(bad, good)
+        out = body.rstrip() + "\n\n---\n\n" + prompt_format_block()
+        if not discipline:
+            return out
         return (
-            body.rstrip()
-            + "\n\n---\n\n"
-            + prompt_format_block()
+            out
             + "\n## Discipline\n"
             "- Report ONLY what you can prove from the code you were shown. Do not assume the\n"
             "  existence of code you cannot see.\n"

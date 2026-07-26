@@ -83,6 +83,7 @@ def run_legacy(path: str, detectors: list[Detector], client: LLMClient,
                 [{"role": "system", "content": det.legacy_prompt()},
                  {"role": "user", "content": src}],
                 temperature=llm_cfg.temperature,
+                context={"stage": "legacy_detect", "detector": det.name, "file": path},
             )
         except LLMError:
             detector_errors += 1
@@ -138,15 +139,18 @@ def run_legacy(path: str, detectors: list[Detector], client: LLMClient,
 
 
 def _detect_task(client: LLMClient, det: Detector, sl: Slice, path: str,
-                 sample_idx: int, temperature: float, seed: int | None) -> list[Finding]:
+                 sample_idx: int, temperature: float, seed: int | None,
+                 discipline: bool = True) -> list[Finding]:
     user = (
         f"File: {path}\nRegion: {sl.name} (source lines {sl.start_line}-{sl.end_line})\n\n"
         "```solidity\n" + sl.text + "\n```"
     )
     parsed = client.complete_json(
-        [{"role": "system", "content": det.enhanced_prompt()},
+        [{"role": "system", "content": det.enhanced_prompt(discipline)},
          {"role": "user", "content": user}],
         FINDING_SCHEMA, temperature=temperature, seed=seed, schema_name="findings",
+        context={"stage": "detect", "detector": det.name, "file": path,
+                 "slice": sl.name, "sample": sample_idx},
     )
     out = coerce_findings(parsed, detector=det.name, file=path, slice_name=sl.name)
     for f in out:
@@ -180,7 +184,7 @@ def run_enhanced(path: str, detectors: list[Detector], client: LLMClient,
             None if llm_cfg.seed is None else llm_cfg.seed + 977 * k
         )
         try:
-            return _detect_task(client, det, sl, path, k, temp, seed)
+            return _detect_task(client, det, sl, path, k, temp, seed, cfg.discipline_block)
         except LLMError:
             return None
 

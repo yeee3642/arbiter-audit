@@ -46,6 +46,8 @@ def _configs(args):
         over["concurrency"] = args.concurrency
     if getattr(args, "no_cache", False):
         over["cache_enabled"] = False
+    if getattr(args, "log_calls", None):
+        over["call_log_path"] = args.log_calls
     if over:
         llm = dataclasses.replace(llm, **over)
 
@@ -61,6 +63,8 @@ def _configs(args):
         pover["slice_code"] = False
     if getattr(args, "keep_ungrounded", False):
         pover["drop_ungrounded"] = False
+    if getattr(args, "no_discipline", False):
+        pover["discipline_block"] = False
     if pover:
         pipe = dataclasses.replace(pipe, **pover)
     return llm, pipe
@@ -137,12 +141,18 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--verifier-model", dest="verifier_model")
         sp.add_argument("--concurrency", type=int)
         sp.add_argument("--no-cache", action="store_true")
+        sp.add_argument("--log-calls", dest="log_calls", metavar="PATH",
+                        help="append a JSONL transcript of every LLM call (full messages, "
+                             "response, usage, latency). Embeds contract source verbatim.")
         sp.add_argument("--samples", type=int, help="self-consistency samples per detector (default 1)")
         sp.add_argument("--vote-threshold", type=float, dest="vote_threshold")
         sp.add_argument("--verify-votes", type=int, dest="verify_votes")
         sp.add_argument("--no-verify", action="store_true")
         sp.add_argument("--no-slice", action="store_true")
         sp.add_argument("--keep-ungrounded", action="store_true")
+        sp.add_argument("--no-discipline", dest="no_discipline", action="store_true",
+                        help="strip the Discipline block from detector prompts, to separate "
+                             "the prompt's contribution from the harness's")
         sp.add_argument("--max-slice-chars", type=int, dest="max_slice_chars")
         sp.add_argument("--min-severity", dest="min_severity", choices=["low", "medium", "high"])
 

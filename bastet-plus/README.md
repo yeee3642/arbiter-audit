@@ -1,146 +1,154 @@
 # Bastet+
 
-A rebuilt harness for [OneSavieLabs/Bastet](https://github.com/OneSavieLabs/Bastet).
+[OneSavieLabs/Bastet](https://github.com/OneSavieLabs/Bastet) 的 harness 重建版。
 
-Same detector knowledge — all 56 vulnerability prompts are lifted verbatim out of the
-original n8n workflows — but the scaffolding around them is replaced. No n8n, no Docker,
-no Postgres, no webhooks. One `pip`-free Python package that talks to any OpenAI-compatible
-endpoint, plus the pieces the original pipeline was missing: source slicing,
-self-consistency sampling, evidence grounding, and an adversarial verification stage.
+56 支漏洞偵測 prompt 原封不動從上游的 n8n workflow JSON 抽出來重用，但外圍的骨架全部換掉：
+沒有 n8n、沒有 Docker、沒有 Postgres、沒有 webhook。一個只用標準函式庫的 Python 套件，
+直接對任何 OpenAI 相容端點說話，外加原本管線缺少的四件事 —— 原始碼切片、自洽性取樣、
+證據落地驗證、對抗式複核。
 
-See [`IMPROVEMENTS.md`](IMPROVEMENTS.md) for the defect-by-defect account of what changed,
-and [`RESULTS.md`](RESULTS.md) for the A/B measurement.
+| 文件 | 內容 |
+|---|---|
+| [`IMPROVEMENTS.md`](IMPROVEMENTS.md) | 逐項缺陷與修法（英文） |
+| [`RESULTS.md`](RESULTS.md) | A/B 量測、trivial baseline、以及為什麼這些數字不能當泛化估計 |
+| [`DECISIONS.md`](DECISIONS.md) | 開發過程記錄：踩到的問題，以及在看到結果之後才做的修改 |
+| [`CHANGE_MAP.md`](CHANGE_MAP.md) | 原版檔案 → 新模組的對照，含可自行驗證的指令 |
 
-Measured head-to-head on `ais3/llama-3.3-70b`, same model and same detectors on both sides:
+---
 
-| | Original harness | Bastet+ |
-| --- | --- | --- |
-| F1 (per file×class) | 0.111 | **0.302** |
-| Recall | 0.667 | **0.889** |
-| File-level F1 ("does this file need review?") | 0.667 | **1.000** |
-| Findings to triage | 278 | **27** |
-| Findings on clean files | 118 | **0** |
-| Findings with a line number | 0 | **27** |
-| Severity silently defaulted to `high` | 278 / 278 | **0** |
+## 先讀這段：這些數字能宣稱什麼
 
-The single most valuable change is verifier asymmetry: run detection on a cheap model and
-verification on a stronger one.
+在 `ais3/llama-3.3-70b` 上、20 個檔案、18 支 detector、兩邊同模型同端點：
+
+| | per (file,class) F1 | file-level F1 |
+|---|---|---|
+| 恆答「有漏洞」（trivial baseline） | 0.140 | 0.621 |
+| 恆答「有漏洞」，除檔名 `clean_*` 外 | 0.154 | 0.667 |
+| **原版 harness** | **0.111** | **0.667** |
+| Bastet+，同模型 verifier | 0.210 | 0.667 |
+| Bastet+，強 verifier，**純 harness 改動** | **0.333** | 0.900 |
+| Bastet+，強 verifier + Discipline prompt 區塊 | 0.302 | **1.000** |
+
+正確的讀法是：**原版低於常數基線，Bastet+ 跨過去了** —— 而且三個配置裡只有一個真的跨過。
+不是「F1 提升 2.7 倍」。原版的 0.111 低於恆答 yes 的 0.140；原版與 Bastet+ 同模型 verifier
+的 file-level 分數都跟 trivial baseline 一模一樣，在檔案層級無法與常數答案區分。
+
+附加到 prompt 的 `## Discipline` 區塊不是純 plumbing，已用 `--no-discipline` 單獨量過：
+它壓掉 2 個乾淨檔的告警（file-level 滿分因此有一部分要歸功於 prompt 而非 harness），
+代價是吃掉一個真陽性。純 harness 的改動仍然大幅跨過 trivial baseline。
+
+**這些是 dev-set 數字，不是泛化估計。** benchmark 是我自己寫的、標註也是我自己標的，
+而且我在看到模型輸出之後改過其中 4 個案例，最後又在同一組資料上挑出「較強 verifier」
+這個建議配置。細節與其他保留意見見 [`DECISIONS.md`](DECISIONS.md) 與 `RESULTS.md`。
+
+真正站得住、不依賴任何資料集或我的標註的，是 `IMPROVEMENTS.md` 裡那些讀原始碼就能驗證的
+缺陷：severity 278/278 被默默改寫成 `high`、61% 的回應不是純 JSON、`while True` 無逾時輪詢、
+評估程式的四個 bug。
+
+---
+
+## 快速開始
+
+```bash
+cp .env.example .env    # 把 BASTET_LLM_BASE_URL 指向你的模型
+python -m bastet_plus packs
+python -m bastet_plus scan path/to/contracts --packs slippage,owasp2025
+```
+
+除了 Python 3.10+ 標準函式庫之外沒有任何相依。
+
+建議配置是非對稱的 —— 偵測用便宜模型，複核用較強模型：
 
 ```bash
 python -m bastet_plus scan contracts/ --samples 3 --verifier-model <stronger-model>
 ```
 
----
-
-## Quick start
-
-```bash
-cp .env.example .env    # point BASTET_LLM_BASE_URL at your model
-python -m bastet_plus packs
-python -m bastet_plus scan path/to/contracts --packs slippage,owasp2025
-```
-
-No dependencies beyond the Python 3.10+ standard library. Setup is two lines; the original
-required Docker Compose, a Postgres volume, an n8n owner account, a manually created n8n API
-key, a manually created OpenAI credential whose UUID you paste back into `.env`, and a
-workflow import step.
-
-### Run the A/B benchmark
+### 跑 A/B
 
 ```bash
 python -m bastet_plus bench --samples 3
 ```
 
-Runs both pipelines — the faithful legacy replica and the enhanced one — over the labelled
-benchmark in `benchmark/`, using the same model, the same detectors and the same endpoint,
-and prints a side-by-side table.
-
----
-
-## Architecture
+## 架構
 
 ```
 contract.sol
      |
      v
-[ slicing.py ]      Solidity-aware slicing. Every slice carries the pragma,
-     |              imports, state variables and modifier definitions of its
-     |              contract, so a function is never judged without its storage.
+[ slicing.py ]      Solidity 切片。每個切片都帶著所屬合約的 pragma、import、
+     |              狀態變數與 modifier，所以函式不會在看不到 storage 的情況下被判斷。
+     |              *** 此項從未被量測 —— benchmark 檔案全部小於切片門檻 ***
      v
-[ detectors.py ]    56 detector prompts extracted from the n8n workflows.
-     |              Output contract is generated from schema.py, not hand-written
-     |              per prompt, so it cannot drift.
+[ detectors.py ]    56 支從 n8n workflow 抽出的 detector prompt。輸出契約由
+     |              schema.py 產生而非逐支手寫，所以不會走鐘。
      v
-[ llm.py ]          Retry + backoff + timeout + sqlite response cache +
-     |  x k         token accounting. Structured-output ladder:
-     |              json_schema -> json_object -> text extraction -> repair.
+[ llm.py ]          重試 + 退避 + 逾時 + sqlite 回應快取 + token 計費。
+     |  x k         structured output 階梯：json_schema -> json_object -> 文字擷取 -> 修復。
      v
-[ dedupe.py ]       Self-consistency. A candidate must be produced by a
-     |              majority of the k samples to survive.
+[ dedupe.py ]       自洽性投票。候選必須被多數取樣產生才留下。
      v
-[ grounding.py ]    Does the quoted code actually exist in the file?
-     |              Zero-token false-positive filter; also assigns line numbers.
+[ grounding.py ]    引用的程式碼真的存在於原始檔嗎？零 token 成本的誤報過濾，
+     |              同時產生行號。
      v
-[ verify.py ]       A fresh call, framed to refute, that must state a concrete
-     |              exploit path or the finding is dropped.
+[ verify.py ]       全新的一次呼叫，框架設定為「反駁」，必須說得出具體攻擊路徑
+     |              才留下。
      v
-[ dedupe.py ]       One report line per bug, however many detectors saw it.
+[ dedupe.py ]       跨 detector 去重，一個 bug 一行。
      v
 [ report.py ]       md / json / csv / sarif
 ```
 
-## Commands
+## 指令
 
-| Command | What it does |
-| --- | --- |
-| `packs` | list the detector packs and their sizes |
-| `scan <path>` | scan a file or directory; `--legacy` runs the original single-shot pipeline instead |
-| `bench` | A/B both pipelines against the labelled benchmark |
+| 指令 | 用途 |
+|---|---|
+| `packs` | 列出 detector pack |
+| `scan <path>` | 掃描檔案或目錄；`--legacy` 改跑原版單次呼叫管線 |
+| `bench` | 在標註 benchmark 上 A/B 兩條管線 |
 
-Useful flags:
+常用旗標：
 
-| Flag | Effect |
-| --- | --- |
-| `--samples N` | self-consistency: run each detector N times and require agreement |
-| `--no-verify` | skip the adversarial verification stage |
-| `--no-slice` | feed whole files, as the original did |
-| `--keep-ungrounded` | keep findings whose quoted code is not in the source |
-| `--model` / `--verifier-model` | override per run; verification can use a stronger model than detection |
-| `--min-severity` | drop findings below a severity floor |
-| `--no-cache` | bypass the response cache |
+| 旗標 | 效果 |
+|---|---|
+| `--samples N` | 自洽性：每支 detector 跑 N 次，取多數 |
+| `--verifier-model` | 複核用不同（較強）的模型 |
+| `--no-verify` | 關掉對抗式複核 |
+| `--no-slice` | 整檔送入，與原版相同 |
+| `--keep-ungrounded` | 保留引用程式碼找不到的 finding |
+| `--no-discipline` | 剝掉 prompt 裡的 Discipline 區塊，用來區分「prompt 的貢獻」與「harness 的貢獻」 |
+| `--log-calls PATH` | 每次 LLM 呼叫寫一行 JSONL（完整 messages、回應、usage、延遲） |
+| `--min-severity` | 嚴重度下限 |
+| `--no-cache` | 略過回應快取 |
 
-Each of these maps to one improvement, so you can ablate them individually and see what
-each is worth on your own model.
+每個旗標對應一項改動，可以逐項 ablate。
 
-## Output formats
+## 稽核用的產出
 
-`md`, `json`, `csv` — and `sarif`, which is new. SARIF renders as inline annotations on the
-changed lines in GitHub code scanning and GitLab, which only became possible once findings
-carried line numbers. The original emitted a PDF for CI to publish, which nothing consumes.
+| 檔案 | 內容 |
+|---|---|
+| `benchmark_results/comparison_*.json` | 每個 arm 的完整 findings、per-file 預測、stats |
+| `docs/run_log_llama70b_2026-07-26.txt` | A/B 那次跑的 console log |
+| `docs/prompt_change_summary.txt` | 56 支 prompt 的機械化改動摘要 |
+| `docs/prompt_diff_example.txt` | 單支 prompt 的完整 unified diff |
+| `--log-calls` 的 JSONL | 完整請求/回應記錄（預設關閉，會內嵌合約原始碼） |
+
+**回應快取不能當稽核紀錄。** 它的 key 是 request 的 sha256，只存回應 —— 能告訴你模型說了
+什麼，永遠無法告訴你它被問了什麼。這就是 `--log-calls` 存在的理由。
 
 ## Benchmark
 
-`benchmark/cases/` holds 20 labelled Solidity files: 9 vulnerable, 11 clean. Every
-vulnerable case is paired with a functionally equivalent safe twin that differs only in the
-defence under test.
+`benchmark/cases/` 有 20 個標註過的 Solidity 檔案：9 個有漏洞、11 個乾淨。每個有漏洞的案例
+都配一個功能等價的安全雙胞胎，只差在受測的那道防護。
 
-That pairing is the point. A detector that answers "yes, slippage" to every function
-containing a swap scores 100% recall on the vulnerable half and is worthless. The safe twins
-are what make precision measurable, and they are what the upstream `dataset.csv` evaluation —
-which only asks "did any workflow output anything for this repo" — cannot measure.
+配對是重點。一個看到 swap 就喊「滑點！」的偵測器在有漏洞的那一半可以拿到 100% recall
+而毫無用處。安全雙胞胎才讓 precision 可量測。
 
-This is a stand-in, not a replacement for the real thing: the upstream Bastet dataset (450
-Code4rena codebases, ~4 400 findings) is distributed via Google Drive and is not in the
-repository. To evaluate against it, point `bench` at a converted `labels.json`.
+這是替代品，不是真實資料集的替換 —— 上游的 Bastet 資料集（450 個 Code4rena 專案、
+約 4 400 個 findings）透過 Google Drive 發佈，不在 repo 裡。為什麼它在這個專案跑不起來，
+見 `RESULTS.md`。
 
-## Configuration
+## 與上游的關係
 
-Everything is environment-driven; see `.env.example`. The original hard-coded `gpt-4o-mini`
-inside all 56 workflow JSON nodes, so changing model meant editing 56 files or clicking
-through the n8n UI 56 times.
-
-## Relationship to upstream
-
-The detector prompts are the work of the Bastet authors and are used unmodified except for
-their output-contract block. `tools/extract_prompts.py` regenerates `prompts/legacy/` from
-`n8n_workflow/*.json`, so upstream prompt changes can be pulled forward in one command.
+detector prompt 是 Bastet 作者的成果，除了輸出契約區塊之外原封不動使用。
+`tools/extract_prompts.py` 可從 `n8n_workflow/*.json` 重新產生 `prompts/legacy/`，
+所以上游的 prompt 更新可以一行指令跟上。

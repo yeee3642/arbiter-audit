@@ -37,7 +37,11 @@ def run_arm(arm: str, cases_dir: str, labels: dict, detectors: list[Detector],
             llm_cfg: LLMConfig, pipe_cfg: PipelineConfig, verbose: bool = True):
     """Run one harness over every benchmark case. Returns (results, stats, usage)."""
     usage = Usage()
-    client = LLMClient(llm_cfg, usage)
+    # One transcript per arm, so legacy and enhanced calls never interleave in
+    # the same file.
+    log_path = (llm_cfg.call_log_path.replace(".jsonl", f".{arm}.jsonl")
+                if llm_cfg.call_log_path else None)
+    client = LLMClient(llm_cfg, usage, log_path=log_path)
     results: dict[str, list] = {}
     per_file_stats: list[dict] = []
     t0 = time.time()

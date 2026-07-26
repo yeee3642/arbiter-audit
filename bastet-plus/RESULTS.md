@@ -1,71 +1,105 @@
-# A/B results
+# A/B 量測結果
 
-**Setup.** 20 labelled Solidity files (9 vulnerable, 11 clean), 18 detectors, model
-`ais3/llama-3.3-70b` served over an OpenAI-compatible endpoint. Both arms use the same model,
-the same endpoint, the same detectors and the same files. The legacy arm is a faithful Python
-replica of the n8n single-shot path (`pipeline.run_legacy`), and it is deliberately given the
-*improved* JSON extraction so the comparison cannot be dismissed as "your parser is better".
+**設定。** 20 個標註過的 Solidity 檔案（9 個有漏洞、11 個乾淨）、18 支 detector、
+模型 `ais3/llama-3.3-70b`，透過 OpenAI 相容端點。兩邊使用相同模型、相同端點、相同 detector、
+相同檔案。legacy 那一組是原版 n8n 單次呼叫路徑的忠實 Python 複刻（`pipeline.run_legacy`），
+而且**刻意給它比 n8n 更寬鬆的 JSON 解析**，免得結果被說成「只是你的 parser 比較好」。
 
-Enhanced settings: `--samples 3`, verification on, grounding on, slicing on. The
-"strong verifier" column additionally sets `--verifier-model ais3/nemotron-3-ultra-550b`,
-leaving detection on the cheap model.
+enhanced 設定：`--samples 3`、開啟複核、開啟證據驗證、開啟切片。「強 verifier」那一欄額外
+指定 `--verifier-model ais3/nemotron-3-ultra-550b`，偵測仍留在便宜模型。
 
 ---
 
-## Headline
+## 0. 先讀這段：這些數字能宣稱什麼、不能宣稱什麼
 
-### File level: "does a human need to look at this file?"
+**一定要跟 trivial baseline 比，不是跟零比。**
 
-| | Original | Bastet+ | Bastet+ (strong verifier) |
+| | per (file,class) F1 | file-level F1 |
+|---|---|---|
+| 恆答「有漏洞」 | 0.140 | 0.621 |
+| 恆答「有漏洞」，除檔名 `clean_*` 外 | 0.154 | 0.667 |
+| **原版 harness** | **0.111** | **0.667** |
+| Bastet+，關閉複核 | 0.174 | 0.667 |
+| Bastet+，同模型 verifier | 0.210 | 0.667 |
+| Bastet+，強 verifier，**純 harness 改動** | **0.333** | 0.900 |
+| Bastet+，強 verifier + Discipline prompt 區塊 | 0.302 | **1.000** |
+
+三件事要從這張表讀出來：
+
+1. **原版的 0.111 低於恆答 yes 的 0.140。** 上游系統的表現比一個常數答案還差。
+2. **原版與 Bastet+ 前兩個配置的 file-level 分數都是 0.667，跟 trivial baseline 完全相同。**
+   在「這個檔案要不要人看」這個層級，它們與常數答案無法區分。
+3. **只有強 verifier 那一組真的跨過所有 trivial baseline。**
+
+所以正確的標題是「**從低於常數基線變成高於常數基線**」，不是「F1 提升 2.7 倍」。
+
+這獨立重現了同 repo 內 `bastet-cc` 的結論：上游系統與常數答案在統計上無法區分。
+
+### 這些數字為什麼不是泛化估計
+
+三個問題，細節在 [`DECISIONS.md`](DECISIONS.md)：
+
+- **benchmark 是建 harness 的同一個人寫的**，標註也是。而且**有 4 個案例是在看到模型輸出
+  之後才修改的** —— 看到什麼被扣分就去改扣分的來源。真實資料集上你沒有這個權力。
+- **建議配置（強 verifier）是在報告數字的同一組 20 個檔案上挑出來的。** 這是在測試集上做
+  模型選擇。正確做法是 train/dev 調參、test 只碰一次。
+- **附加到 prompt 的 `## Discipline` 區塊不是純 plumbing**（見第 5 節），所以這不是乾淨的
+  harness-only A/B。
+
+### 真正站得住的部分
+
+`IMPROVEMENTS.md` 裡的程式碼缺陷是讀原始碼就能驗證的事實，不依賴任何資料集或我的標註
+（見第 4 節）。那些站得住。所有 P/R/F1 數字都應該當成 smoke test 與迴歸測試，不是效能宣稱。
+
+---
+
+## 1. 檔案層級：「這個檔案要不要人看？」
+
+| | 原版 | Bastet+ | Bastet+（強 verifier） |
 | --- | --- | --- | --- |
 | Precision | 0.500 | 0.500 | **1.000** |
 | Recall | 1.000 | 1.000 | **1.000** |
 | F1 | 0.667 | 0.667 | **1.000** |
 | TP / FP / FN / TN | 9 / 9 / 0 / 2 | 9 / 9 / 0 / 2 | **9 / 0 / 0 / 11** |
-| Clean files raising an alarm | 9 / 11 | 9 / 11 | **0 / 11** |
-| Findings on clean files | 118 | 18 | **0** |
+| 有告警的乾淨檔 | 9 / 11 | 9 / 11 | **0 / 11** |
+| 乾淨檔上的 finding 數 | 118 | 18 | **0** |
 
-This is the most instructive row in the comparison, and it is not the flattering reading.
+這是整份比較裡最有教育意義的一列，而且不是好看的那種讀法。
 
-Same-model verification, llama-3.3-70b judging its own output, cuts the *volume* of noise on
-clean files by 6.5x (118 findings down to 18) but does not silence a single clean file. Nine
-of eleven still raise at least one alarm, exactly as before. A model asked to referee its own
-reasoning keeps enough of it to stay above zero.
+同模型複核 —— llama-3.3-70b 審自己的輸出 —— 把乾淨檔的雜訊**數量**壓下 6.5 倍
+（118 → 18），但**一個乾淨檔都沒有變安靜**。11 個裡仍有 9 個至少發出一個告警，跟改造前
+完全一樣，也跟 trivial baseline 完全一樣。模型被要求審自己的推理時，會保留足夠多的部分讓
+自己維持在零以上。
 
-Swapping **only the verifier** to a stronger model drives clean-file findings to zero while
-still catching all 9 vulnerable files: 20/20 at file level.
+只換 verifier 成較強的模型，乾淨檔 finding 歸零，同時 9 個有漏洞的檔案全部抓到：檔案層級 20/20。
 
-So the finding is not "verification helps". It is: **verification by a model no stronger than
-the detector reduces noise but does not change the decision; verification by a stronger model
-does.**
+**所以結論不是「加了複核就有用」，而是：不比 detector 強的 verifier 只能減少雜訊、無法改變
+判斷；比 detector 強的 verifier 才能。**
 
-### Per (file, class) pair: strict attribution
+## 2. 每個 (檔案, 類別) 配對：嚴格歸屬
 
-| Metric | Original | Bastet+ | Bastet+ (strong verifier) |
+| 指標 | 原版 | Bastet+ | Bastet+（強 verifier） |
 | --- | --- | --- | --- |
 | Precision | 0.061 | 0.119 | **0.182** |
 | Recall | 0.667 | 0.889 | **0.889** |
 | F1 | 0.111 | 0.210 | **0.302** |
-| False-positive rate | 0.838 | 0.531 | **0.324** |
+| 誤報率 | 0.838 | 0.531 | **0.324** |
 | TP / FP / FN / TN | 6 / 93 / 3 / 18 | 8 / 59 / 1 / 52 | 8 / 36 / 1 / 75 |
-| Total findings reported | 278 | 55 | **27** |
-| Findings carrying a line number | **0** | 55 | 27 |
-| Localization accuracy | 6/6 | 8/8 | 8/8 |
+| 回報的 finding 總數 | 278 | 55 | **27** |
+| 帶行號的 finding | **0** | 55 | 27 |
+| 定位準確率 | 6/6 | 8/8 | 8/8 |
 
-Attribution here is strict: a finding merged from six detectors counts as a prediction for
-all six of their classes. So this metric penalises *class smearing* (reporting the right bug
-on the right line under several overlapping labels) as heavily as an outright hallucination.
-Both views are given because they answer different questions and neither alone is the whole
-picture.
+這裡的歸屬是嚴格的：一筆由六支 detector 合併而成的 finding，會被算成那六個類別各一次預測。
+所以這個指標把「在正確的行上報出正確的 bug、但掛了好幾個重疊標籤」懲罰得跟徹底的幻覺一樣重。
+兩種視角都列出來，因為它們回答不同問題。
 
-Absolute precision is low on both sides. That is the honest state of 18 aggressively-primed
-CoT detectors running over a 70B open-weight model: each prompt has just told the model what
-it is looking for, and the model obliges. The harness roughly triples it; it does not solve
-the problem.
+絕對 precision 兩邊都低。這是 18 支被高度引導的 CoT detector 跑在 70B 開源模型上的誠實現況：
+每一支 prompt 都剛剛告訴模型「你要找的是什麼」，模型就照辦。harness 把它拉高約三倍，但沒有
+解決這個問題。
 
-### Per class
+### 各類別
 
-| Class | Original P/R/F1 (TP/FP/FN) | Bastet+ strong verifier P/R/F1 (TP/FP/FN) |
+| 類別 | 原版 P/R/F1 (TP/FP/FN) | Bastet+ 強 verifier P/R/F1 (TP/FP/FN) |
 | --- | --- | --- |
 | access_control | 0.11 / 1.00 / 0.20 (2/16/0) | 0.29 / 1.00 / 0.44 (2/5/0) |
 | slippage | 0.11 / 1.00 / 0.20 (2/16/0) | 0.22 / 1.00 / 0.36 (2/7/0) |
@@ -74,126 +108,171 @@ the problem.
 | randomness | 0.00 / 0.00 / 0.00 (0/13/1) | 0.12 / 1.00 / 0.22 (1/7/0) |
 | oracle | 0.06 / 1.00 / 0.11 (1/17/0) | 0.11 / 1.00 / 0.20 (1/8/0) |
 
-The original scores **zero** on reentrancy and randomness. It is not silent on those files;
-it emits 14 and 13 findings respectively. It just never emits the right one. Bastet+ recovers
-both.
+原版在 reentrancy 與 randomness 兩類是**零分**。它在那些檔案上並非沉默 —— 分別吐出 14 和
+13 筆 —— 只是從來沒吐對那一筆。Bastet+ 把兩類都救回來。
 
 ---
 
-## Harness health
+## 3. 誤報被擋在哪一關
 
-These are not accuracy metrics. They are counts of the original's defects firing in practice.
+強 verifier 配置，各階段在整個 benchmark 上移除的候選數：
 
-| | Original | Bastet+ |
-| --- | --- | --- |
-| Findings whose severity was silently rewritten to `high` | **278 / 278 (100%)** | 0 |
-| Responses n8n's strict output parser would have rejected | **221 / 360 (61%)** | 0 |
-| Structured-output ladder: native / extracted / repaired / failed | n/a | 1300 / 0 / 0 / 0 |
-| Severity histogram of reported findings | `{high: 278}` | `{high: 26, medium: 1}` |
-
-**Every finding the original produces is stamped `high`.** The severity column in every Bastet
-report to date is a constant. This is defect A1: 55 of 56 prompts never mention `severity`,
-the schema requires it, and `AuditReport.__init__` defaults the missing value to `"high"`
-without complaint.
-
-**61% of legacy responses are not bare JSON.** They arrive fenced, prefaced, or with
-commentary. n8n's Structured Output Parser rejects those, and `scan.py` handles the rejection
-by printing `Model output doesn't fit required format, escape one` and dropping the finding.
-The legacy arm's 0.667 recall is measured *with* the lenient parser; through the real n8n path
-it would be materially lower. With an explicit `response_format` schema, all 1300 enhanced
-calls parsed natively on the first attempt and the repair path never fired.
-
----
-
-## Where the false positives go
-
-Enhanced pipeline with the strong verifier, per stage, across the whole benchmark:
-
-| Stage | Candidates removed |
+| 階段 | 移除數 |
 | --- | --- |
-| Self-consistency (agreement across 3 samples) | 136 |
-| Evidence grounding (quoted code absent from source) | 16 |
-| Adversarial verification | 103 |
-| Cross-detector dedup | 90 merged |
+| 自洽性（3 次取樣的一致性） | 136 |
+| 證據落地（引用的程式碼不存在於原始檔） | 16 |
+| 對抗式複核 | 103 |
+| 跨 detector 去重 | 合併 90 |
 
-Grounding removes the fewest candidates, but it costs zero tokens (it is pure string matching)
-and the ones it removes are the confidently-wrong ones, where the model invented the code that
-proves its own claim.
+證據落地移除的最少，但它**零 token 成本**（純字串比對），而且移除的是「模型連證明自己主張
+的程式碼都是編的」那一類最有自信的錯誤。
 
-## Ablation
+## 4. Harness 健康度
 
-| Configuration | P | R | F1 | Findings | On clean files | Clean files silenced |
-| --- | --- | --- | --- | --- | --- | --- |
-| Original harness | 0.061 | 0.667 | 0.111 | 278 | 118 | 2 / 11 |
-| Bastet+, verification off | 0.096 | 0.889 | 0.174 | 105 | 47 | 2 / 11 |
-| Bastet+, same-model verifier | 0.119 | 0.889 | 0.210 | 55 | 18 | 2 / 11 |
-| Bastet+, stronger verifier | **0.182** | **0.889** | **0.302** | **27** | **0** | **11 / 11** |
+這些不是準確度指標，是原版缺陷在實際執行中觸發的次數 —— **不依賴我的標註**。
 
-Three things to read off this:
-
-1. **Self-consistency + grounding + dedup alone** (the "verification off" row, no extra LLM
-   call beyond the 3 samples) take F1 from 0.111 to 0.174 and cut findings from 278 to 105.
-   Recall goes *up* at the same time, 0.667 to 0.889, because the enhanced arm recovers the
-   two classes the original scores zero on.
-2. **Verifier strength is the variable that changes the decision, not verification itself.**
-   Every row except the last leaves the same 9 clean files raising alarms. Only the stronger
-   verifier drives them to silence, and it costs nothing in recall.
-3. The recommended configuration is therefore asymmetric:
-
-```bash
-python -m bastet_plus scan contracts/ --samples 3 --verifier-model <stronger-model>
-```
-
-`--no-slice` is deliberately absent from the table: every benchmark file is under the 12 000
-character slicing threshold, so slicing is a no-op here and ablating it would measure nothing.
-Slicing targets the multi-thousand-line files in the real Bastet dataset and **is untested by
-this benchmark**.
-
-## Cost
-
-| | Original | Bastet+ (`--samples 3`, verify on) |
+| | 原版 | Bastet+ |
 | --- | --- | --- |
-| LLM requests | 360 | 1 080 + one per surviving candidate |
-| Total tokens | 427 932 | 1 882 739 |
-| Wall clock | 332 s | 814 s |
+| severity 被默默改寫成 `high` 的 finding | **278 / 278（100%）** | 0 |
+| n8n 嚴格輸出解析器會拒絕的回應 | **221 / 360（61%）** | 0 |
+| structured output 階梯：原生 / 擷取 / 修復 / 失敗 | 不適用 | 1300 / 0 / 0 / 0 |
+| 回報 finding 的嚴重度分布 | `{high: 278}` | `{high: 26, medium: 1}` |
 
-Roughly **4.4x the tokens for 2.7x the F1**, and 27 findings to triage instead of 278.
-Swapping the verifier model added 266 600 tokens on top of cached detection.
+**原版產出的每一筆 finding 都被蓋章成 `high`。** 至今每一份 Bastet 報告的 severity 欄位都是
+常數。成因是 A1：56 支 prompt 裡有 55 支從未提到 `severity`，schema 卻要求它，
+`AuditReport.__init__` 就把缺失值補成 `"high"` 且不出聲。
 
-Whether that trade is worth it depends on what an analyst-hour costs relative to tokens. The
-knobs exist: `--samples 1` removes two thirds of detection cost, `--no-verify` removes
-verification cost, `--min-severity` truncates the tail, and the response cache makes
-re-running an unchanged scan free.
+**61% 的原版回應不是純 JSON。** 它們帶著 code fence、前言或註解。n8n 的 Structured Output
+Parser 會拒絕這些，而 `scan.py` 的處理方式是印一行
+`Model output doesn't fit required format, escape one` 然後丟掉。legacy 那組 0.667 的 recall
+是**在我給它寬鬆 parser 的情況下**量的；走真正的 n8n 路徑會明顯更低。改用明確的
+`response_format` schema 後，1300 次呼叫全部首次原生解析成功，修復路徑一次都沒觸發。
+
+## 5. Discipline 區塊：一個原本沒揭露的混淆因子
+
+`tools/prompt_diff.py` 機械化產生 diff 後才看清楚：附加到每支 detector prompt 的有兩塊，
+性質不同 ——
+
+1. `## Output contract`：由 `schema.py` 產生，純格式。**是 plumbing。**
+2. `## Discipline`（438 字元）：告訴模型「已在可見範圍內實作的防護不算漏洞」「不確定就降低
+   `confidence` 而不是略過」。這是**反誤報的偵測指引，不是 plumbing**，本身就可能推高
+   precision。
+
+所以 legacy vs enhanced **不是乾淨的 harness-only A/B**。`--no-discipline` 單獨量測它，
+結果比預期有意思：
+
+| | pair P / R / F1 | file-level P / R / F1 | findings | 乾淨檔告警 |
+| --- | --- | --- | --- | --- |
+| 有 Discipline | 0.182 / 0.889 / 0.302 | **1.000 / 1.000 / 1.000** | 27 | **0 / 11** |
+| 無 Discipline | **0.200 / 1.000 / 0.333** | 0.818 / 1.000 / 0.900 | 33 | 2 / 11 |
+
+它不是單純的灌水，而是一組**精確率換召回率**的交換，方向正是它被寫出來的目的：
+
+- **它壓掉 2 個乾淨檔的告警**，這正是 file-level 拿到滿分 1.000 的原因。拿掉它，file-level
+  掉到 0.900。
+- **但它吃掉一個真陽性。** `reentrancy` 的 recall 從 1.00 掉到 0.50 ——「已在可見範圍實作的
+  防護不算漏洞」這條指引，讓模型把 `reentrancy_vuln_02` 的 callback 順序問題判成沒問題。
+  在 pair 指標上它其實**讓 F1 變差**（0.302 對 0.333）。
+
+**誠實的結論：那個漂亮的 file-level 1.000 有一部分要歸功於 prompt，不是純 harness。**
+
+但核心宣稱撐得住 —— 把 Discipline 完全拿掉、只留 harness 改動：
+
+| | pair F1 | file-level F1 |
+| --- | --- | --- |
+| trivial baseline | 0.140 | 0.667 |
+| 原版 harness | 0.111 | 0.667 |
+| **Bastet+，無 Discipline（純 harness 改動）** | **0.333** | **0.900** |
+
+純 harness 的改動仍然大幅跨過 trivial baseline，而且在 pair F1 上比含 Discipline 的版本更好。
+所以先前的數字**低估**了 harness 本身在 pair 指標上的貢獻，同時**高估**了它獨力拿到檔案層級
+滿分的能力。
+
+## 6. Ablation
+
+| 配置 | P | R | F1 | Findings | 乾淨檔上的 finding | 變安靜的乾淨檔 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 恆答「有漏洞」（trivial） | 0.075 | 1.000 | 0.140 | — | — | 0 / 11 |
+| 原版 harness | 0.061 | 0.667 | 0.111 | 278 | 118 | 2 / 11 |
+| Bastet+，關閉複核 | 0.096 | 0.889 | 0.174 | 105 | 47 | 2 / 11 |
+| Bastet+，同模型 verifier | 0.119 | 0.889 | 0.210 | 55 | 18 | 2 / 11 |
+| Bastet+，強 verifier，無 Discipline（純 harness） | 0.200 | **1.000** | **0.333** | 33 | 2 | 9 / 11 |
+| Bastet+，強 verifier，含 Discipline | 0.182 | 0.889 | 0.302 | **27** | **0** | **11 / 11** |
+
+三件事：
+
+1. **只靠自洽性 + 證據落地 + 去重**（「關閉複核」那列，除了 3 次取樣之外沒有額外 LLM 呼叫）
+   就把 F1 從 0.111 拉到 0.174、finding 從 278 降到 105。recall 同時**上升**（0.667 → 0.889），
+   因為 enhanced 救回了原版拿零分的兩個類別。
+2. **決定判斷的變數是 verifier 的強度，不是「有沒有複核」。** 除了最後一列，每一列都留下同樣
+   9 個乾淨檔在告警。
+3. `--no-slice` 刻意不在表上：benchmark 每個檔案都小於 12 000 字元的切片門檻，切片在這組資料
+   上是 no-op，ablate 它量不到任何東西。**切片這項改動從未被量測過。**
+
+## 7. 成本
+
+| | 原版 | Bastet+（`--samples 3`，開複核） |
+| --- | --- | --- |
+| LLM 呼叫次數 | 360 | 1 080 + 每個存活候選一次 |
+| 總 token | 427 932 | 1 882 739 |
+| 牆鐘時間 | 332 秒 | 814 秒 |
+
+大約 **4.4 倍的 token，換 2.7 倍的 F1**，以及要人工分診的 finding 從 278 降到 27。
+換 verifier 模型在快取過的偵測之上額外花了 266 600 token。
+
+這筆交易划不划算取決於分析師工時相對於 token 的價格。旋鈕都在：`--samples 1` 砍掉三分之二
+的偵測成本，`--no-verify` 砍掉複核成本，`--min-severity` 截尾，而回應快取讓沒有改動的重跑
+免費。
 
 ---
 
-## Caveats
+## 8. 保留意見
 
-- **20 files is a small benchmark.** It cleanly separates a harness that puts 118 findings on
-  clean files from one that puts 0. It cannot resolve a two-point F1 difference. The 95%
-  Wilson interval on the strong-verifier precision of 0.182 is **[0.095, 0.320]**; on the
-  legacy 0.061 it is **[0.028, 0.126]**. Those intervals do not overlap, so the precision
-  improvement is real, but its magnitude is not pinned down to three digits.
-- **The cases are purpose-built** and therefore cleaner than production Solidity. Both arms
-  are flattered.
-- **The legacy arm is a replica**, not the n8n container. It issues the same request and gets
-  the same response, but is *more* forgiving on parsing than n8n; see the 61% strict-parse
-  failure rate. The real original would score lower.
-- **The upstream dataset was not used.** Bastet's 450-repo Code4rena dataset is distributed
-  via Google Drive and is not in the repository. These numbers do not transfer to it directly,
-  and the slicing improvement in particular is unmeasured here.
-- **Two bugs in this harness were found and fixed during the run**, both in `dedupe.py`:
-  provenance truncation, which silently reclassified merged findings and produced two phantom
-  regressions; and a similarity signature that counted a shared *function name* as evidence
-  that two different bug classes were the same finding. Both are covered by regression tests
-  in `tests/test_offline.py`, and every number above is post-fix.
+- **20 個檔案是很小的 benchmark。** 它能乾淨地分辨「乾淨檔上放 118 個 finding」和「放 0 個」
+  的差別，但無法解析兩個百分點的 F1 差異。強 verifier 的 precision 0.182 的 95% Wilson 區間是
+  **[0.095, 0.320]**，原版 0.061 的是 **[0.028, 0.126]**。兩個區間不重疊，所以 precision 的改善
+  是真的，但幅度沒有被釘到三位數。
+- **案例是刻意設計的**，因此比生產環境的 Solidity 乾淨。兩邊都被美化了。
+- **legacy 那組是複刻**，不是 n8n 容器本身。它送出相同請求、拿到相同回應，但在解析上比 n8n
+  **更寬容** —— 見 61% 的嚴格解析失敗率。真正的原版分數會更低。
+- **沒有使用上游資料集。** Bastet 的 450 個 Code4rena 專案資料集透過 Google Drive 發佈，不在
+  repo 裡。這些數字無法直接轉移過去。為什麼它在這個專案跑不起來，見第 9 節。
+- **開發過程中在這個 harness 裡發現並修掉兩個 bug**，都在 `dedupe.py`：provenance 截斷
+  （會默默把合併後的 finding 重新分類，造出兩個假的 regression），以及把共用的 function 名
+  當成「兩個不同類別的 bug 是同一筆」的證據。兩者都有迴歸測試涵蓋，上述所有數字都是修正後的。
+- **污染完全沒量。** 這些 detector 針對的是公開的 Code4rena 稽核報告，2020–2024 那批幾乎確定
+  在模型的預訓練資料裡。分數有多少來自記憶而非偵測，無從得知。
 
-## Reproducing
+## 9. 為什麼上游資料集在這個專案跑不起來
+
+三個獨立的阻礙：
+
+**標註粒度不匹配。** `metrics.evaluate` 的評分單位是 `(file, class)`，需要一張
+`detector_class` 映射表。Code4rena 的 finding 是 repo 層級的自由文字加標籤，與 56 支
+detector 之間沒有對應關係。那張表不存在，必須人工建，而怎麼建本身就是一個影響結果的自由度。
+
+**上游的評分協定本身有天花板。** 同 repo 內的 `bastet-cc` 量過：把 ground truth 直接餵給
+預測器，在上游協定下 macro-F1 只有 **0.901**，不是 1.0。因為一個 repo 平均帶 9.2 個 findings，
+同一個 repo 會同時進 `DoS` 的正樣本池和 `Reentrancy` 的負樣本池，掃描器只答一次，必錯一邊。
+那 9 個百分點是儀器誤差，不是偵測誤差。在一把本身就歪的尺上比較改善幅度沒有意義。
+
+**成本。** 實測：20 個小檔 × 18 支 detector × 3 次取樣 = 1 080 次呼叫、1 882 739 token、
+814 秒。換算約 94k token/檔（18 支 detector），全 56 支約 292k token/檔。一個 Code4rena
+專案動輒 50–200 個 `.sol`，450 個專案粗估是百億 token 等級。
+
+**另外：沒有東西會被 train。** 這個專案沒有任何權重會被更新 —— 凍結的 LLM 加 prompt 而已。
+會被擬合的只有人手轉的旋鈕（prompt 字句、取樣次數 k、投票門檻、嚴重度下限、開哪些 pack、
+verifier 用哪個模型）。所以「訓練集」在這裡沒有東西可以餵；需要的是一個**只碰一次的
+test split**。拿標註資料反覆調旋鈕，就是拿 eval set 當 loss function 做手動梯度下降 ——
+也就是本文件第 0 節坦承這份 benchmark 已經犯下的錯。
+
+## 10. 重現
 
 ```bash
-cp .env.example .env          # point at your endpoint
-python tests/test_offline.py  # 42 offline checks, no network
+cp .env.example .env          # 指向你的端點
+python tests/test_offline.py  # 42 項離線檢查，不需網路
 python -m bastet_plus bench --samples 3 --verifier-model <stronger-model>
 ```
 
-Raw per-finding output for every run is in `benchmark_results/comparison_*.json`.
+每次執行的完整 per-finding 輸出在 `benchmark_results/comparison_*.json`。
+A/B 那次的 console log 在 `docs/run_log_llama70b_2026-07-26.txt`。

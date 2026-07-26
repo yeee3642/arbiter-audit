@@ -280,14 +280,27 @@ your own corpus:
 | `--keep-ungrounded` | B4 evidence grounding |
 
 Measured on `ais3/llama-3.3-70b`, 20 files, 18 detectors — full detail and caveats in
-[`RESULTS.md`](RESULTS.md):
+[`RESULTS.md`](RESULTS.md), development-process disclosures in [`DECISIONS.md`](DECISIONS.md):
 
 | Configuration | P | R | F1 | Findings | Findings on clean files |
 | --- | --- | --- | --- | --- | --- |
-| Original harness | 0.061 | 0.667 | 0.111 | 278 | 118 |
+| *trivial: always answer "vulnerable"* | *0.075* | *1.000* | *0.140* | — | — |
+| Original harness | 0.061 | 0.667 | **0.111** | 278 | 118 |
 | Bastet+, verification off | 0.096 | 0.889 | 0.174 | 105 | 47 |
 | Bastet+, same-model verifier | 0.119 | 0.889 | 0.210 | 55 | 18 |
 | Bastet+, stronger verifier | **0.182** | **0.889** | **0.302** | **27** | **0** |
+
+Read that against the trivial baseline, not against zero. **The original harness scores
+below a constant "yes".** The honest claim is "crosses the trivial floor", not "2.7x better".
+
+Two things disqualify these from being a generalisation estimate, both detailed in
+`DECISIONS.md`: the benchmark was authored by the same agent that built the harness and
+**four cases were edited after seeing model output**, and the recommended configuration was
+selected on the same 20 files it is reported on.
+
+The `## Discipline` block appended to every detector prompt is also **not** pure plumbing —
+it is anti-false-positive detection guidance, so this is not a clean harness-only A/B. Use
+`--no-discipline` to isolate it; see `RESULTS.md` for that measurement.
 
 Two of the defects above show up directly as counts rather than as accuracy:
 

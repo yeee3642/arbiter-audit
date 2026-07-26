@@ -75,6 +75,9 @@ def verify_one(client: LLMClient, f: Finding, source: str, start_line: int = 1,
     for i in range(max(1, votes)):
         verdict = client.complete_json(
             messages, VERDICT_SCHEMA, model=model,
+            context={"stage": "verify", "juror": i, "detector": f.detector,
+                     "file": f.file, "slice": f.slice_name,
+                     "claim": f.summary, "function": f.function_name},
             temperature=0.0 if votes == 1 else 0.4,
             # Vary the seed per juror, otherwise a deterministic backend returns
             # the same answer k times and the "panel" is theatre.
