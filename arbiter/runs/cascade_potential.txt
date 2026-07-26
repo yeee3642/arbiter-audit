@@ -1,0 +1,25 @@
+sample                                   ARBITER   fired  on-class  matching detectors
+V_reentrancy_unstake                     vuln         10         1  SC05-2025-Reentrancy
+V_missing_access_control_disburse        vuln          9         3  Lack-of-two-step-process-for-contr, Lack-of-access-control, SC01-2025-Improper-Access-Control
+V_unchecked_call_return_buyback          vuln         26         2  Chainlink-Oracle-Returns-Incorrect, SC06-2025-Unchecked-External-Calls
+V_tx_origin_auth_router                  safe         12         3  4naly3er-M-avoidTx-origin, Lack-of-access-control, SC01-2025-Improper-Access-Control
+V_unbounded_queue_dos                    safe         13         2  Unbounded-loop, SC10-2025-Denial-Of-Service
+V_forced_ether_refund                    safe         13         0  
+V_approval_double_spend                  vuln         10         0  
+V_delegatecall_unchecked_module          safe         13         0  
+V_amm_spot_price_oracle                  safe         45        14  Chainlink-Not-Checking-For-Down-L2, Chainlink-Not-Checking-For-Stale-P, Chainlink-Oracle-Price-Feeds-Not-U
+V_slippage_check_skipped_branch          vuln         42        10  Slippage-Mismatched-Slippage-Preci, Slippage-No-Slippage-Parameter, Slippage-No-Expiration-Deadline
+V_missing_deadline_signed_order          safe         33         1  Slippage-No-Expiration-Deadline
+V_stale_cached_price_liquidation         safe         46         9  Chainlink-Oracle-Price-Feeds-Not-U, Chainlink-Assuming-Oracle-Price-Pr, Chainlink-Incorrect-Oracle-Price-F
+V_first_depositor_share_inflation        vuln         18         3  ERC4626-Fee, ERC4626-Global-and-user-specific-l, ERC4626-Rounding
+V_withdraw_rounding_favours_user         safe         15         1  ERC4626-Rounding
+V_fee_on_transfer_credit                 safe         10         1  4naly3er-M-FoTTokens
+V_uint128_downcast_reward_debt           safe         17         1  SC08-2025-Integer-Overflow-and-Und
+V_signature_replay_voucher               safe         14         0  
+V_ecrecover_zero_address_session         vuln         11         0  
+V_commit_reveal_frontrun                 vuln         12         0  
+V_weak_randomness_flip_payout            vuln         22         3  Chainlink-Placing-Bets-After-Rando, SC09-2025-Insecure-Randomness, Chainlink-Re-requesting-Randomness
+
+Of the 11 vulnerable samples ARBITER failed to prove, 8 had at least one on-class detector fire (73%).
+A cascade is worth building only if that share is high: it is the ceiling on
+how often Bastet's hits could have redirected ARBITER away from its fixation.
