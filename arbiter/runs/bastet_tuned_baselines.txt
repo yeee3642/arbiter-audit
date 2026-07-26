@@ -1,0 +1,66 @@
+evalset: 20 vulnerable / 20 patched
+
+  constant 'vulnerable'    F1=0.6667 MCC=+0.000 spec=0.000
+  constant 'safe'          F1=0.0000 MCC=+0.000 spec=1.000
+  Bastet as shipped (OR)   F1=0.6667 MCC=+0.000 spec=0.000
+
+Best single detectors of 53, by MCC:
+  Lack of access control                           TP=19 FP=16 F1=0.6909 MCC=+0.227
+  SC07:2025 - Flash Loan Attacks                   TP=19 FP=17 F1=0.6786 MCC=+0.167
+  4naly3er-M-avoidTx.origin                        TP= 1 FP= 0 F1=0.0952 MCC=+0.160
+  SC01:2025 - Improper Access Control              TP=20 FP=19 F1=0.6780 MCC=+0.160
+  SC10:2025 - Denial Of Service                    TP=20 FP=19 F1=0.6780 MCC=+0.160
+  Unbounded loop                                   TP= 7 FP= 5 F1=0.4375 MCC=+0.109
+  Chainlink-Request Confirmation < Depth of Chai   TP= 2 FP= 1 F1=0.1739 MCC=+0.095
+  Chainlink-Incorrect Oracle Price Feed Address    TP= 3 FP= 2 F1=0.2400 MCC=+0.076
+
+BEST SINGLE DETECTOR: Lack of access control
+  F1=0.6909  MCC=+0.227  specificity=0.200
+
+'at least k detectors fired' sweep:
+  k= 1  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 2  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 3  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 4  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 5  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 6  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 7  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 8  TP=20 TN= 0 FP=20 FN= 0  F1=0.6667  MCC=+0.000
+  k= 9  TP=20 TN= 2 FP=18 FN= 0  F1=0.6897  MCC=+0.229
+  k=10  TP=19 TN= 2 FP=18 FN= 1  F1=0.6667  MCC=+0.095
+  k=11  TP=16 TN= 3 FP=17 FN= 4  F1=0.6038  MCC=-0.066
+  k=12  TP=15 TN= 8 FP=12 FN= 5  F1=0.6383  MCC=+0.160
+  k=13  TP=13 TN= 8 FP=12 FN= 7  F1=0.5778  MCC=+0.052
+  k=14  TP=10 TN=11 FP= 9 FN=10  F1=0.5128  MCC=+0.050
+  k=15  TP= 9 TN=12 FP= 8 FN=11  F1=0.4865  MCC=+0.051
+  k=16  TP= 8 TN=12 FP= 8 FN=12  F1=0.4444  MCC=+0.000
+  k=17  TP= 8 TN=12 FP= 8 FN=12  F1=0.4444  MCC=+0.000
+  k=18  TP= 7 TN=12 FP= 8 FN=13  F1=0.4000  MCC=-0.052
+  k=19  TP= 6 TN=12 FP= 8 FN=14  F1=0.3529  MCC=-0.105
+  k=20  TP= 6 TN=14 FP= 6 FN=14  F1=0.3750  MCC=+0.000
+  k=21  TP= 6 TN=15 FP= 5 FN=14  F1=0.3871  MCC=+0.056
+  k=22  TP= 6 TN=15 FP= 5 FN=14  F1=0.3871  MCC=+0.056
+  k=23  TP= 5 TN=15 FP= 5 FN=15  F1=0.3333  MCC=+0.000
+  k=24  TP= 5 TN=15 FP= 5 FN=15  F1=0.3333  MCC=+0.000
+  k=25  TP= 5 TN=16 FP= 4 FN=15  F1=0.3448  MCC=+0.060
+  k=26  TP= 5 TN=16 FP= 4 FN=15  F1=0.3448  MCC=+0.060
+  k=27  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=28  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=29  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=30  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=31  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=32  TP= 4 TN=16 FP= 4 FN=16  F1=0.2857  MCC=+0.000
+  k=33  TP= 4 TN=17 FP= 3 FN=16  F1=0.2963  MCC=+0.066
+  k=34  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=35  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=36  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=37  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=38  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=39  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=40  TP= 3 TN=17 FP= 3 FN=17  F1=0.2308  MCC=+0.000
+  k=41  TP= 3 TN=18 FP= 2 FN=17  F1=0.2400  MCC=+0.076
+  k=42  TP= 3 TN=18 FP= 2 FN=17  F1=0.2400  MCC=+0.076
+  k=43  TP= 2 TN=18 FP= 2 FN=18  F1=0.1667  MCC=+0.000
+  k=44  TP= 2 TN=18 FP= 2 FN=18  F1=0.1667  MCC=+0.000
+  k=45  TP= 2 TN=18 FP= 2 FN=18  F1=0.1667  MCC=+0.000
+  k=46  TP= 1 TN=19 FP= 1 FN=19  F1=0.0909  MCC=+0.000

@@ -317,3 +317,30 @@ The architectural claim that survives is narrow and qualitative: ARBITER's posit
 accompanied by executions that its own harness ran and adjudicated, and Bastet's are not.
 That is a statement about what the two systems can produce, not about which scores better,
 and this report should not have been written as though the second followed from the first.
+
+---
+
+## The k-of-N sweep, now that the raw rows are committed
+
+`h2h-bastet.jobs.jsonl` (2,125 per-sample per-detector rows) is now in `runs/`, so the
+voting baseline the review asked for can be evaluated. Both routes to a tuned Bastet
+converge on the same ceiling:
+
+| Bastet configuration | TP | TN | FP | FN | F1 | MCC |
+|---|---|---|---|---|---|---|
+| as shipped, k≥1 (53-way OR) | 20 | 0 | 20 | 0 | 0.6667 | +0.000 |
+| **best vote threshold, k≥9** | 20 | 2 | 18 | 0 | **0.6897** | **+0.229** |
+| **best single detector** | 19 | 4 | 16 | 1 | **0.6909** | **+0.227** |
+| ARBITER, attempts=3 | 9 | 16 | 4 | 11 | 0.5455 | +0.267 |
+
+The agreement between the two tuning routes (0.6897/0.229 and 0.6909/0.227) makes this a
+robust ceiling rather than an artefact of one lucky choice. Tuned Bastet beats ARBITER on
+F1 by 0.145 and ties it on MCC.
+
+Note also what the sweep shows about the shipped rule: thresholds k=1 through k=8 are
+*identical* — every one of the 40 samples has at least 8 detectors firing. The 53-way OR
+is not merely permissive, it is saturated, and the first threshold that separates
+anything at all is k=9. That supports the original diagnosis of the shipped
+configuration while removing any claim that the architecture cannot be tuned.
+
+`runs/bastet_tuned_baselines.txt` holds the full sweep.
