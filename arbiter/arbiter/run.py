@@ -22,6 +22,7 @@ from typing import Any
 
 from .agent import audit, outcome_to_label
 from .gateway import Gateway, RateLimiter
+from .proposals import load_hits, proposal_block, rarity
 from .workspace import Workspace
 
 
@@ -47,10 +48,19 @@ def run_arbiter(
     max_tokens: int = 4096,
     rpm: int = 45,
     workspace_root: Path | None = None,
+    proposals_path: Path | None = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
     meta, items = load_evalset(evalset)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Cascade mode: a cheap detector proposes classes, the execution gate adjudicates.
+    hits: dict = {}
+    rare: dict = {}
+    if proposals_path is not None:
+        hits = load_hits(proposals_path)
+        rare = rarity(proposals_path)
+        print(f"cascade: hypothesis proposals loaded for {len(hits)} samples", flush=True)
     ws_root = workspace_root or Path("/tmp/arbiter-ws") / run_id
 
     limiter = RateLimiter(rpm)
@@ -104,6 +114,7 @@ def run_arbiter(
                     max_tokens=max_tokens,
                     trace_sink=attempt_trace,
                     ruled_out=ruled_out,
+                    proposals=proposal_block(hits.get(item['id'], []), rare) if hits else "",
                 )
             except Exception as exc:  # noqa: BLE001
                 from .tools import AgentOutcome
@@ -180,13 +191,14 @@ def run_arbiter(
         if line.strip()
     ]
     summary = {
-        "arm": "arbiter",
+        "arm": "arbiter_cascade" if proposals_path else "arbiter",
         "run_id": run_id,
         "model": model,
         "evalset": str(evalset),
         "evalset_meta": meta,
         "repeats": repeats,
         "attempts_per_sample": attempts,
+        "proposals_from": str(proposals_path) if proposals_path else None,
         "max_turns": max_turns,
         "max_tokens": max_tokens,
         "wall_clock_s": round(time.monotonic() - started, 1),

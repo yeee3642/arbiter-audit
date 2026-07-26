@@ -205,6 +205,7 @@ def audit(
     max_tokens: int = 4096,
     trace_sink: list[dict[str, Any]] | None = None,
     ruled_out: list[str] | None = None,
+    proposals: str = "",
 ) -> AgentOutcome:
     """Run one audit to a terminal verdict. Returns the outcome.
 
@@ -221,6 +222,8 @@ def audit(
     task = USER_TEMPLATE.format(
         n_lines=len(workspace.lines), source=workspace.source
     )
+    if proposals:
+        task += proposals
     if ruled_out:
         listed = "\n".join(f"  - {h}" for h in ruled_out[:12])
         task += (

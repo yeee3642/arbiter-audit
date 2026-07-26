@@ -35,6 +35,8 @@ def main() -> int:
     r.add_argument("--max-turns", type=int, default=16)
     r.add_argument("--max-tokens", type=int, default=4096)
     r.add_argument("--rpm", type=int, default=45)
+    r.add_argument("--proposals", type=Path, default=None,
+                   help="Bastet jobs.jsonl; enables cascade mode (detector hits become hypotheses)")
 
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
@@ -86,6 +88,7 @@ def main() -> int:
             max_turns=args.max_turns,
             max_tokens=args.max_tokens,
             rpm=args.rpm,
+            proposals_path=args.proposals,
         )
         _, items = load_evalset(args.evalset)
         truth = truth_map(items)
