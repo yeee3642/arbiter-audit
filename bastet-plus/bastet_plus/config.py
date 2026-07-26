@@ -56,6 +56,11 @@ class LLMConfig:
     cache_path: str = field(default_factory=lambda: _env("BASTET_CACHE", ".bastet_cache.sqlite3"))
     cache_enabled: bool = field(default_factory=lambda: _env("BASTET_CACHE_ENABLED", "1") != "0")
 
+    # Full request/response transcript, JSONL. Empty = off. The cache is keyed
+    # by a hash of the request and therefore cannot serve as an audit trail:
+    # it records what the model said, never what it was asked.
+    call_log_path: str = field(default_factory=lambda: _env("BASTET_CALL_LOG", ""))
+
     def for_verifier(self) -> "LLMConfig":
         return replace(self, model=self.verifier_model or self.model)
 
@@ -88,6 +93,11 @@ class PipelineConfig:
     drop_ungrounded: bool = True
 
     min_severity: str = "low"
+
+    # The Discipline block appended to every detector prompt is anti-false-positive
+    # *detection* guidance, not plumbing. Set False to strip it and measure how much
+    # of the reported improvement is the prompt rather than the harness.
+    discipline_block: bool = True
 
 
 SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}

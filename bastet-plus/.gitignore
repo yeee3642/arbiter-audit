@@ -2,17 +2,26 @@
 .env
 .env.local
 
-# Response cache: content-addressed sqlite holding every prompt and completion
-# verbatim. Local-only -- it is a speed and reproducibility aid, not an artefact.
+# Response cache: content-addressed sqlite holding every completion verbatim.
+# Local-only -- a speed and reproducibility aid, not an artefact. Note it is NOT
+# an audit trail: it is keyed by a hash of the request, so it records what the
+# model said and never what it was asked. Use --log-calls for that.
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+
+# Call transcripts from --log-calls. They embed contract source verbatim and grow
+# without bound, so they stay local; the derived measurements are what ship.
+*.calls.jsonl
+calls.jsonl
 
 __pycache__/
 *.pyc
 .pytest_cache/
 
-# Ad-hoc scan output. benchmark_results/ is deliberately NOT ignored: RESULTS.md
-# cites those JSONs as the evidence for every number it claims, so they ship.
+# Ad-hoc scan output and scratch space.
 scan_report/
 scratch/
+
+# benchmark_results/ is deliberately NOT ignored: RESULTS.md cites those JSONs as
+# the evidence for every number it claims, so they ship with the repository.

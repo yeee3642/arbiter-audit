@@ -1,0 +1,53 @@
+﻿--- slippage__0 (original, from n8n)
++++ slippage__0 (as Bastet+ sends it)
+@@ -30,26 +30,29 @@
+ Follow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.
+ 
+-### Output Format
++---
+ 
+-If NO concrete vulnerability found, output a empty array
++## Output contract
+ 
+-Otherwise, follow the format below:
++Reply with a single JSON object, nothing else. It has exactly one key, `findings`,
++whose value is an array. If you find nothing, return `{"findings": []}`.
++If the input is not a smart contract, return `{"findings": []}`.
+ 
+-```
+-[
+-    {
+-        "summary":  "summary of the vulnerabilities",
+-        "vulnerability_details": {
+-            "function_name": "Name of the function",
+-            "description": "a brief description of the vulnerability"
+-        },
+-    
+-        "code_snippet": [
+-            "code snippet in the file"
+-        ],
+-    
+-        "recommendation": "recommendation of how to fix the vulnerability"
+-    
+-    }
+-]
+-```
++Each array element has exactly these keys:
++  - "summary": One-line summary of the vulnerability
++  - "severity": high | medium | low
++  - "function_name": Exact name of the function containing the vulnerability
++  - "description": Why this is exploitable, concretely
++  - "code_snippet": Lines copied VERBATIM from the supplied source. Do not paraphrase.
++  - "recommendation": How to fix it
++  - "confidence": 0.0-1.0, how sure you are this is a real exploitable bug
++
++`code_snippet` must contain lines copied character-for-character from the source you
++were given. A snippet that does not appear in the source will be discarded.
++
++## Discipline
++- Report ONLY what you can prove from the code you were shown. Do not assume the
++  existence of code you cannot see.
++- A defence that is present but implemented elsewhere in the shown context is NOT a
++  vulnerability. Re-read the contract-level context before reporting.
++- One entry per distinct vulnerable function. Do not report the same issue twice.
++- If unsure, set a low `confidence` rather than omitting the finding.

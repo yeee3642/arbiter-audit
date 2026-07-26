@@ -176,7 +176,7 @@ _RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 class LLMClient:
-    def __init__(self, cfg: LLMConfig, usage: Usage | None = None):
+    def __init__(self, cfg: LLMConfig, usage: Usage | None = None, log_path: str | None = None):
         self.cfg = cfg
         self.usage = usage if usage is not None else Usage()
         self.cache = ResponseCache(cfg.cache_path, cfg.cache_enabled)
@@ -185,6 +185,23 @@ class LLMClient:
         # show how often the model needed coaxing.
         self.parse_stats = {"native": 0, "extracted": 0, "repaired": 0, "failed": 0}
         self._stats_lock = threading.Lock()
+
+        # Full request/response transcript. Off by default because it embeds
+        # contract source verbatim and grows without bound; on when you need to
+        # audit *why* a particular finding was produced. The response cache is
+        # NOT a substitute -- it is keyed by a hash of the request, so it can
+        # tell you what the model said but never what it was asked.
+        self.log_path = log_path or (cfg.call_log_path or None)
+        self._log_lock = threading.Lock()
+        if self.log_path:
+            os.makedirs(os.path.dirname(os.path.abspath(self.log_path)) or ".", exist_ok=True)
+
+    def _log(self, record: dict) -> None:
+        if not self.log_path:
+            return
+        with self._log_lock:
+            with open(self.log_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     # -- raw ---------------------------------------------------------------
 
@@ -203,8 +220,14 @@ class LLMClient:
 
     def complete(self, messages: list[dict], *, model: str | None = None, temperature: float | None = None,
                  max_tokens: int | None = None, response_format: dict | None = None,
-                 seed: int | None = ...) -> str:
-        """One chat completion, with cache + retry. Returns assistant content."""
+                 seed: int | None = ..., context: dict | None = None) -> str:
+        """One chat completion, with cache + retry. Returns assistant content.
+
+        ``context`` is metadata for the call log only (which detector, which
+        file, which sample). It never enters the request payload, so it cannot
+        perturb the cache key.
+        """
+        t_call = time.time()
         payload = {
             "model": model or self.cfg.model,
             "messages": messages,
@@ -223,6 +246,14 @@ class LLMClient:
         hit = self.cache.get(ck)
         if hit is not None:
             self.usage.add(cache_hits=1)
+            self._log({
+                "ts": t_call, "event": "cache_hit", "request_sha256": ck,
+                "context": context or {}, "model": payload["model"],
+                "temperature": payload["temperature"], "seed": payload.get("seed"),
+                "response_format": (response_format or {}).get("type"),
+                "messages": messages, "response": hit["content"],
+                "usage": hit.get("usage", {}), "latency_s": round(time.time() - t_call, 3),
+            })
             return hit["content"]
 
         last_err: Exception | None = None
@@ -263,16 +294,32 @@ class LLMClient:
                 continue
             content = choices[0].get("message", {}).get("content") or ""
             self.cache.put(ck, {"content": content, "usage": u})
+            self._log({
+                "ts": t_call, "event": "completion", "request_sha256": ck,
+                "context": context or {}, "model": payload["model"],
+                "temperature": payload["temperature"], "seed": payload.get("seed"),
+                "response_format": (response_format or {}).get("type"),
+                "attempts": attempt + 1,
+                "messages": messages, "response": content, "usage": u,
+                "latency_s": round(time.time() - t_call, 3),
+            })
             return content
 
         self.usage.add(failures=1)
+        self._log({
+            "ts": t_call, "event": "failed", "request_sha256": ck,
+            "context": context or {}, "model": payload["model"],
+            "attempts": self.cfg.max_retries + 1, "error": str(last_err),
+            "messages": messages, "latency_s": round(time.time() - t_call, 3),
+        })
         raise LLMError(f"request failed after {self.cfg.max_retries + 1} attempts: {last_err}")
 
     # -- structured --------------------------------------------------------
 
     def complete_json(self, messages: list[dict], schema: dict, *, model: str | None = None,
                       temperature: float | None = None, max_tokens: int | None = None,
-                      seed: int | None = ..., schema_name: str = "result"):
+                      seed: int | None = ..., schema_name: str = "result",
+                      context: dict | None = None):
         """Return parsed JSON honouring ``schema``, degrading gracefully.
 
         Ladder: native ``json_schema`` -> ``json_object`` -> free text, then a
@@ -284,10 +331,12 @@ class LLMClient:
             ("extracted", None),
         ]
         raw = ""
-        for label, rf in rungs:
+        for rung_idx, (label, rf) in enumerate(rungs):
+            ctx = dict(context or {}, rung=rung_idx, rung_kind=(rf or {}).get("type", "plain"))
             try:
                 raw = self.complete(messages, model=model, temperature=temperature,
-                                    max_tokens=max_tokens, response_format=rf, seed=seed)
+                                    max_tokens=max_tokens, response_format=rf, seed=seed,
+                                    context=ctx)
             except LLMError:
                 continue
             parsed = extract_json(raw)
@@ -303,6 +352,7 @@ class LLMClient:
                     {"role": "user", "content": f"Target JSON schema:\n{json.dumps(schema)}\n\nMalformed output:\n{raw[:6000]}\n\nReturn the corrected JSON."},
                 ],
                 model=model, temperature=0.0, max_tokens=max_tokens, seed=seed,
+                context=dict(context or {}, rung="repair"),
             )
             parsed = extract_json(fixed)
             if parsed is not None:

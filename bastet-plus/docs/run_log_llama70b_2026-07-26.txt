@@ -1,0 +1,115 @@
+Benchmark: 20 files x 18 detectors | model=ais3/llama-3.3-70b
+
+--- running legacy ---
+  [legacy  ] slippage_vuln_01.sol             truth=slippage         reported= 22  (0.01s)
+  [legacy  ] slippage_safe_01.sol             truth=clean            reported= 17  (0.02s)
+  [legacy  ] slippage_vuln_02.sol             truth=slippage         reported= 13  (19.09s)
+  [legacy  ] slippage_safe_02.sol             truth=clean            reported= 13  (17.25s)
+  [legacy  ] reentrancy_vuln_01.sol           truth=reentrancy       reported=  8  (45.51s)
+  [legacy  ] reentrancy_safe_01.sol           truth=clean            reported=  9  (14.9s)
+  [legacy  ] reentrancy_vuln_02.sol           truth=reentrancy       reported= 16  (13.46s)
+  [legacy  ] reentrancy_safe_02.sol           truth=clean            reported= 17  (15.72s)
+  [legacy  ] access_control_vuln_01.sol       truth=access_control   reported= 15  (17.61s)
+  [legacy  ] access_control_safe_01.sol       truth=clean            reported=  8  (11.57s)
+  [legacy  ] access_control_vuln_02.sol       truth=access_control   reported= 26  (19.97s)
+  [legacy  ] access_control_safe_02.sol       truth=clean            reported= 17  (20.03s)
+  [legacy  ] oracle_vuln_01.sol               truth=oracle           reported= 22  (25.37s)
+  [legacy  ] oracle_safe_01.sol               truth=clean            reported= 16  (16.04s)
+  [legacy  ] randomness_vuln_01.sol           truth=randomness       reported= 16  (28.96s)
+  [legacy  ] randomness_safe_01.sol           truth=clean            reported= 10  (12.23s)
+  [legacy  ] unchecked_call_vuln_01.sol       truth=unchecked_call   reported= 22  (22.59s)
+  [legacy  ] unchecked_call_safe_01.sol       truth=clean            reported= 11  (15.36s)
+  [legacy  ] clean_erc20_01.sol               truth=clean            reported=  0  (10.12s)
+  [legacy  ] clean_library_01.sol             truth=clean            reported=  0  (5.93s)
+    -> P=0.061 R=0.667 F1=0.111 | 427932 tokens
+
+--- running enhanced ---
+  [enhanced] slippage_vuln_01.sol             truth=slippage         reported= 11  (42.56s)
+  [enhanced] slippage_safe_01.sol             truth=clean            reported=  4  (23.81s)
+  [enhanced] slippage_vuln_02.sol             truth=slippage         reported=  8  (44.73s)
+  [enhanced] slippage_safe_02.sol             truth=clean            reported=  1  (17.02s)
+  [enhanced] reentrancy_vuln_01.sol           truth=reentrancy       reported=  5  (53.72s)
+  [enhanced] reentrancy_safe_01.sol           truth=clean            reported=  1  (71.36s)
+  [enhanced] reentrancy_vuln_02.sol           truth=reentrancy       reported=  2  (31.84s)
+  [enhanced] reentrancy_safe_02.sol           truth=clean            reported=  1  (102.84s)
+  [enhanced] access_control_vuln_01.sol       truth=access_control   reported=  3  (56.95s)
+  [enhanced] access_control_safe_01.sol       truth=clean            reported=  1  (10.28s)
+  [enhanced] access_control_vuln_02.sol       truth=access_control   reported=  5  (92.33s)
+  [enhanced] access_control_safe_02.sol       truth=clean            reported=  1  (13.37s)
+  [enhanced] oracle_vuln_01.sol               truth=oracle           reported=  5  (30.9s)
+  [enhanced] oracle_safe_01.sol               truth=clean            reported=  2  (40.14s)
+  [enhanced] randomness_vuln_01.sol           truth=randomness       reported=  4  (21.35s)
+  [enhanced] randomness_safe_01.sol           truth=clean            reported=  2  (37.01s)
+  [enhanced] unchecked_call_vuln_01.sol       truth=unchecked_call   reported=  6  (32.56s)
+  [enhanced] unchecked_call_safe_01.sol       truth=clean            reported=  1  (35.63s)
+  [enhanced] clean_erc20_01.sol               truth=clean            reported=  0  (2.69s)
+  [enhanced] clean_library_01.sol             truth=clean            reported=  0  (53.16s)
+    -> P=0.120 R=0.667 F1=0.203 | 1882739 tokens
+
++------------------------------+-------------------+-------------------------------------+--------+
+| Metric                       | Original (legacy) | Bastet+                             | Delta  |
++==============================+===================+=====================================+========+
+| Precision                    | 0.061             | 0.120                               | +0.059 |
++------------------------------+-------------------+-------------------------------------+--------+
+| Recall                       | 0.667             | 0.667                               | +0.000 |
++------------------------------+-------------------+-------------------------------------+--------+
+| F1                           | 0.111             | 0.203                               | +0.092 |
++------------------------------+-------------------+-------------------------------------+--------+
+| Accuracy                     | 0.200             | 0.608                               | +0.408 |
++------------------------------+-------------------+-------------------------------------+--------+
+| False-positive rate          | 0.838             | 0.396                               | -0.441 |
++------------------------------+-------------------+-------------------------------------+--------+
+| TP / FP / FN / TN            | 6/93/3/18         | 6/44/3/67                           |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Localization accuracy        | 6/6               | 6/6                                 |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Findings with line number    | 0                 | 63                                  |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Total findings reported      | 278               | 63                                  |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Noise per clean file         | 10.73             | 1.27                                |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Clean files with an alarm    | 9/11              | 9/11                                |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Severity histogram           | {'high': 278}     | {'high': 60, 'low': 1, 'medium': 2} |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| --- cost ---                 |                   |                                     |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| LLM requests                 | 360               | 1080                                |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Total tokens                 | 427932            | 1882739                             |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Wall seconds                 | 331.8             | 814.3                               |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| --- harness health ---       |                   |                                     |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Strict JSON parse failures   | 221               | 0                                   |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Severity silently coerced    | 278               | 0                                   |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Dropped: ungrounded evidence | -                 | 10                                  |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Dropped: sample disagreement | -                 | 268                                 |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Dropped: verifier refuted    | -                 | 66                                  |        |
++------------------------------+-------------------+-------------------------------------+--------+
+| Duplicates merged            | -                 | 64                                  |        |
++------------------------------+-------------------+-------------------------------------+--------+
+
++----------------+----------------+----------------+-----------------+------------------+
+| Class          | Legacy P/R/F1  | Bastet+ P/R/F1 | Legacy TP/FP/FN | Bastet+ TP/FP/FN |
++================+================+================+=================+==================+
+| access_control | 0.11/1.00/0.20 | 0.20/1.00/0.33 | 2/16/0          | 2/8/0            |
++----------------+----------------+----------------+-----------------+------------------+
+| oracle         | 0.06/1.00/0.11 | 0.20/1.00/0.33 | 1/17/0          | 1/4/0            |
++----------------+----------------+----------------+-----------------+------------------+
+| randomness     | 0.00/0.00/0.00 | 0.00/0.00/0.00 | 0/13/1          | 0/5/1            |
++----------------+----------------+----------------+-----------------+------------------+
+| reentrancy     | 0.00/0.00/0.00 | 0.17/0.50/0.25 | 0/14/2          | 1/5/1            |
++----------------+----------------+----------------+-----------------+------------------+
+| slippage       | 0.11/1.00/0.20 | 0.18/1.00/0.31 | 2/16/0          | 2/9/0            |
++----------------+----------------+----------------+-----------------+------------------+
+| unchecked_call | 0.06/1.00/0.11 | 0.00/0.00/0.00 | 1/17/0          | 0/13/1           |
++----------------+----------------+----------------+-----------------+------------------+
+
+full results -> benchmark_results\comparison_ais3_llama-3.3-70b.json
