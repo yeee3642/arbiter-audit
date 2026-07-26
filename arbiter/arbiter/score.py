@@ -14,6 +14,7 @@ than with the chi-square approximation, which is not valid at these counts.
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
@@ -115,6 +116,58 @@ def constant_yes_baseline(truth: Mapping[str, str]) -> Confusion:
     return score({k: "vuln" for k in truth}, truth)
 
 
+def constant_no_baseline(truth: Mapping[str, str]) -> Confusion:
+    """The other degenerate floor, which this suite was missing.
+
+    Answering "safe" every time scores specificity 1.000 and precision 0.000. Its absence
+    was an asymmetry in our own fairness machinery: `constant_yes_baseline` existed and
+    was used to show that Bastet's F1 is degenerate, while specificity -- the metric this
+    project was promoting as decisive -- had no corresponding floor, even though a
+    predictor that reads nothing and always answers "safe" beats ARBITER's 0.800 outright.
+
+    Neither degenerate predictor beats the other on MCC: both score 0.000, because
+    neither carries information. That is the only comparison that survives both floors,
+    and it is the reason MCC rather than specificity belongs in a headline.
+    """
+    return score({k: "safe" for k in truth}, truth)
+
+
+def mcnemar_mde(n_discordant: int, alpha: float = 0.05, power: float = 0.80) -> float:
+    """Smallest detectable split of the discordant pairs, as a proportion.
+
+    Reported because "not significant" and "underpowered" are different statements and
+    the suite previously conflated them. The old `underpowered` flag fired only below
+    n=6, which answers "could this design ever reach p<0.05", not "could it detect an
+    effect anyone would care about". Returns the proportion p such that a binomial test
+    on n_discordant trials distinguishes p from 0.5 at the given alpha and power; at
+    n=27 that is about 0.74, meaning roughly three quarters of all disagreements would
+    have to fall one way before this design could call it.
+    """
+    if n_discordant < 1:
+        return 1.0
+    # Smallest k whose two-sided exact tail is below alpha.
+    crit = None
+    for k in range(n_discordant // 2, n_discordant + 1):
+        tail = sum(math.comb(n_discordant, i) for i in range(k, n_discordant + 1)) * (
+            0.5**n_discordant
+        )
+        if 2 * tail <= alpha:
+            crit = k
+            break
+    if crit is None:
+        return 1.0
+    # Smallest p at which that critical value is reached with the requested power.
+    for step in range(500, 1001):
+        p = step / 1000.0
+        achieved = sum(
+            math.comb(n_discordant, i) * (p**i) * ((1 - p) ** (n_discordant - i))
+            for i in range(crit, n_discordant + 1)
+        )
+        if achieved >= power:
+            return round(p, 3)
+    return 1.0
+
+
 # -- paired inference --------------------------------------------------------
 
 
@@ -159,11 +212,17 @@ def mcnemar_exact(
         "p_value_exact": round(p, 6),
         "favours": "b" if b10 > b01 else ("a" if b01 > b10 else "neither"),
         "discordant_samples": discordant_ids,
-        "underpowered": n < 6,
+        "cannot_ever_reach_significance": n < 6,
+        "minimum_detectable_split": mcnemar_mde(n),
         "note": (
-            "Only discordant pairs carry evidence. With fewer than 6 of them no "
-            "two-sided exact test can reach p < 0.05 at any split, so the comparison "
-            "is reported as underpowered rather than as evidence of equivalence."
+            "Only discordant pairs carry evidence. `cannot_ever_reach_significance` "
+            "fires below 6 discordant pairs, where no two-sided exact test reaches "
+            "p<0.05 at any split; it was previously named `underpowered`, which "
+            "overstated what it checks. `minimum_detectable_split` is the honest power "
+            "statement: the proportion of disagreements that must fall one way before "
+            "this design can call the difference at alpha 0.05 and 80% power. A design "
+            "that is not flagged here can still be far too small to detect any "
+            "realistic effect."
         ),
     }
 
@@ -238,14 +297,30 @@ def _metric(c: Confusion, name: str) -> float:
 
 
 class _Lcg:
-    """Small deterministic PRNG, so bootstrap intervals reproduce exactly."""
+    """Deterministic PRNG for the bootstrap.
+
+    This was a hand-rolled linear congruential generator, and it was broken in a way
+    that silently narrowed every interval it produced. With a power-of-two modulus and
+    an odd multiplier and increment, the low bit of an LCG alternates deterministically:
+    the index sequence went 23, 20, 37, 10, 3, 32, ... whose parities are exactly
+    1, 0, 1, 0, 1, 0. The evaluation set alternates vulnerable and patched by index, so
+    parity *is* the label, and every resample was forced to contain exactly 20 of each.
+    Measured: 10,000 of 10,000 resamples had precisely 20 vulnerable samples.
+
+    That is stratified resampling, not the i.i.d. resampling a bootstrap requires, and
+    it removes the largest source of variance in a paired comparison on a balanced set.
+    Every confidence interval this produced was too narrow, in the direction that
+    flattered the conclusion.
+
+    There was never a reason to hand-roll it. `random.Random` is stdlib, pure Python, and
+    reproducible from a seed, which was the only property the original was reaching for.
+    """
 
     def __init__(self, seed: int) -> None:
-        self.state = seed & 0xFFFFFFFF
+        self._rng = random.Random(seed)
 
     def below(self, n: int) -> int:
-        self.state = (1103515245 * self.state + 12345) & 0x7FFFFFFF
-        return self.state % n
+        return self._rng.randrange(n)
 
 
 def summarise_runs(

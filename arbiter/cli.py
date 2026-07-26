@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from arbiter.run import load_evalset, run_arbiter, truth_map  # noqa: E402
 from arbiter.score import (  # noqa: E402
     bootstrap_delta,
+    constant_no_baseline,
     constant_yes_baseline,
     mcnemar_exact,
     summarise_runs,
@@ -224,6 +225,7 @@ def main() -> int:
             "evalset": str(args.evalset),
             "n_samples": len(truth),
             "constant_yes_floor": floor.as_dict(),
+            "constant_no_floor": constant_no_baseline(truth).as_dict(),
             "arm_a": {"name": a.get("arm"), "model": a.get("model"),
                       "scored": summarise_runs(a_runs, truth),
                       "usage": a.get("usage")},
@@ -232,7 +234,14 @@ def main() -> int:
                       "usage": b.get("usage")},
             "same_model": a.get("model") == b.get("model"),
             "mcnemar_first_repeat": mcnemar_exact(a_runs[0], b_runs[0], truth),
-            "bootstrap_f1": bootstrap_delta(a_runs[0], b_runs[0], truth, "f1"),
+            # Every metric, not just the one we happen to lose. Reporting a confidence
+            # interval for F1 alone while promoting MCC and specificity as decisive was
+            # selective: the metrics carrying the claim were the ones never given an
+            # interval, and MCC's turns out to include zero.
+            "bootstrap": {
+                m: bootstrap_delta(a_runs[0], b_runs[0], truth, m)
+                for m in ("f1", "precision", "recall", "specificity", "accuracy", "mcc")
+            },
         }
         text = json.dumps(report, ensure_ascii=False, indent=1)
         if args.out:
