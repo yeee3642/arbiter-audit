@@ -33,7 +33,7 @@ def main() -> int:
     r.add_argument("--concurrency", type=int, default=8)
     r.add_argument("--max-turns", type=int, default=16)
     r.add_argument("--max-tokens", type=int, default=4096)
-    r.add_argument("--rpm", type=int, default=110)
+    r.add_argument("--rpm", type=int, default=45)
 
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
@@ -48,7 +48,7 @@ def main() -> int:
     ba.add_argument("--repeats", type=int, default=1)
     ba.add_argument("--concurrency", type=int, default=12)
     ba.add_argument("--max-tokens", type=int, default=4096)
-    ba.add_argument("--rpm", type=int, default=110)
+    ba.add_argument("--rpm", type=int, default=45)
 
     rc = sub.add_parser(
         "reconstruct", help="restore compilation context for non-compiling samples"
@@ -56,7 +56,7 @@ def main() -> int:
     rc.add_argument("--evalset", type=Path, required=True)
     rc.add_argument("--out", type=Path, required=True)
     rc.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
-    rc.add_argument("--rpm", type=int, default=110)
+    rc.add_argument("--rpm", type=int, default=45)
 
     bm = sub.add_parser(
         "bench", help="verify authored pairs and emit an evalset of the admitted ones"

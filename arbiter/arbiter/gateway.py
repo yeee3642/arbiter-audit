@@ -39,10 +39,12 @@ from typing import Any
 
 DEFAULT_BASE_URL = "https://llm-api.zoolab.org/v1"
 
-# The measured cap is 120 rpm. We ask for slightly less: the cap is enforced per API
-# key, the key is shared with the rest of the team, and colliding with it costs a
-# retry (one request) to learn something we already know.
-DEFAULT_RPM = 110
+# The measured cap is 120 rpm, enforced per API KEY rather than per process. The key is
+# shared, so the whole 120 is never ours: a run that assumes it gets all of them collides
+# with whatever else the team is doing and burns retries discovering that. We therefore
+# claim a minority share by default and leave the rest of the window for other users.
+# Raise it with --rpm only when the key is known to be idle.
+DEFAULT_RPM = 45
 
 
 class GatewayError(RuntimeError):
@@ -139,7 +141,7 @@ class Gateway:
         limiter: RateLimiter | None = None,
         ledger_path: Path | None = None,
         timeout: float = 600.0,
-        max_retries: int = 4,
+        max_retries: int = 7,
         strict_model: bool = True,
     ) -> None:
         key = api_key or os.environ.get("AIS3_API_KEY", "")
@@ -232,7 +234,13 @@ class Gateway:
                 # 4xx other than 429 is a bad request and will not improve.
                 if exc.code != 429 and exc.code < 500:
                     raise GatewayError(last_error) from exc
-                time.sleep(min(2.0 * (2**attempt), 30.0))
+                if exc.code == 429:
+                    # The limiter is a sliding window over OUR requests; a 429 means
+                    # someone else spent the shared budget. Backing off by seconds just
+                    # collides again, so wait out most of a window.
+                    time.sleep(min(25.0 + 10.0 * attempt, 70.0))
+                else:
+                    time.sleep(min(2.0 * (2**attempt), 30.0))
                 continue
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 last_error = f"{type(exc).__name__}: {exc}"

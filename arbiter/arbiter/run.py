@@ -45,7 +45,7 @@ def run_arbiter(
     concurrency: int = 8,
     max_turns: int = 16,
     max_tokens: int = 4096,
-    rpm: int = 110,
+    rpm: int = 45,
     workspace_root: Path | None = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:

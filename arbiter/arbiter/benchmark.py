@@ -116,6 +116,11 @@ def verify_pair(
                 attacker_code=pair["attacker_code"],
                 predicate=predicate,
                 observed_getter=getter,
+                token_expr=pair.get("token_expr", "") or "",
+                attack_body=pair.get("attack_body", "") or "",
+                honest_body=pair.get("honest_body", "") or "",
+                mode=pair.get("mode", "contract") or "contract",
+                require_honest=False,
             )
         except ValueError as exc:
             verdict.reasons.append(f"{half}: bad exploit spec: {exc}")

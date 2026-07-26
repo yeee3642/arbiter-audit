@@ -141,6 +141,7 @@ class Workspace:
         attack_body: str = "",
         honest_body: str = "",
         mode: str = "contract",
+        require_honest: bool = True,
         funding_wei: int = 10**19,
     ) -> str:
         """Build the exploit test file. The agent never writes the success check.
@@ -162,10 +163,18 @@ class Workspace:
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
         if predicate != "state_change" and not honest_body.strip():
-            raise ValueError(
-                "profit predicates need honest_body: the statements an ordinary, "
-                "non-attacking user would run. The exploit must beat that baseline."
-            )
+            if require_honest:
+                raise ValueError(
+                    "profit predicates need honest_body: the statements an ordinary, "
+                    "non-attacking user would run. The exploit must beat that baseline."
+                )
+            # Benchmark admission is the one place this is relaxed. There the
+            # discriminator is the PAIR -- the same exploit must pass on the vulnerable
+            # half and fail on the patched one -- which is a stronger test than beating
+            # an honest baseline, and it is available because admission can see both
+            # halves. An auditing agent cannot: it sees one contract and has no patched
+            # twin to compare against, which is exactly why it owes a baseline instead.
+            honest_body = ";"
 
         # How the attacker's holdings are read. Same expression before and after, so the
         # predicate is a strict increase in whatever the attacker actually walks away

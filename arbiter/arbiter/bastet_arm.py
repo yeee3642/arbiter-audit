@@ -113,7 +113,7 @@ def run_bastet(
     repeats: int = 1,
     concurrency: int = 12,
     max_tokens: int = 4096,
-    rpm: int = 110,
+    rpm: int = 45,
     api_key: str | None = None,
 ) -> dict[str, Any]:
     data = json.loads(evalset.read_text(encoding="utf-8"))
