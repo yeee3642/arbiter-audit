@@ -91,6 +91,10 @@ def tool_schemas() -> list[dict[str, Any]]:
                     "vm.startPrank(eoa, eoa), operating on the variable 'target'. "
                     "deploy_code may also set up scenario state (fund the contract, "
                     "have the owner airdrop to eoa) before the measurement starts. "
+                    "Every profit predicate is DIFFERENTIAL: you must also give "
+                    "honest_body, the intended happy path, and your attack has to beat "
+                    "it strictly. Collecting a reward the contract grants by design is "
+                    "not an exploit. "
                     "Predicates: eth_profit (attacker ends up with more ether), "
                     "token_profit (attacker's balance of the token named by token_expr "
                     "goes up -- use this whenever the value stolen is an ERC20), or "
@@ -134,6 +138,19 @@ def tool_schemas() -> list[dict[str, Any]]:
                             "description": (
                                 "For mode='eoa'. Solidity statements run as the "
                                 "attacker EOA, e.g. 'target.redeem(1000e9);'"
+                            ),
+                        },
+                        "honest_body": {
+                            "type": "string",
+                            "description": (
+                                "REQUIRED for eth_profit and token_profit. Solidity "
+                                "statements an ordinary, non-attacking user would run "
+                                "against 'target' -- the intended happy path, e.g. "
+                                "'target.claim(); target.withdraw();'. The harness runs "
+                                "this first as a separate funded account and your "
+                                "exploit must produce STRICTLY MORE gain than it does. "
+                                "This is why merely collecting a reward the contract "
+                                "hands out by design does not count as an exploit."
                             ),
                         },
                         "token_expr": {
@@ -493,6 +510,7 @@ class ToolDispatcher:
                 observed_getter=str(args.get("observed_getter") or ""),
                 token_expr=str(args.get("token_expr") or ""),
                 attack_body=attack_body,
+                honest_body=str(args.get("honest_body") or ""),
                 mode=mode,
             )
         except ValueError as exc:

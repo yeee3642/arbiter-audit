@@ -139,6 +139,7 @@ class Workspace:
         observed_getter: str = "",
         token_expr: str = "",
         attack_body: str = "",
+        honest_body: str = "",
         mode: str = "contract",
         funding_wei: int = 10**19,
     ) -> str:
@@ -160,6 +161,11 @@ class Workspace:
         """
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
+        if predicate != "state_change" and not honest_body.strip():
+            raise ValueError(
+                "profit predicates need honest_body: the statements an ordinary, "
+                "non-attacking user would run. The exploit must beat that baseline."
+            )
 
         # How the attacker's holdings are read. Same expression before and after, so the
         # predicate is a strict increase in whatever the attacker actually walks away
@@ -186,22 +192,43 @@ class Workspace:
             check = _STATE_CHANGE_BODY.replace(
                 "__GETTER__", observed_getter.strip()
             ).replace("__ACTION__", action)
-        elif mode == "contract":
-            check = _PROFIT_CONTRACT_BODY.format(
-                measure_pre=measure.format(who="address(atk)"),
-                measure_post=measure.format(who="address(atk)"),
-            )
         else:
-            check = _PROFIT_EOA_BODY.format(
-                measure_pre=measure.format(who="eoa"),
-                measure_post=measure.format(who="eoa"),
-                attack_body=_indent(attack_body, 8),
+            # Profit alone does not mean a vulnerability. The reentrancy pair proves it:
+            # UtopiaVault pays every caller a 1 ether airdrop by design, so
+            # claim()+withdraw() leaves an EOA richer on the PATCHED contract too. An
+            # earlier revision accepted exactly that and reported S1, a patched sample,
+            # as "proven".
+            #
+            # So the bar is no longer "did the attacker profit" but "did the attacker do
+            # better than an honest user of the same contract". The harness runs the
+            # honest path first, as a separate account under identical funding, and
+            # requires the attack to strictly beat it. On S1 both paths yield 1 ether and
+            # the exploit is refused; on V1 the honest path yields 1 and the reentrant
+            # one yields several, so it passes.
+            attacker_expr = "address(atk)" if mode == "contract" else "eoa"
+            attack_action = (
+                "        atk.attack();"
+                if mode == "contract"
+                else _EOA_ACTION.format(attack_body=_indent(attack_body, 8))
+            )
+            check = _PROFIT_BODY.format(
+                honest_body=_indent(honest_body, 8),
+                measure_ctrl=measure.format(who="ctrl"),
+                measure_atk=measure.format(who=attacker_expr),
+                setup=_ATTACKER_SETUP.format(funding_wei=int(funding_wei))
+                if mode == "contract"
+                else "",
+                attack_action=attack_action,
             )
 
         if mode == "contract":
             if "contract Attacker" not in attacker_code:
                 raise ValueError("contract mode needs an Attacker contract")
-            setup = _ATTACKER_SETUP.format(funding_wei=int(funding_wei))
+            setup = (
+                ""
+                if predicate != "state_change"
+                else _ATTACKER_SETUP.format(funding_wei=int(funding_wei))
+            )
         else:
             # attacker_code is still emitted in EOA mode. It is no longer required to
             # contain an `Attacker`, but a realistic scenario usually needs helper
@@ -366,4 +393,29 @@ __ACTION__
         require(
             keccak256(pre) != keccak256(post),
             "ARBITER: privileged state did not change"
+        );"""
+
+
+# Honest baseline first, attack second, and the attack has to win. `ctrl` and the
+# attacker get the same funding, so the comparison is between what the contract gives an
+# ordinary user and what it gives someone trying to break it. Gains are computed with a
+# guard against underflow, because an honest path that loses money is legitimate.
+_PROFIT_BODY = """        address ctrl = address(uint160(uint256(keccak256("arbiter.control"))));
+        vm.deal(ctrl, 10000000000000000000);
+        uint256 ctrlPre = {measure_ctrl};
+        vm.startPrank(ctrl, ctrl);
+{honest_body}
+        vm.stopPrank();
+        uint256 ctrlPost = {measure_ctrl};
+        uint256 honestGain = ctrlPost > ctrlPre ? ctrlPost - ctrlPre : 0;
+
+{setup}
+        uint256 atkPre = {measure_atk};
+{attack_action}
+        uint256 atkPost = {measure_atk};
+        uint256 attackGain = atkPost > atkPre ? atkPost - atkPre : 0;
+
+        require(
+            attackGain > honestGain,
+            "ARBITER: attacker did no better than an honest user of this contract"
         );"""

@@ -51,12 +51,22 @@ that candidate is dead; move on.
 3. Pick the strongest surviving candidate and state ONE falsifiable hypothesis: a \
 specific sequence of attacker transactions, and a specific bad end state that should not \
 be reachable.
-4. Prove it with run_exploit. You write the attacker contract and the deployment; the \
-harness writes the success condition and you cannot change it. It asks one of two \
-questions: did the attacker end up with more ether than it was given, or did privileged \
-state move when an unprivileged account acted. Use run_poc first if you need to probe \
-behaviour cheaply, but understand that a passing run_poc is worth nothing as evidence -- \
-you chose what it asserts, so all it can prove is that your own assertion is true.
+4. Prove it with run_exploit. You write the attacker and the deployment; the harness \
+writes the success condition and you cannot change it. Use run_poc first if you need to \
+probe behaviour cheaply, but understand that a passing run_poc is worth nothing as \
+evidence -- you chose what it asserts, so all it can prove is that your own assertion is \
+true.
+
+   The profit predicates are DIFFERENTIAL, and this is the part people get wrong. You \
+must supply honest_body: what an ordinary user does with this contract. The harness runs \
+that first, as a separate funded account, and your exploit has to produce STRICTLY MORE \
+gain than it did. So collecting a reward the contract hands out on purpose is not an \
+exploit -- an honest user collects it too. Draining five times the reward is.
+
+   If the target requires msg.sender == tx.origin, no contract can call it; use \
+mode='eoa'. If the value at stake is an ERC20 rather than ether, use token_profit. \
+deploy_code can set up the world first -- fund the contract, have the owner airdrop to \
+the attacker -- because setup is not part of the attack and the measurement starts after it.
 5. Read the result honestly.
    - Passed: you have admissible evidence. Submit the finding, citing that exploit.
    - Compile error: fix it and rerun.
