@@ -39,7 +39,7 @@ from typing import Any
 from .gateway import Gateway
 from .workspace import Workspace
 
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 8
 
 SYSTEM = """\
 You restore missing declarations so that an extracted Solidity fragment compiles again.
@@ -119,6 +119,52 @@ def split_pragma(source: str) -> tuple[str, str]:
     )
 
 
+_DECL_PATTERNS = (
+    r"\b(?:abstract\s+)?contract\s+([A-Za-z_]\w*)",
+    r"\binterface\s+([A-Za-z_]\w*)",
+    r"\blibrary\s+([A-Za-z_]\w*)",
+    r"\bstruct\s+([A-Za-z_]\w*)",
+    r"\benum\s+([A-Za-z_]\w*)",
+    r"\berror\s+([A-Za-z_]\w*)",
+    r"\bevent\s+([A-Za-z_]\w*)",
+    r"\bmodifier\s+([A-Za-z_]\w*)",
+    r"\bfunction\s+([A-Za-z_]\w*)",
+    r"\bconstant\s+([A-Za-z_]\w*)",
+)
+
+
+def declared_identifiers(source: str) -> set[str]:
+    """Names the source already defines.
+
+    The model kept re-declaring these -- on V5 it emitted its own `Context` even though
+    the sample declares one, producing `Identifier already declared` -- so the list is
+    computed and handed over instead of being asked for.
+    """
+    found: set[str] = set()
+    for pattern in _DECL_PATTERNS:
+        found |= set(re.findall(pattern, source))
+    return found
+
+
+def undeclared_identifiers(build_output: str) -> set[str]:
+    """Names solc says are missing, read off the caret markers in its diagnostics."""
+    missing: set[str] = set()
+    lines = build_output.splitlines()
+    for i, line in enumerate(lines):
+        if "^" not in line or i == 0:
+            continue
+        src = lines[i - 1]
+        if "|" not in src:
+            continue
+        column = line.index("^")
+        body = src.split("|", 1)[1]
+        offset = column - (len(src) - len(body))
+        token = re.match(r"[A-Za-z_]\w*(?:\.\w+)?", body[max(offset, 0) :])
+        if token:
+            missing.add(token.group(0))
+    return missing
+
+
 def significant_lines(source: str) -> list[str]:
     """Lines that must survive reconstruction.
 
@@ -189,29 +235,53 @@ def reconstruct_group(
         f"\n```solidity\n{item['code']}\n```"
         for item in group
     )
-    messages = [
-        {"role": "system", "content": SYSTEM},
-        {
-            "role": "user",
-            "content": USER_TEMPLATE.format(sources=listing, errors=errors[:6000]),
-        },
-    ]
+    already: set[str] = set()
+    for item in group:
+        already |= declared_identifiers(item["code"])
 
     prelude = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        needed = undeclared_identifiers(errors)
+        constraints = (
+            "ALREADY DECLARED by the source -- you MUST NOT declare any of these "
+            f"again, doing so causes 'Identifier already declared':\n{sorted(already)}\n\n"
+            "MISSING -- the compiler cannot resolve these, so your prelude must supply "
+            f"every one of them:\n{sorted(needed)}\n"
+        )
+        # Each attempt is a fresh conversation. An earlier revision appended the failed
+        # prelude and its errors to a growing history, and the model drifted instead of
+        # converging; the state that matters is carried in the prompt, not the history.
+        messages = [
+            {"role": "system", "content": SYSTEM},
+            {
+                "role": "user",
+                "content": USER_TEMPLATE.format(
+                    sources=listing, errors=errors[:5000]
+                )
+                + "\n\n"
+                + constraints,
+            },
+        ]
+        if prelude:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": RETRY_TEMPLATE.format(
+                        prelude=prelude[:5000], errors=errors[:5000]
+                    ),
+                }
+            )
+
         reply = gateway.chat(
             messages,
             max_tokens=max_tokens,
             temperature=0.0,
             tag=f"reconstruct:{group[0]['id']}:a{attempt}",
         )
-        prelude = strip_fences(reply.get("content") or "")
-        if not prelude:
-            messages.append({"role": "assistant", "content": ""})
-            messages.append(
-                {"role": "user", "content": "Empty reply. Send the prelude Solidity only."}
-            )
+        candidate = strip_fences(reply.get("content") or "")
+        if not candidate:
             continue
+        prelude = candidate
 
         ok, errors, sources = compile_all(prelude)
         if ok:
@@ -231,18 +301,12 @@ def reconstruct_group(
                     )
             return Reconstruction(True, prelude, sources, attempt)
 
-        messages.append({"role": "assistant", "content": prelude})
-        messages.append(
-            {
-                "role": "user",
-                "content": RETRY_TEMPLATE.format(
-                    prelude=prelude[:4000], errors=errors[:6000]
-                ),
-            }
-        )
-
     return Reconstruction(
-        False, prelude, {}, MAX_ATTEMPTS, error=f"did not compile in {MAX_ATTEMPTS} attempts"
+        False,
+        prelude,
+        {},
+        MAX_ATTEMPTS,
+        error=f"did not compile in {MAX_ATTEMPTS} attempts; last errors: {errors[:300]}",
     )
 
 

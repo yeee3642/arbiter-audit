@@ -56,6 +56,13 @@ def main() -> int:
     rc.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
     rc.add_argument("--rpm", type=int, default=110)
 
+    bm = sub.add_parser(
+        "bench", help="verify authored pairs and emit an evalset of the admitted ones"
+    )
+    bm.add_argument("--pairs", type=Path, required=True)
+    bm.add_argument("--out", type=Path, required=True)
+    bm.add_argument("--note", default="")
+
     c = sub.add_parser("compare", help="paired comparison of two arms")
     c.add_argument("--a", type=Path, required=True, help="baseline arm summary")
     c.add_argument("--b", type=Path, required=True, help="challenger arm summary")
@@ -178,6 +185,20 @@ def main() -> int:
         n_ok = sum(1 for r in report if r["ok"])
         print(f"\n{n_ok}/{len(report)} groups usable -> {len(out_items)} samples")
         print(f"usage: {json.dumps(gw.usage.as_dict())}")
+        return 0
+
+    if args.cmd == "bench":
+        from arbiter.benchmark import build_evalset
+
+        raw = json.loads(args.pairs.read_text(encoding="utf-8"))
+        pairs = raw["pairs"] if isinstance(raw, dict) else raw
+        meta = build_evalset(
+            pairs, Path("/tmp/arbiter-bench"), args.out, source_note=args.note
+        )
+        print(
+            f"\n{meta['pairs_admitted']}/{meta['pairs_offered']} pairs admitted "
+            f"-> {meta['n']} samples ({meta['n_vuln']} vuln / {meta['n_safe']} safe)"
+        )
         return 0
 
     if args.cmd == "score":
