@@ -85,6 +85,24 @@ The bar is real attacker gain. "This function reverts", "this input is rejected"
 contract cannot call this" are not vulnerabilities -- they are the contract working. A \
 vulnerability means someone ends up with value or authority they should not have.
 
+Before the checklist, the failure mode that costs the most: fixating on reentrancy. It \
+is the most famous class, it is the first thing that comes to mind for any function that \
+makes an external call, and it is usually not the bug. Measured on real audits with this \
+harness, seven of ten missed vulnerabilities had every single attempt reach for \
+reentrancy while the actual defect was a comparison operator, a rounding direction, a \
+missing deadline, a stale price source, or a missing replay guard. If your first two \
+exploits along one line of attack fail, the line of attack is wrong -- change the \
+mechanism, not the parameters.
+
+The most productive question is usually not "what famous bug does this resemble" but \
+"what does this function compute, and is that the right quantity". Read the arithmetic. \
+Compare what a value is derived FROM against what it should be derived from: change \
+computed from the sender's payment rather than the contract's balance, a price read from \
+a checkpoint rather than live reserves, credits rounded up rather than down, an \
+authorisation compared against msg.sender rather than tx.origin, a bound checked with \
+>= where == was meant. Those are quiet one-token defects and they are what these \
+contracts actually get wrong.
+
 Techniques worth reaching for, because a hypothesis you never form is one you cannot \
 test. This is a checklist of mechanisms, not a list of answers -- most will not apply, \
 and the guards in front of them are what decide:
@@ -186,18 +204,36 @@ def audit(
     max_turns: int = 16,
     max_tokens: int = 4096,
     trace_sink: list[dict[str, Any]] | None = None,
+    ruled_out: list[str] | None = None,
 ) -> AgentOutcome:
-    """Run one audit to a terminal verdict. Returns the outcome."""
+    """Run one audit to a terminal verdict. Returns the outcome.
+
+    ``ruled_out`` carries the hypotheses that earlier independent attempts on this same
+    contract already tested and failed. Without it the attempts are not just independent
+    but amnesiac, and they converge: measured over ten missed samples, seven of them had
+    every attempt reach for reentrancy regardless of the actual defect, several trying a
+    single hypothesis across ten consecutive exploits. That is also why raising the
+    attempt budget from three to five bought almost nothing -- it bought more runs of the
+    same wrong idea.
+    """
     dispatcher = ToolDispatcher(workspace)
     schemas = tool_schemas()
+    task = USER_TEMPLATE.format(
+        n_lines=len(workspace.lines), source=workspace.source
+    )
+    if ruled_out:
+        listed = "\n".join(f"  - {h}" for h in ruled_out[:12])
+        task += (
+            "\n\nIndependent earlier attempts on this exact contract already tested "
+            "these hypotheses and FAILED to demonstrate any of them:\n"
+            f"{listed}\n\n"
+            "Do not retry them or minor variations of them. Whatever is wrong with this "
+            "contract, it is something else. Read the code for what it actually does "
+            "rather than for the shape of a familiar bug, and pick a different mechanism."
+        )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": USER_TEMPLATE.format(
-                n_lines=len(workspace.lines), source=workspace.source
-            ),
-        },
+        {"role": "user", "content": task},
     ]
 
     nudged = False

@@ -92,6 +92,7 @@ def run_arbiter(
         # execution predicate, so extra attempts can raise recall but cannot manufacture
         # a false positive. Attempts stop as soon as one succeeds, so the cost is paid
         # only on samples we are failing to crack.
+        ruled_out: list[str] = []
         for attempt in range(attempts):
             ws = Workspace(ws_root / f"r{repeat}a{attempt}", item["id"], item["code"])
             attempt_trace: list[dict[str, Any]] = []
@@ -102,6 +103,7 @@ def run_arbiter(
                     max_turns=max_turns,
                     max_tokens=max_tokens,
                     trace_sink=attempt_trace,
+                    ruled_out=ruled_out,
                 )
             except Exception as exc:  # noqa: BLE001
                 from .tools import AgentOutcome
@@ -121,6 +123,17 @@ def run_arbiter(
             trace = attempt_trace
             if outcome.proven:
                 break
+            # Carry this attempt's dead ends into the next one. Deduplicated on a
+            # normalised prefix so ten restatements of the same reentrancy idea occupy
+            # one line rather than ten.
+            for poc in outcome.pocs:
+                if not poc.adjudicated or poc.passed:
+                    continue
+                text = " ".join(poc.hypothesis.split())[:140]
+                if text and not any(
+                    text[:60].lower() == seen[:60].lower() for seen in ruled_out
+                ):
+                    ruled_out.append(text)
 
         row = {
             "repeat": repeat,
