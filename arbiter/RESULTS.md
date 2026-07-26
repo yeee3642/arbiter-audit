@@ -112,3 +112,42 @@ python cli.py compare --a runs/h2h-bastet.summary.json --b runs/h2h-arbiter.summ
 ```
 
 Raw artefacts for this run are in `runs/`: both summaries and the paired comparison.
+
+---
+
+## Ablation: attempts 3 vs 5
+
+The 11 false negatives were all exploits that compiled, ran and extracted nothing, so the
+obvious lever was more independent attempts. It was tried and it did not work.
+
+| attempts | TP | TN | FP | FN | precision | recall | specificity | F1 | MCC | requests | cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **3** | 9 | 16 | **4** | 11 | 0.692 | 0.450 | **0.800** | 0.5455 | **0.267** | **1555** | **$13.82** |
+| 5 | 10 | 14 | 6 | 10 | 0.625 | 0.500 | 0.700 | 0.5556 | 0.204 | 2412 | $21.50 |
+
+Two extra attempts bought one true positive and two false positives. F1 moved 0.01, MCC
+fell, the request count overtook Bastet's 2125 — losing the one efficiency argument that
+was clean — and cost rose 55%. McNemar at 5 attempts: 14 vs 10 discordant, p = 0.541.
+
+This also falsifies a claim this project had made in writing: that because every attempt
+must clear the same execution predicate, extra attempts could raise recall but **could
+not** manufacture a false positive. True only if the predicate is sound. Ours is not
+fully sound, `state_change` least of all, and more attempts find the holes more often.
+The honest version is that the difference from Bastet's unchecked 53-way OR is one of
+degree, not of kind.
+
+`--attempts 3` is the configuration the project stands behind, and the headline table
+above is that configuration.
+
+## Where this leaves the comparison
+
+ARBITER wins precision, specificity, accuracy, MCC, request count, and proof rate. It
+loses F1 and recall. The paired test is not significant either way. Bastet's F1 of 0.6667
+is numerically identical to a constant "vulnerable" answer and its MCC is exactly 0.000,
+which is the strongest thing that can be said against it — and it is not the same thing
+as ARBITER having won.
+
+The gap is still recall, and two rounds of tuning did not close it: 9 of 20 proven at
+3 attempts, 10 of 20 at 5. Every one of those samples is provably exploitable inside this
+harness. Closing it needs better exploit construction, which is a research problem rather
+than a configuration one, and guessing at it costs roughly $15 and an hour per attempt.

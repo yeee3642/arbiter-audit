@@ -97,13 +97,29 @@ exists because `require(msg.sender == tx.origin)` makes a contract attacker stru
 impossible — sample `V2` is exactly that, and any contract-only harness fails it by
 construction rather than by weakness.
 
-### Why unioning attempts is safe here and not for Bastet
+### Unioning attempts — a claim this project made and then measured
 
 `--attempts k` runs a sample through k independent audits and takes the union, stopping
-at the first proof. Bastet's 53-way OR can only accumulate false positives, because
-nothing checks any term. Every ARBITER attempt has to clear the same execution predicate,
-so extra attempts raise recall and **cannot** manufacture a false positive. Recall and
-precision stop trading against each other.
+at the first proof. An earlier version of this section argued that Bastet's 53-way OR can
+only accumulate false positives because nothing checks any term, whereas every ARBITER
+attempt must clear the same execution predicate, so extra attempts **cannot** manufacture
+a false positive.
+
+That was measured, and it is false. Going from 3 attempts to 5 on the 40-sample benchmark:
+
+| attempts | TP | TN | FP | FN | precision | recall | specificity | F1 | MCC | requests | cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 3 | 9 | 16 | **4** | 11 | 0.692 | 0.450 | **0.800** | 0.5455 | **0.267** | **1555** | **$13.82** |
+| 5 | 10 | 14 | **6** | 10 | 0.625 | 0.500 | 0.700 | 0.5556 | 0.204 | 2412 | $21.50 |
+
+Two extra attempts bought one true positive and two false positives. F1 moved by 0.01,
+MCC got *worse*, request count overtook Bastet's 2125, and cost rose 55%.
+
+The corrected claim: unioning is safe only to the extent the predicate is sound. Ours has
+holes — `state_change` most of all — and more attempts find them more often. The
+difference from Bastet is one of degree rather than of kind: its 53-way OR has no check
+at all, ours has a check that is imperfect. `--attempts 3` is the configuration this
+project stands behind.
 
 ## 3. The benchmark
 
