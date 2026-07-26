@@ -3,10 +3,61 @@
 Proof-carrying smart contract auditing. A finding is a transcript of an execution, not an
 assertion by a language model.
 
-Built to beat [OneSavieLabs/Bastet](https://github.com/OneSavieLabs/Bastet) on the same
+Built against [OneSavieLabs/Bastet](https://github.com/OneSavieLabs/Bastet) on the same
 model, the same gateway, the same evaluation set and the same scorer.
 
 AIS3 2026, track *安全工具開發與研究自動化*.
+
+---
+
+## The result, in one paragraph
+
+ARBITER **does not beat Bastet on F1** — 0.5455 against a fairly tuned 0.6909 — and this
+document says so before it says anything else. What it does do is find each real
+vulnerability in **8.7 analyst-minutes against Bastet's 28.5**, surfacing 3.3× more real
+bugs inside a one-hour review budget, on the cost-weighted metric that
+`BENCH_PROTOCOL.md` pre-registered on 2026-07-25 and that round 1 never computed. Every
+positive it reports arrives with an exploit its own harness compiled, executed and
+adjudicated; Bastet's arrive as assertions. Both numbers are in the same table in
+[`RESULTS.md`](RESULTS.md), along with a bootstrap defect found in our own statistics that
+had been narrowing every interval in our favour.
+
+## What this project contributes
+
+**1. A quantitative audit of a published tool's instrument.** Bastet's shipped decision
+rule is a 53-way OR, and it is not merely permissive — it is *saturated*. Thresholds k=1
+through k=8 give identical results because every sample in the benchmark has at least 8
+detectors firing. Its measured true-negative count is 0 across 20 patched contracts, its
+F1 of 0.6667 equals the constant-"vulnerable" floor to four decimal places, and its MCC
+is exactly 0.000. Given one tuning decision it reaches MCC 0.229 — so the defect is in
+the shipped configuration, not the architecture, and this project says that too.
+
+**2. An execution-gated auditing architecture, and the three ways it first failed.** The
+research content is the failure sequence, not the final design: accepting "a test passed"
+let the agent prove a *patched* contract's `withdraw()` reverts and submit it; taking the
+success condition away from the agent still accepted a patched contract because the
+contract pays a 1-ether airdrop by design; only a *differential* predicate — beat what an
+honest user gets — holds. Naive proof-carrying does not work, and the reason is
+documented rather than smoothed over.
+
+**3. A machine-verified paired benchmark.** 20 vulnerability classes, 40 samples, where
+each negative is the patched original differing by 1–4 lines. No pair enters unless the
+reference exploit passes on the vulnerable half and the *same* exploit fails on the
+patched half, checked by `forge` with no model involved. Reusable independently of this
+project.
+
+**4. An adversarial self-audit.** A reviewer attacked this work and 11 of 12 findings
+landed. The bootstrap PRNG was stratifying its own resamples — 10,000 of 10,000 draws had
+exactly 20 of each class — which narrowed every confidence interval in our favour; after
+fixing it the headline MCC advantage no longer excludes zero. Confidence intervals had
+been computed for the one metric we lose and not for the two carrying the claim. Our own
+fairness suite had a `constant_yes_baseline` but no `constant_no`, which is why
+specificity looked like a headline when a predictor that always answers "safe" beats us
+on it. All fixed, all recorded, none quietly dropped.
+
+**5. A pre-registered round 2.** [`PREREGISTRATION_V2.md`](PREREGISTRATION_V2.md) fixes
+splits, power, arms and the decision rule before running, because round 1's headline
+configuration was chosen by comparing settings on the only evaluation set there was.
 
 ---
 
