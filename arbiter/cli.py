@@ -28,6 +28,8 @@ def main() -> int:
     r.add_argument("--run-id", required=True)
     r.add_argument("--out", type=Path, default=Path("runs"))
     r.add_argument("--repeats", type=int, default=1)
+    r.add_argument("--attempts", type=int, default=1,
+                   help="independent audit attempts per sample; unioned, stops on first proof")
     r.add_argument("--concurrency", type=int, default=8)
     r.add_argument("--max-turns", type=int, default=16)
     r.add_argument("--max-tokens", type=int, default=4096)
@@ -78,6 +80,7 @@ def main() -> int:
             run_id=args.run_id,
             out_dir=args.out,
             repeats=args.repeats,
+            attempts=args.attempts,
             concurrency=args.concurrency,
             max_turns=args.max_turns,
             max_tokens=args.max_tokens,

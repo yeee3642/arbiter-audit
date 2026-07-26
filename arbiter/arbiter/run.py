@@ -41,6 +41,7 @@ def run_arbiter(
     run_id: str,
     out_dir: Path,
     repeats: int = 1,
+    attempts: int = 1,
     concurrency: int = 8,
     max_turns: int = 16,
     max_tokens: int = 4096,
@@ -77,29 +78,57 @@ def run_arbiter(
         key = f"{repeat}::{item['id']}"
         if key in done:
             return None
-        ws = Workspace(ws_root / f"r{repeat}", item["id"], item["code"])
-        trace: list[dict[str, Any]] = []
         t0 = time.monotonic()
-        try:
-            outcome = audit(
-                gateway,
-                ws,
-                max_turns=max_turns,
-                max_tokens=max_tokens,
-                trace_sink=trace,
-            )
-            error = ""
-        except Exception as exc:  # noqa: BLE001
-            from .tools import AgentOutcome
+        trace: list[dict[str, Any]] = []
+        error = ""
+        outcome = None
+        tried: list[dict[str, Any]] = []
 
-            outcome = AgentOutcome(stop_reason=f"error: {type(exc).__name__}: {exc}")
-            error = f"{type(exc).__name__}: {exc}"
+        # Independent attempts, unioned: the sample is vulnerable if ANY attempt
+        # produced a harness-adjudicated exploit. Unioning is safe here in a way it is
+        # not for Bastet. Bastet unions 53 detectors and each one can only add false
+        # positives, because nothing checks them -- with 53 draws at even a 5% error
+        # rate it flags 93% of safe code. Every ARBITER attempt has to clear the same
+        # execution predicate, so extra attempts can raise recall but cannot manufacture
+        # a false positive. Attempts stop as soon as one succeeds, so the cost is paid
+        # only on samples we are failing to crack.
+        for attempt in range(attempts):
+            ws = Workspace(ws_root / f"r{repeat}a{attempt}", item["id"], item["code"])
+            attempt_trace: list[dict[str, Any]] = []
+            try:
+                outcome = audit(
+                    gateway,
+                    ws,
+                    max_turns=max_turns,
+                    max_tokens=max_tokens,
+                    trace_sink=attempt_trace,
+                )
+            except Exception as exc:  # noqa: BLE001
+                from .tools import AgentOutcome
+
+                outcome = AgentOutcome(stop_reason=f"error: {type(exc).__name__}: {exc}")
+                error = f"{type(exc).__name__}: {exc}"
+            ws.cleanup()
+            tried.append(
+                {
+                    "attempt": attempt,
+                    "verdict": outcome.verdict,
+                    "proven": outcome.proven,
+                    "turns": outcome.turns,
+                    "stop_reason": outcome.stop_reason,
+                }
+            )
+            trace = attempt_trace
+            if outcome.proven:
+                break
 
         row = {
             "repeat": repeat,
             "sample_id": item["id"],
             "truth": item["label"],
             "predicted": outcome_to_label(outcome),
+            "attempts_used": len(tried),
+            "attempts": tried,
             "elapsed_s": round(time.monotonic() - t0, 2),
             "error": error,
             "outcome": outcome.as_dict(),
@@ -110,12 +139,11 @@ def run_arbiter(
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
                 fh.flush()
                 os.fsync(fh.fileno())
-        ws.cleanup()
         hit = "OK " if row["predicted"] == row["truth"] else "MISS"
         proven = "proven" if outcome.proven else outcome.stop_reason
         print(
             f"  [{hit}] r{repeat} {item['id'][:44]:46s} "
-            f"-> {row['predicted']:5s} ({proven}, {outcome.turns}t, "
+            f"-> {row['predicted']:5s} ({proven}, {len(tried)}x{outcome.turns}t, "
             f"{row['elapsed_s']}s)",
             flush=True,
         )
@@ -145,6 +173,7 @@ def run_arbiter(
         "evalset": str(evalset),
         "evalset_meta": meta,
         "repeats": repeats,
+        "attempts_per_sample": attempts,
         "max_turns": max_turns,
         "max_tokens": max_tokens,
         "wall_clock_s": round(time.monotonic() - started, 1),
@@ -153,6 +182,7 @@ def run_arbiter(
         "no_verdict_rate": _no_verdict_rate(rows),
         "proven_rate": _proven_rate(rows),
         "mean_turns": _mean_turns(rows),
+        "mean_requests_per_sample": _mean_requests(rows),
     }
     (out_dir / f"{run_id}.summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -187,6 +217,19 @@ def _proven_rate(rows: list[dict[str, Any]]) -> float:
     return round(
         sum(1 for r in positives if r["outcome"]["proven"]) / len(positives), 4
     )
+
+
+def _mean_requests(rows: list[dict[str, Any]]) -> float:
+    """Gateway requests spent per sample: one per turn, summed over attempts.
+
+    Reported because it is the axis the gateway actually rations. Bastet spends 53 per
+    sample by construction; if ARBITER exceeds that, its accuracy advantage is bought
+    rather than earned and the comparison has to say so.
+    """
+    if not rows:
+        return 0.0
+    total = sum(sum(a["turns"] for a in r.get("attempts", [])) for r in rows)
+    return round(total / len(rows), 2)
 
 
 def _mean_turns(rows: list[dict[str, Any]]) -> float:
