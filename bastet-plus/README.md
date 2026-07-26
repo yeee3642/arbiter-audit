@@ -33,6 +33,17 @@
 不是「F1 提升 2.7 倍」。原版的 0.111 低於恆答 yes 的 0.140；原版與 Bastet+ 同模型 verifier
 的 file-level 分數都跟 trivial baseline 一模一樣，在檔案層級無法與常數答案區分。
 
+**而且連這個改善也只有部分經得起檢定**（`tools/significance.py`，輸出見 `docs/significance.txt`）：
+
+| 差異 | 檢定 | 判定 |
+| --- | --- | --- |
+| Precision 0.061 → 0.182 | 兩比例 z, p = 0.024（觀測叢集在 20 檔內，偏樂觀） | 有跡象，未確立 |
+| Recall 6/9 → 8/9 | McNemar p = 0.50 | **沒有證據** |
+| File-level 0.667 → 1.000 | 分母 9，95% CI [0.70, 1.00] | 方向明確，幅度未定 |
+
+真陽性 (檔案,類別) 配對總共只有 **9** 個，乾淨檔只有 **11** 個。recall 那 22 個百分點的
+差異實際上是**兩個案例**。
+
 附加到 prompt 的 `## Discipline` 區塊不是純 plumbing，已用 `--no-discipline` 單獨量過：
 它壓掉 2 個乾淨檔的告警（file-level 滿分因此有一部分要歸功於 prompt 而非 harness），
 代價是吃掉一個真陽性。純 harness 的改動仍然大幅跨過 trivial baseline。
@@ -128,6 +139,7 @@ contract.sol
 |---|---|
 | `benchmark_results/comparison_*.json` | 每個 arm 的完整 findings、per-file 預測、stats |
 | `docs/run_log_llama70b_2026-07-26.txt` | A/B 那次跑的 console log |
+| `docs/significance.txt` | 顯著性檢定：哪些差異真的有證據支持 |
 | `docs/prompt_change_summary.txt` | 56 支 prompt 的機械化改動摘要 |
 | `docs/prompt_diff_example.txt` | 單支 prompt 的完整 unified diff |
 | `--log-calls` 的 JSONL | 完整請求/回應記錄（預設關閉，會內嵌合約原始碼） |

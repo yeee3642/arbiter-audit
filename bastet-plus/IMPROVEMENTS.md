@@ -293,6 +293,22 @@ Measured on `ais3/llama-3.3-70b`, 20 files, 18 detectors — full detail and cav
 Read that against the trivial baseline, not against zero. **The original harness scores
 below a constant "yes".** The honest claim is "crosses the trivial floor", not "2.7x better".
 
+And only part of even that survives a significance test (`tools/significance.py`,
+output in `docs/significance.txt`). There are **9** true-positive (file, class) pairs in
+the whole benchmark and **11** clean files:
+
+| Difference | Test | Verdict |
+| --- | --- | --- |
+| Precision 0.061 → 0.182 | two-proportion z, p = 0.024 (observations cluster within 20 files, so optimistic) | suggestive, not established |
+| Recall 6/9 → 8/9 | McNemar exact, p = 0.50 | **no evidence** |
+| File-level 0.667 → 1.000 | n = 9, 95% CI [0.70, 1.00] | direction clear, magnitude not |
+
+Two columns that appeared in earlier versions of this comparison have been removed
+because they are rhetoric rather than measurement: "findings with a line number, 0 → 27"
+(the original never asks for line numbers, so 0 is definitional — that is a new
+capability, not better detection), and part of "findings 278 → 27" (90 of those are
+cross-detector merges, i.e. a counting-rule difference, not filtered false positives).
+
 Two things disqualify these from being a generalisation estimate, both detailed in
 `DECISIONS.md`: the benchmark was authored by the same agent that built the harness and
 **four cases were edited after seeing model output**, and the recommended configuration was
