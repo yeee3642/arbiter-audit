@@ -99,8 +99,10 @@ def tool_schemas() -> list[dict[str, Any]]:
                     "token_profit (attacker's balance of the token named by token_expr "
                     "goes up -- use this whenever the value stolen is an ERC20), or "
                     "state_change (state that an honest user cannot move, moved by an "
-                    "unprivileged account). Every predicate is differential, so "
-                    "honest_body is always required."
+                    "unprivileged account), or liveness_broken (an operation an "
+                    "ordinary user could complete stops working after your attack -- "
+                    "use this for denial of service, where the attacker gains nothing). "
+                    "Every predicate is differential."
                 ),
                 "parameters": {
                     "type": "object",
@@ -123,7 +125,7 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "predicate": {
                             "type": "string",
-                            "enum": ["eth_profit", "token_profit", "state_change"],
+                            "enum": ["eth_profit", "token_profit", "state_change", "liveness_broken"],
                         },
                         "mode": {
                             "type": "string",
@@ -155,6 +157,16 @@ def tool_schemas() -> list[dict[str, Any]]:
                                 "checks the state really is privileged. "
                                 "This is why merely collecting a reward the contract "
                                 "hands out by design does not count as an exploit."
+                            ),
+                        },
+                        "liveness_call": {
+                            "type": "string",
+                            "description": (
+                                "For liveness_broken (denial of service). An "
+                                "abi.encodeWithSignature(...) expression for an "
+                                "operation an ordinary user can complete, e.g. "
+                                "abi.encodeWithSignature(\"claim()\"). The harness "
+                                "checks it SUCCEEDS before your attack and FAILS after."
                             ),
                         },
                         "token_expr": {
@@ -513,6 +525,7 @@ class ToolDispatcher:
                 predicate=predicate,
                 observed_getter=str(args.get("observed_getter") or ""),
                 token_expr=str(args.get("token_expr") or ""),
+                liveness_call=str(args.get("liveness_call") or ""),
                 attack_body=attack_body,
                 honest_body=str(args.get("honest_body") or ""),
                 mode=mode,

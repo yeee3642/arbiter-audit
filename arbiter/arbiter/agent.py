@@ -63,6 +63,12 @@ that first, as a separate funded account, and your exploit has to produce STRICT
 gain than it did. So collecting a reward the contract hands out on purpose is not an \
 exploit -- an honest user collects it too. Draining five times the reward is.
 
+   Not every vulnerability makes the attacker richer. If the harm is that the protocol \
+STOPS WORKING -- an unbounded loop, a queue anyone can grow, a state nobody can clear -- \
+then no profit predicate can express it and you should use liveness_broken: give \
+liveness_call, an abi.encodeWithSignature(...) for something an ordinary user can do, \
+and the harness checks it succeeds before your attack and fails after.
+
    If the target requires msg.sender == tx.origin, no contract can call it; use \
 mode='eoa'. If the value at stake is an ERC20 rather than ether, use token_profit. \
 deploy_code can set up the world first -- fund the contract, have the owner airdrop to \

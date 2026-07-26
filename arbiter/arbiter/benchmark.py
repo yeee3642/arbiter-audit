@@ -117,6 +117,7 @@ def verify_pair(
                 predicate=predicate,
                 observed_getter=getter,
                 token_expr=pair.get("token_expr", "") or "",
+                liveness_call=pair.get("liveness_call", "") or "",
                 attack_body=pair.get("attack_body", "") or "",
                 honest_body=pair.get("honest_body", "") or "{}",
                 mode=pair.get("mode", "contract") or "contract",
