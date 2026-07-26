@@ -1,0 +1,620 @@
+{
+ "arm": "bastet_verbatim",
+ "run_id": "h2h-bastet",
+ "model": "ais3/nemotron-3-ultra-550b",
+ "evalset": "evalsets/v3_authored.json",
+ "evalset_meta": {
+  "n": 40,
+  "n_vuln": 20,
+  "n_safe": 20,
+  "pairs_admitted": 20,
+  "pairs_offered": 20,
+  "source": "paired benchmark authored for ARBITER; every pair machine-verified",
+  "admission_rule": "A pair enters only if both halves compile, the reference exploit PASSES against the vulnerable half under the harness-owned predicate, and the SAME exploit FAILS against the patched half. No model adjudicates this.",
+  "negative_design": "Every negative is the patched version of a positive, differing only by the security fix. Unrelated safe code as a negative would inflate precision for both arms and destroy the discriminative power of the comparison.",
+  "comment_policy": "Comments that would reveal the label are stripped, and the halves carry identical comment text.",
+  "verdicts": [
+   {
+    "slug": "reentrancy_unstake",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 4,
+    "reasons": []
+   },
+   {
+    "slug": "missing_access_control_disburse",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "unchecked_call_return_buyback",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "tx_origin_auth_router",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "unbounded_queue_dos",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "forced_ether_refund",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "approval_double_spend",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "delegatecall_unchecked_module",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "amm_spot_price_oracle",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "slippage_check_skipped_branch",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "missing_deadline_signed_order",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "stale_cached_price_liquidation",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "first_depositor_share_inflation",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 4,
+    "reasons": []
+   },
+   {
+    "slug": "withdraw_rounding_favours_user",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "fee_on_transfer_credit",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 3,
+    "reasons": []
+   },
+   {
+    "slug": "uint128_downcast_reward_debt",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "signature_replay_voucher",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "ecrecover_zero_address_session",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "commit_reveal_frontrun",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "weak_randomness_flip_payout",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   }
+  ]
+ },
+ "repeats": 1,
+ "max_tokens": 4096,
+ "n_detectors": 53,
+ "decision_rule": "Bastet eval.py: positive iff any detector output != []",
+ "requests_per_sample": 53,
+ "wall_clock_s": 3011.4,
+ "usage": {
+  "requests": 2125,
+  "prompt_tokens": 3843837,
+  "completion_tokens": 457686,
+  "cost_usd": 2.928828,
+  "retries": 7,
+  "http_errors": 7,
+  "parse_failures": 1,
+  "reasoning_recoveries": 0,
+  "system_fingerprints": [
+   "vllm-0.24.0-tp8-ep-d6a91272",
+   "vllm-0.24.0-tp8-ep-e50784a2"
+  ],
+  "models_seen": [
+   "ais3/nemotron-3-ultra-550b"
+  ]
+ },
+ "predictions_by_repeat": {
+  "0": {
+   "V_reentrancy_unstake": "vuln",
+   "S_reentrancy_unstake": "vuln",
+   "V_missing_access_control_disburse": "vuln",
+   "S_missing_access_control_disburse": "vuln",
+   "V_unchecked_call_return_buyback": "vuln",
+   "S_unchecked_call_return_buyback": "vuln",
+   "V_tx_origin_auth_router": "vuln",
+   "S_tx_origin_auth_router": "vuln",
+   "V_unbounded_queue_dos": "vuln",
+   "S_unbounded_queue_dos": "vuln",
+   "V_forced_ether_refund": "vuln",
+   "S_forced_ether_refund": "vuln",
+   "V_approval_double_spend": "vuln",
+   "S_approval_double_spend": "vuln",
+   "V_delegatecall_unchecked_module": "vuln",
+   "S_delegatecall_unchecked_module": "vuln",
+   "V_amm_spot_price_oracle": "vuln",
+   "S_amm_spot_price_oracle": "vuln",
+   "V_slippage_check_skipped_branch": "vuln",
+   "S_slippage_check_skipped_branch": "vuln",
+   "V_missing_deadline_signed_order": "vuln",
+   "S_missing_deadline_signed_order": "vuln",
+   "V_stale_cached_price_liquidation": "vuln",
+   "S_stale_cached_price_liquidation": "vuln",
+   "V_first_depositor_share_inflation": "vuln",
+   "S_first_depositor_share_inflation": "vuln",
+   "V_withdraw_rounding_favours_user": "vuln",
+   "S_withdraw_rounding_favours_user": "vuln",
+   "V_fee_on_transfer_credit": "vuln",
+   "S_fee_on_transfer_credit": "vuln",
+   "V_uint128_downcast_reward_debt": "vuln",
+   "S_uint128_downcast_reward_debt": "vuln",
+   "V_signature_replay_voucher": "vuln",
+   "S_signature_replay_voucher": "vuln",
+   "V_ecrecover_zero_address_session": "vuln",
+   "S_ecrecover_zero_address_session": "vuln",
+   "V_commit_reveal_frontrun": "vuln",
+   "S_commit_reveal_frontrun": "vuln",
+   "V_weak_randomness_flip_payout": "vuln",
+   "S_weak_randomness_flip_payout": "vuln"
+  }
+ },
+ "detector_fire_rates": {
+  "Lack of access control": {
+   "fires_on_vuln": 0.95,
+   "fires_on_safe": 0.8,
+   "discrimination": 0.15
+  },
+  "Unbounded loop": {
+   "fires_on_vuln": 0.35,
+   "fires_on_safe": 0.25,
+   "discrimination": 0.1
+  },
+  "SC07:2025 - Flash Loan Attacks": {
+   "fires_on_vuln": 0.95,
+   "fires_on_safe": 0.85,
+   "discrimination": 0.1
+  },
+  "4naly3er-M-centralizationRisk": {
+   "fires_on_vuln": 0.8,
+   "fires_on_safe": 0.75,
+   "discrimination": 0.05
+  },
+  "Lack of two-step process for contract ownership changes": {
+   "fires_on_vuln": 0.5,
+   "fires_on_safe": 0.45,
+   "discrimination": 0.05
+  },
+  "4naly3er-M-avoidTx.origin": {
+   "fires_on_vuln": 0.05,
+   "fires_on_safe": 0.0,
+   "discrimination": 0.05
+  },
+  "Chainlink-Request Confirmation < Depth of Chain Re-Orgs": {
+   "fires_on_vuln": 0.1,
+   "fires_on_safe": 0.05,
+   "discrimination": 0.05
+  },
+  "Chainlink-Incorrect Oracle Price Feed Address": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.1,
+   "discrimination": 0.05
+  },
+  "Chainlink-Oracle Returns Incorrect Price During Flash Crashes": {
+   "fires_on_vuln": 0.25,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.05
+  },
+  "Chainlink-Re-requesting Randomness": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.05
+  },
+  "ERC4626-Rounding": {
+   "fires_on_vuln": 0.35,
+   "fires_on_safe": 0.3,
+   "discrimination": 0.05
+  },
+  "SC02:2025 - Price Oracle Manipulation": {
+   "fires_on_vuln": 0.5,
+   "fires_on_safe": 0.45,
+   "discrimination": 0.05
+  },
+  "SC01:2025 - Improper Access Control": {
+   "fires_on_vuln": 1.0,
+   "fires_on_safe": 0.95,
+   "discrimination": 0.05
+  },
+  "SC06:2025 - Unchecked External Calls": {
+   "fires_on_vuln": 0.7,
+   "fires_on_safe": 0.65,
+   "discrimination": 0.05
+  },
+  "SC10:2025 - Denial Of Service": {
+   "fires_on_vuln": 1.0,
+   "fires_on_safe": 0.95,
+   "discrimination": 0.05
+  },
+  "4naly3er-H-wstETHPriceStEth": {
+   "fires_on_vuln": 0.0,
+   "fires_on_safe": 0.0,
+   "discrimination": 0.0
+  },
+  "4naly3er-H-get_dy_underlyingFlashLoan": {
+   "fires_on_vuln": 0.05,
+   "fires_on_safe": 0.05,
+   "discrimination": 0.0
+  },
+  "4naly3er-M-approve0first": {
+   "fires_on_vuln": 0.0,
+   "fires_on_safe": 0.0,
+   "discrimination": 0.0
+  },
+  "Chainlink-Not Checking For Down L2 Sequencer": {
+   "fires_on_vuln": 0.1,
+   "fires_on_safe": 0.1,
+   "discrimination": 0.0
+  },
+  "Chainlink-Not Checking For Stale Prices": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "Chainlink-Same Heartbeat Used For Multiple Price Feeds": {
+   "fires_on_vuln": 0.05,
+   "fires_on_safe": 0.05,
+   "discrimination": 0.0
+  },
+  "Chainlink-Oracle Price Feeds Not Updated Frequently": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "Chainlink-Assuming Oracle Price Precision": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "Chainlink-Unhandled Depeg Of Bridged Assets": {
+   "fires_on_vuln": 0.25,
+   "fires_on_safe": 0.25,
+   "discrimination": 0.0
+  },
+  "4naly3er-H-msg.valueInLoop": {
+   "fires_on_vuln": 0.05,
+   "fires_on_safe": 0.05,
+   "discrimination": 0.0
+  },
+  "Chainlink-Placing Bets After Randomness Request": {
+   "fires_on_vuln": 0.3,
+   "fires_on_safe": 0.3,
+   "discrimination": 0.0
+  },
+  "4naly3er-M-FoTTokens": {
+   "fires_on_vuln": 0.3,
+   "fires_on_safe": 0.3,
+   "discrimination": 0.0
+  },
+  "4naly3er-H-delegateCallInLoop": {
+   "fires_on_vuln": 0.0,
+   "fires_on_safe": 0.0,
+   "discrimination": 0.0
+  },
+  "4naly3er-H-comparisonOutsideCondition": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "ERC4626-Fee": {
+   "fires_on_vuln": 0.25,
+   "fires_on_safe": 0.25,
+   "discrimination": 0.0
+  },
+  "ERC4626-Global and user-specific limits": {
+   "fires_on_vuln": 0.35,
+   "fires_on_safe": 0.35,
+   "discrimination": 0.0
+  },
+  "COT - flashloan manipulation attack": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "4naly3er-M-NFTRedefinesMint": {
+   "fires_on_vuln": 0.3,
+   "fires_on_safe": 0.3,
+   "discrimination": 0.0
+  },
+  "4naly3er-M-blockNumberL": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "Refund failed": {
+   "fires_on_vuln": 1.0,
+   "fires_on_safe": 1.0,
+   "discrimination": 0.0
+  },
+  "SC05:2025 - Reentrancy": {
+   "fires_on_vuln": 0.95,
+   "fires_on_safe": 0.95,
+   "discrimination": 0.0
+  },
+  "SC04:2025 - Lack of Input Validation": {
+   "fires_on_vuln": 1.0,
+   "fires_on_safe": 1.0,
+   "discrimination": 0.0
+  },
+  "SC03:2025 - Logic Errors": {
+   "fires_on_vuln": 1.0,
+   "fires_on_safe": 1.0,
+   "discrimination": 0.0
+  },
+  "SC08:2025 - Integer Overflow and Underflow": {
+   "fires_on_vuln": 0.5,
+   "fires_on_safe": 0.5,
+   "discrimination": 0.0
+  },
+  "Slippage-Incorrect Slippage Calculation": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "SC09:2025 - Insecure Randomness": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "Slippage-No Expiration Deadline": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "Slippage-No Slippage Parameter": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "Slippage-Minting Exposes Users To Unlimited Slippage": {
+   "fires_on_vuln": 0.35,
+   "fires_on_safe": 0.35,
+   "discrimination": 0.0
+  },
+  "Slippage-MinTokensOut For Intermediate, Not Final Amount": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "Slippage-Hard-coded Slippage May Freeze User Funds": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "COT - slippage min amount": {
+   "fires_on_vuln": 0.2,
+   "fires_on_safe": 0.2,
+   "discrimination": 0.0
+  },
+  "Slippage-On-Chain Slippage Calculation Can Be Manipulated": {
+   "fires_on_vuln": 0.15,
+   "fires_on_safe": 0.15,
+   "discrimination": 0.0
+  },
+  "Chainlink-Unhandled Oracle Revert Denial Of Service": {
+   "fires_on_vuln": 0.25,
+   "fires_on_safe": 0.3,
+   "discrimination": -0.05
+  },
+  "Integration/Logical error": {
+   "fires_on_vuln": 0.95,
+   "fires_on_safe": 1.0,
+   "discrimination": -0.05
+  },
+  "Slippage-Mismatched Slippage Precision": {
+   "fires_on_vuln": 0.1,
+   "fires_on_safe": 0.15,
+   "discrimination": -0.05
+  },
+  "Chainlink-Oracle Price Updates Can Be Front-Run": {
+   "fires_on_vuln": 0.5,
+   "fires_on_safe": 0.6,
+   "discrimination": -0.1
+  },
+  "Slippage-Zero Slippage Required": {
+   "fires_on_vuln": 0.6,
+   "fires_on_safe": 0.7,
+   "discrimination": -0.1
+  }
+ },
+ "scored": {
+  "repeats": 1,
+  "runs": [
+   {
+    "TP": 20,
+    "TN": 0,
+    "FP": 20,
+    "FN": 0,
+    "precision": 0.5,
+    "recall": 1.0,
+    "specificity": 0.0,
+    "f1": 0.6667,
+    "accuracy": 0.5,
+    "mcc": 0.0
+   }
+  ],
+  "TP": {
+   "mean": 20.0,
+   "min": 20,
+   "max": 20
+  },
+  "TN": {
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "FP": {
+   "mean": 20.0,
+   "min": 20,
+   "max": 20
+  },
+  "FN": {
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "precision": {
+   "mean": 0.5,
+   "min": 0.5,
+   "max": 0.5
+  },
+  "recall": {
+   "mean": 1.0,
+   "min": 1.0,
+   "max": 1.0
+  },
+  "specificity": {
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0
+  },
+  "f1": {
+   "mean": 0.6667,
+   "min": 0.6667,
+   "max": 0.6667
+  },
+  "accuracy": {
+   "mean": 0.5,
+   "min": 0.5,
+   "max": 0.5
+  },
+  "mcc": {
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0
+  }
+ }
+}

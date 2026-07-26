@@ -1,0 +1,243 @@
+{
+ "evalset": "evalsets/v3_authored.json",
+ "n_samples": 40,
+ "constant_yes_floor": {
+  "TP": 20,
+  "TN": 0,
+  "FP": 20,
+  "FN": 0,
+  "precision": 0.5,
+  "recall": 1.0,
+  "specificity": 0.0,
+  "f1": 0.6667,
+  "accuracy": 0.5,
+  "mcc": 0.0
+ },
+ "arm_a": {
+  "name": "bastet_verbatim",
+  "model": "ais3/nemotron-3-ultra-550b",
+  "scored": {
+   "repeats": 1,
+   "runs": [
+    {
+     "TP": 20,
+     "TN": 0,
+     "FP": 20,
+     "FN": 0,
+     "precision": 0.5,
+     "recall": 1.0,
+     "specificity": 0.0,
+     "f1": 0.6667,
+     "accuracy": 0.5,
+     "mcc": 0.0
+    }
+   ],
+   "TP": {
+    "mean": 20.0,
+    "min": 20,
+    "max": 20
+   },
+   "TN": {
+    "mean": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "FP": {
+    "mean": 20.0,
+    "min": 20,
+    "max": 20
+   },
+   "FN": {
+    "mean": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "precision": {
+    "mean": 0.5,
+    "min": 0.5,
+    "max": 0.5
+   },
+   "recall": {
+    "mean": 1.0,
+    "min": 1.0,
+    "max": 1.0
+   },
+   "specificity": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "f1": {
+    "mean": 0.6667,
+    "min": 0.6667,
+    "max": 0.6667
+   },
+   "accuracy": {
+    "mean": 0.5,
+    "min": 0.5,
+    "max": 0.5
+   },
+   "mcc": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   }
+  },
+  "usage": {
+   "requests": 2125,
+   "prompt_tokens": 3843837,
+   "completion_tokens": 457686,
+   "cost_usd": 2.928828,
+   "retries": 7,
+   "http_errors": 7,
+   "parse_failures": 1,
+   "reasoning_recoveries": 0,
+   "system_fingerprints": [
+    "vllm-0.24.0-tp8-ep-d6a91272",
+    "vllm-0.24.0-tp8-ep-e50784a2"
+   ],
+   "models_seen": [
+    "ais3/nemotron-3-ultra-550b"
+   ]
+  }
+ },
+ "arm_b": {
+  "name": "arbiter",
+  "model": "ais3/nemotron-3-ultra-550b",
+  "scored": {
+   "repeats": 1,
+   "runs": [
+    {
+     "TP": 9,
+     "TN": 16,
+     "FP": 4,
+     "FN": 11,
+     "precision": 0.6923,
+     "recall": 0.45,
+     "specificity": 0.8,
+     "f1": 0.5455,
+     "accuracy": 0.625,
+     "mcc": 0.2669
+    }
+   ],
+   "TP": {
+    "mean": 9.0,
+    "min": 9,
+    "max": 9
+   },
+   "TN": {
+    "mean": 16.0,
+    "min": 16,
+    "max": 16
+   },
+   "FP": {
+    "mean": 4.0,
+    "min": 4,
+    "max": 4
+   },
+   "FN": {
+    "mean": 11.0,
+    "min": 11,
+    "max": 11
+   },
+   "precision": {
+    "mean": 0.6923,
+    "min": 0.6923,
+    "max": 0.6923
+   },
+   "recall": {
+    "mean": 0.45,
+    "min": 0.45,
+    "max": 0.45
+   },
+   "specificity": {
+    "mean": 0.8,
+    "min": 0.8,
+    "max": 0.8
+   },
+   "f1": {
+    "mean": 0.5455,
+    "min": 0.5455,
+    "max": 0.5455
+   },
+   "accuracy": {
+    "mean": 0.625,
+    "min": 0.625,
+    "max": 0.625
+   },
+   "mcc": {
+    "mean": 0.2669,
+    "min": 0.2669,
+    "max": 0.2669
+   }
+  },
+  "usage": {
+   "requests": 1555,
+   "prompt_tokens": 23383216,
+   "completion_tokens": 968366,
+   "cost_usd": 13.822013,
+   "retries": 0,
+   "http_errors": 0,
+   "parse_failures": 0,
+   "reasoning_recoveries": 0,
+   "system_fingerprints": [
+    "vllm-0.24.0-tp8-ep-d6a91272",
+    "vllm-0.24.0-tp8-ep-e50784a2"
+   ],
+   "models_seen": [
+    "ais3/nemotron-3-ultra-550b"
+   ]
+  }
+ },
+ "same_model": true,
+ "mcnemar_first_repeat": {
+  "b01_a_only_correct": 11,
+  "b10_b_only_correct": 16,
+  "concordant": 13,
+  "discordant": 27,
+  "p_value_exact": 0.442068,
+  "favours": "b",
+  "discordant_samples": {
+   "S_unchecked_call_return_buyback": "b_only",
+   "V_tx_origin_auth_router": "a_only",
+   "S_tx_origin_auth_router": "b_only",
+   "V_unbounded_queue_dos": "a_only",
+   "S_unbounded_queue_dos": "b_only",
+   "V_forced_ether_refund": "a_only",
+   "S_forced_ether_refund": "b_only",
+   "S_approval_double_spend": "b_only",
+   "V_delegatecall_unchecked_module": "a_only",
+   "S_delegatecall_unchecked_module": "b_only",
+   "V_amm_spot_price_oracle": "a_only",
+   "S_amm_spot_price_oracle": "b_only",
+   "V_missing_deadline_signed_order": "a_only",
+   "S_missing_deadline_signed_order": "b_only",
+   "V_stale_cached_price_liquidation": "a_only",
+   "S_stale_cached_price_liquidation": "b_only",
+   "S_first_depositor_share_inflation": "b_only",
+   "V_withdraw_rounding_favours_user": "a_only",
+   "S_withdraw_rounding_favours_user": "b_only",
+   "V_fee_on_transfer_credit": "a_only",
+   "S_fee_on_transfer_credit": "b_only",
+   "V_uint128_downcast_reward_debt": "a_only",
+   "S_uint128_downcast_reward_debt": "b_only",
+   "V_signature_replay_voucher": "a_only",
+   "S_signature_replay_voucher": "b_only",
+   "S_ecrecover_zero_address_session": "b_only",
+   "S_commit_reveal_frontrun": "b_only"
+  },
+  "underpowered": false,
+  "note": "Only discordant pairs carry evidence. With fewer than 6 of them no two-sided exact test can reach p < 0.05 at any split, so the comparison is reported as underpowered rather than as evidence of equivalence."
+ },
+ "bootstrap_f1": {
+  "refused": false,
+  "metric": "f1",
+  "point_delta": -0.1212,
+  "ci95": [
+   -0.3333,
+   0.0556
+  ],
+  "excludes_zero": false,
+  "n_boot": 10000
+ }
+}
