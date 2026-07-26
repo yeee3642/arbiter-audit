@@ -262,3 +262,58 @@ What does not survive is the claim of a measured advantage. On this evaluation s
 this sample size, with the corrected bootstrap, **ARBITER is not shown to beat Bastet on
 any metric except specificity — and a predictor that always answers "safe" beats them
 both on that.**
+
+---
+
+## Bastet, fairly tuned — the strongest single result of the review
+
+The head-to-head scored Bastet on its shipped rule: positive iff any of 53 detectors
+fires. Nobody checked whether a *better* Bastet configuration exists. One does.
+
+`scripts/detector_baselines.py` recovers every detector's confusion matrix from the
+committed run summary — with 20 vulnerable and 20 patched samples, `fires_on_vuln × 20`
+is that detector's TP and `fires_on_safe × 20` is its FP, so no re-run is needed:
+
+| configuration | F1 | MCC | specificity |
+|---|---|---|---|
+| constant "vulnerable" | 0.6667 | 0.000 | 0.000 |
+| constant "safe" | 0.0000 | 0.000 | 1.000 |
+| Bastet as shipped, 53-way OR | 0.6667 | 0.000 | 0.000 |
+| **Bastet, best single detector** (`Lack of access control`) | **0.6909** | **+0.227** | 0.200 |
+| ARBITER, attempts=3 | 0.5455 | +0.267 | 0.800 |
+| ARBITER, attempts=5 | 0.5556 | +0.204 | 0.700 |
+
+Two consequences, both bad for this project's framing.
+
+**"Bastet scores MCC exactly 0.000" is true only of its shipped configuration.** Given
+one tuning decision — use the best detector instead of OR-ing 53 — it reaches MCC 0.227
+and F1 0.6909, beating ARBITER on F1 by a wider margin than the shipped version did. The
+argument that Bastet is *structurally* uninformative was resting on an untuned baseline.
+
+**At attempts=5 ARBITER's MCC (0.204) is below that tuned baseline (0.227)**, exactly as
+the review said.
+
+The one thing that keeps this from being a clean loss is that picking the best detector
+by looking at the answers is test-set selection, so 0.227 is an optimistic ceiling for
+Bastet rather than a number it would achieve in deployment. But that cuts both ways and
+does not rescue us: `attempts=3` was chosen the same way, on the same 40 samples, so
+ARBITER's 0.267 is an optimistic ceiling too. Neither number is honest as a deployment
+estimate, and comparing two ceilings is not a comparison.
+
+The k-of-N vote sweep — the other obvious tuning of Bastet — still cannot be run,
+because the per-sample rows were never committed and the test machine is unreachable.
+`--jobs` computes it as soon as `h2h-bastet.jobs.jsonl` is in the repository. Until then
+the tuned-Bastet ceiling above is a lower bound on what a tuned Bastet reaches.
+
+## Revised bottom line
+
+ARBITER is not shown to beat Bastet. Against the shipped configuration it wins
+specificity and loses F1 and recall, with everything else inside the noise once the
+bootstrap is fixed. Against a Bastet given one tuning decision, it loses F1 outright and
+its MCC advantage shrinks to 0.267 vs 0.227 — a gap far below what 40 samples and a
+minimum detectable split of 0.788 can resolve.
+
+The architectural claim that survives is narrow and qualitative: ARBITER's positives are
+accompanied by executions that its own harness ran and adjudicated, and Bastet's are not.
+That is a statement about what the two systems can produce, not about which scores better,
+and this report should not have been written as though the second followed from the first.
