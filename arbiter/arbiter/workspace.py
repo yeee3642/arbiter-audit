@@ -388,6 +388,8 @@ import "./Vm.sol";
 
 interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
 
+error ArbiterNoGain(uint256 honestGain, uint256 attackGain);
+
 {attacker_code}
 
 contract TestArbiterExploit is Harness {{
@@ -484,10 +486,13 @@ _PROFIT_BODY = """        address ctrl = address(uint160(uint256(keccak256("arbi
         uint256 atkPost = {measure_atk};
         uint256 attackGain = atkPost > atkPre ? atkPost - atkPre : 0;
 
-        require(
-            attackGain > honestGain,
-            "ARBITER: attacker did no better than an honest user of this contract"
-        );"""
+        // A custom error rather than a require string, so the two quantities reach the
+        // agent. "did not satisfy the predicate" told it nothing it could act on; the
+        // actual pair of numbers tells it whether the attack extracted nothing at all,
+        // or extracted something and was outrun by an over-generous honest baseline.
+        if (attackGain <= honestGain) {{
+            revert ArbiterNoGain(honestGain, attackGain);
+        }}"""
 
 
 # Denial of service is a real vulnerability class that no profit predicate can express:
