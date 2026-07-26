@@ -260,6 +260,18 @@ class Workspace:
         safe = re.sub(r"[^A-Za-z0-9_]", "", name) or "Poc"
         if not safe.endswith("Poc"):
             safe = f"{safe}Poc"
+
+        # Retire every earlier PoC before writing this one. `forge build` compiles the
+        # whole test directory, so a single malformed exploratory PoC left on disk makes
+        # every LATER build fail with ITS errors -- and the agent, reading a compiler
+        # error about a file it has moved on from, cannot fix the file it is actually
+        # working on. This was the dominant cause of compile failures: 72 "Undeclared
+        # identifier" errors, most of them belonging to abandoned probes rather than to
+        # the exploit being compiled. Each PoC is independent, so only the current one
+        # ever needs to build.
+        for stale in (self.root / "test").glob("*.t.sol"):
+            stale.unlink()
+
         path = self.root / "test" / f"{safe}.t.sol"
         path.write_text(solidity, encoding="utf-8")
         self.pocs[safe] = solidity
