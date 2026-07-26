@@ -1,0 +1,394 @@
+{
+  "4naly3er__0": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-blockNumberL",
+    "model": "gpt-4o-mini",
+    "chars": 3901,
+    "mojibake": 0
+  },
+  "4naly3er__1": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-GAS-ERC721usage",
+    "model": "gpt-4o-mini",
+    "chars": 4547,
+    "mojibake": 0
+  },
+  "4naly3er__2": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-GAS-addPlusEqual",
+    "model": "gpt-4o-mini",
+    "chars": 285,
+    "mojibake": 0
+  },
+  "4naly3er__3": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-GAS-_msgSender",
+    "model": "gpt-4o-mini",
+    "chars": 3166,
+    "mojibake": 0
+  },
+  "4naly3er__4": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-H-comparisonOutsideCondition",
+    "model": "gpt-4o-mini",
+    "chars": 2935,
+    "mojibake": 0
+  },
+  "4naly3er__5": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-H-wstETHPriceStEth",
+    "model": "gpt-4o-mini",
+    "chars": 2841,
+    "mojibake": 0
+  },
+  "4naly3er__6": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-H-delegateCallInLoop",
+    "model": "gpt-4o-mini",
+    "chars": 3034,
+    "mojibake": 0
+  },
+  "4naly3er__7": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-H-get_dy_underlyingFlashLoan",
+    "model": "gpt-4o-mini",
+    "chars": 2870,
+    "mojibake": 0
+  },
+  "4naly3er__8": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-H-msg.valueInLoop",
+    "model": "gpt-4o-mini",
+    "chars": 3831,
+    "mojibake": 0
+  },
+  "4naly3er__9": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-FoTTokens",
+    "model": "gpt-4o-mini",
+    "chars": 2105,
+    "mojibake": 0
+  },
+  "4naly3er__10": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-NFTRedefinesMint",
+    "model": "gpt-4o-mini",
+    "chars": 2105,
+    "mojibake": 0
+  },
+  "4naly3er__11": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-approve0first",
+    "model": "gpt-4o-mini",
+    "chars": 3340,
+    "mojibake": 1
+  },
+  "4naly3er__12": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-avoidTx.origin",
+    "model": "gpt-4o-mini",
+    "chars": 3150,
+    "mojibake": 0
+  },
+  "4naly3er__13": {
+    "workflow": "4naly3er.json",
+    "node": "4naly3er-M-centralizationRisk",
+    "model": "gpt-4o-mini",
+    "chars": 5745,
+    "mojibake": 0
+  },
+  "access_control__0": {
+    "workflow": "access_control.json",
+    "node": "Lack of two-step process for contract ownership changes",
+    "model": "gpt-4o-mini",
+    "chars": 3669,
+    "mojibake": 0
+  },
+  "access_control__1": {
+    "workflow": "access_control.json",
+    "node": "Lack of access control",
+    "model": "gpt-4o-mini",
+    "chars": 3618,
+    "mojibake": 0
+  },
+  "chainlink__0": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Not Checking For Down L2 Sequencer",
+    "model": "gpt-4o-mini",
+    "chars": 2790,
+    "mojibake": 0
+  },
+  "chainlink__1": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Not Checking For Stale Prices",
+    "model": "gpt-4o-mini",
+    "chars": 2135,
+    "mojibake": 0
+  },
+  "chainlink__2": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Same Heartbeat Used For Multiple Price Feeds",
+    "model": "gpt-4o-mini",
+    "chars": 2519,
+    "mojibake": 0
+  },
+  "chainlink__3": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Oracle Price Feeds Not Updated Frequently",
+    "model": "gpt-4o-mini",
+    "chars": 2838,
+    "mojibake": 0
+  },
+  "chainlink__4": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Request Confirmation < Depth of Chain Re-Orgs",
+    "model": "gpt-4o-mini",
+    "chars": 3535,
+    "mojibake": 0
+  },
+  "chainlink__5": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Assuming Oracle Price Precision",
+    "model": "gpt-4o-mini",
+    "chars": 1770,
+    "mojibake": 0
+  },
+  "chainlink__6": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Incorrect Oracle Price Feed Address",
+    "model": "gpt-4o-mini",
+    "chars": 2143,
+    "mojibake": 0
+  },
+  "chainlink__7": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Oracle Price Updates Can Be Front-Run",
+    "model": "gpt-4o-mini",
+    "chars": 1752,
+    "mojibake": 0
+  },
+  "chainlink__8": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Unhandled Oracle Revert Denial Of Service",
+    "model": "gpt-4o-mini",
+    "chars": 2014,
+    "mojibake": 0
+  },
+  "chainlink__9": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Unhandled Depeg Of Bridged Assets",
+    "model": "gpt-4o-mini",
+    "chars": 1729,
+    "mojibake": 0
+  },
+  "chainlink__10": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Oracle Returns Incorrect Price During Flash Crashes",
+    "model": "gpt-4o-mini",
+    "chars": 2620,
+    "mojibake": 0
+  },
+  "chainlink__11": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Placing Bets After Randomness Request",
+    "model": "gpt-4o-mini",
+    "chars": 2105,
+    "mojibake": 0
+  },
+  "chainlink__12": {
+    "workflow": "chainlink.json",
+    "node": "Chainlink-Re-requesting Randomness",
+    "model": "gpt-4o-mini",
+    "chars": 1727,
+    "mojibake": 0
+  },
+  "denial_of_service__0": {
+    "workflow": "denial_of_service.json",
+    "node": "Unbounded loop",
+    "model": "gpt-4o-mini",
+    "chars": 3144,
+    "mojibake": 0
+  },
+  "denial_of_service__1": {
+    "workflow": "denial_of_service.json",
+    "node": "Integration/Logical error",
+    "model": "gpt-4o-mini",
+    "chars": 3660,
+    "mojibake": 0
+  },
+  "denial_of_service__2": {
+    "workflow": "denial_of_service.json",
+    "node": "Refund failed",
+    "model": "gpt-4o-mini",
+    "chars": 2799,
+    "mojibake": 0
+  },
+  "erc4626__0": {
+    "workflow": "erc4626.json",
+    "node": "ERC4626-Rounding",
+    "model": "gpt-4o-mini",
+    "chars": 2393,
+    "mojibake": 1
+  },
+  "erc4626__1": {
+    "workflow": "erc4626.json",
+    "node": "ERC4626-Global and user-specific limits",
+    "model": "gpt-4o-mini",
+    "chars": 2177,
+    "mojibake": 0
+  },
+  "erc4626__2": {
+    "workflow": "erc4626.json",
+    "node": "ERC4626-Fee",
+    "model": "gpt-4o-mini",
+    "chars": 2377,
+    "mojibake": 0
+  },
+  "flashloan": {
+    "workflow": "flashloan.json",
+    "node": "COT - flashloan manipulation attack",
+    "model": "os-azure-gpt5-chat",
+    "chars": 9851,
+    "mojibake": 1
+  },
+  "owasp2025__0": {
+    "workflow": "owasp2025.json",
+    "node": "SC01:2025 - Improper Access Control",
+    "model": "gpt-4o-mini",
+    "chars": 2981,
+    "mojibake": 0
+  },
+  "owasp2025__1": {
+    "workflow": "owasp2025.json",
+    "node": "SC02:2025 - Price Oracle Manipulation",
+    "model": "gpt-4o-mini",
+    "chars": 4418,
+    "mojibake": 0
+  },
+  "owasp2025__2": {
+    "workflow": "owasp2025.json",
+    "node": "SC03:2025 - Logic Errors",
+    "model": "gpt-4o-mini",
+    "chars": 4642,
+    "mojibake": 0
+  },
+  "owasp2025__3": {
+    "workflow": "owasp2025.json",
+    "node": "SC04:2025 - Lack of Input Validation",
+    "model": "gpt-4o-mini",
+    "chars": 3090,
+    "mojibake": 0
+  },
+  "owasp2025__4": {
+    "workflow": "owasp2025.json",
+    "node": "SC05:2025 - Reentrancy",
+    "model": "gpt-4o-mini",
+    "chars": 3287,
+    "mojibake": 0
+  },
+  "owasp2025__5": {
+    "workflow": "owasp2025.json",
+    "node": "SC07:2025 - Flash Loan Attacks",
+    "model": "gpt-4o-mini",
+    "chars": 2478,
+    "mojibake": 0
+  },
+  "owasp2025__6": {
+    "workflow": "owasp2025.json",
+    "node": "SC08:2025 - Integer Overflow and Underflow",
+    "model": "gpt-4o-mini",
+    "chars": 4763,
+    "mojibake": 0
+  },
+  "owasp2025__7": {
+    "workflow": "owasp2025.json",
+    "node": "SC09:2025 - Insecure Randomness",
+    "model": "gpt-4o-mini",
+    "chars": 4998,
+    "mojibake": 0
+  },
+  "owasp2025__8": {
+    "workflow": "owasp2025.json",
+    "node": "SC10:2025 - Denial Of Service",
+    "model": "gpt-4o-mini",
+    "chars": 526,
+    "mojibake": 0
+  },
+  "owasp2025__9": {
+    "workflow": "owasp2025.json",
+    "node": "SC06:2025 - Unchecked External Calls",
+    "model": "gpt-4o-mini",
+    "chars": 2964,
+    "mojibake": 0
+  },
+  "slippage__0": {
+    "workflow": "slippage.json",
+    "node": "Slippage-No Slippage Parameter",
+    "model": "gpt-4o-mini",
+    "chars": 2021,
+    "mojibake": 0
+  },
+  "slippage__1": {
+    "workflow": "slippage.json",
+    "node": "Slippage-No Expiration Deadline",
+    "model": "gpt-4o-mini",
+    "chars": 2554,
+    "mojibake": 0
+  },
+  "slippage__2": {
+    "workflow": "slippage.json",
+    "node": "Slippage-Incorrect Slippage Calculation",
+    "model": "gpt-4o-mini",
+    "chars": 2870,
+    "mojibake": 0
+  },
+  "slippage__3": {
+    "workflow": "slippage.json",
+    "node": "Slippage-Mismatched Slippage Precision",
+    "model": "gpt-4o-mini",
+    "chars": 2749,
+    "mojibake": 0
+  },
+  "slippage__4": {
+    "workflow": "slippage.json",
+    "node": "Slippage-Minting Exposes Users To Unlimited Slippage",
+    "model": "gpt-4o-mini",
+    "chars": 2958,
+    "mojibake": 0
+  },
+  "slippage__5": {
+    "workflow": "slippage.json",
+    "node": "Slippage-MinTokensOut For Intermediate, Not Final Amount",
+    "model": "gpt-4o-mini",
+    "chars": 3455,
+    "mojibake": 1
+  },
+  "slippage__6": {
+    "workflow": "slippage.json",
+    "node": "Slippage-On-Chain Slippage Calculation Can Be Manipulated",
+    "model": "gpt-4o-mini",
+    "chars": 2880,
+    "mojibake": 0
+  },
+  "slippage__7": {
+    "workflow": "slippage.json",
+    "node": "Slippage-Hard-coded Slippage May Freeze User Funds",
+    "model": "gpt-4o-mini",
+    "chars": 3241,
+    "mojibake": 1
+  },
+  "slippage__8": {
+    "workflow": "slippage.json",
+    "node": "Slippage-Zero Slippage Required",
+    "model": "gpt-4o-mini",
+    "chars": 1163,
+    "mojibake": 0
+  },
+  "slippage_min_amount": {
+    "workflow": "slippage_min_amount.json",
+    "node": "COT - slippage min amount",
+    "model": "gpt-4o-mini",
+    "chars": 7088,
+    "mojibake": 3
+  }
+}
