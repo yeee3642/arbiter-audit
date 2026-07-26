@@ -37,6 +37,25 @@ def main() -> int:
     s.add_argument("--summary", type=Path, required=True)
     s.add_argument("--evalset", type=Path, required=True)
 
+    ba = sub.add_parser("bastet", help="run the Bastet baseline arm")
+    ba.add_argument("--evalset", type=Path, required=True)
+    ba.add_argument("--prompts", type=Path, required=True)
+    ba.add_argument("--model", required=True)
+    ba.add_argument("--run-id", required=True)
+    ba.add_argument("--out", type=Path, default=Path("runs"))
+    ba.add_argument("--repeats", type=int, default=1)
+    ba.add_argument("--concurrency", type=int, default=12)
+    ba.add_argument("--max-tokens", type=int, default=4096)
+    ba.add_argument("--rpm", type=int, default=110)
+
+    rc = sub.add_parser(
+        "reconstruct", help="restore compilation context for non-compiling samples"
+    )
+    rc.add_argument("--evalset", type=Path, required=True)
+    rc.add_argument("--out", type=Path, required=True)
+    rc.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
+    rc.add_argument("--rpm", type=int, default=110)
+
     c = sub.add_parser("compare", help="paired comparison of two arms")
     c.add_argument("--a", type=Path, required=True, help="baseline arm summary")
     c.add_argument("--b", type=Path, required=True, help="challenger arm summary")
@@ -69,6 +88,96 @@ def main() -> int:
                                               "recall", "specificity", "f1", "mcc")
                           if k in agg}, indent=1))
         print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "bastet":
+        from arbiter.bastet_arm import run_bastet
+
+        summary = run_bastet(
+            evalset=args.evalset,
+            prompts_dir=args.prompts,
+            model=args.model,
+            run_id=args.run_id,
+            out_dir=args.out,
+            repeats=args.repeats,
+            concurrency=args.concurrency,
+            max_tokens=args.max_tokens,
+            rpm=args.rpm,
+        )
+        _, items = load_evalset(args.evalset)
+        truth = truth_map(items)
+        runs = list(summary["predictions_by_repeat"].values())
+        agg = summarise_runs(runs, truth)
+        summary["scored"] = agg
+        (args.out / f"{args.run_id}.summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        print(json.dumps(agg, indent=1))
+        print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "reconstruct":
+        from arbiter.gateway import Gateway
+        from arbiter.reconstruct import pair_key, reconstruct_group
+
+        data = json.loads(args.evalset.read_text(encoding="utf-8"))
+        items = data["items"]
+        gw = Gateway(model=args.model, rpm=args.rpm)
+
+        groups: dict[str, list] = {}
+        for item in items:
+            groups.setdefault(pair_key(item["id"]), []).append(item)
+
+        rebuilt: dict[str, str] = {}
+        report = []
+        for key, group in groups.items():
+            names = ", ".join(g["id"] for g in group)
+            res = reconstruct_group(gw, group, Path("/tmp/arbiter-recon"))
+            status = "native" if res.attempts == 0 else ("OK" if res.ok else "FAILED")
+            print(f"[{status:6s}] {key:20s} attempts={res.attempts}  {names}")
+            if not res.ok:
+                print(f"          {res.error}")
+            for g in group:
+                if res.ok:
+                    rebuilt[g["id"]] = res.sources[g["id"]]
+            report.append({
+                "group": key, "samples": [g["id"] for g in group], "ok": res.ok,
+                "attempts": res.attempts, "error": res.error,
+                "preserved": res.preserved, "native": res.attempts == 0,
+            })
+
+        out_items = []
+        for item in items:
+            if item["id"] not in rebuilt:
+                continue
+            new = dict(item)
+            new["code"] = rebuilt[item["id"]]
+            new["reconstructed"] = any(
+                r["group"] == pair_key(item["id"]) and not r["native"] for r in report
+            )
+            out_items.append(new)
+
+        meta = dict(data.get("meta", {}))
+        meta["derived_from"] = str(args.evalset)
+        meta["n"] = len(out_items)
+        meta["n_vuln"] = sum(1 for i in out_items if i["label"] == "vuln")
+        meta["n_safe"] = sum(1 for i in out_items if i["label"] == "safe")
+        meta["reconstruction"] = (
+            "Samples that did not compile had their stripped compilation context "
+            "restored by an LLM under three enforced constraints: additions only, every "
+            "significant original line verified present verbatim, and one shared prelude "
+            "per vulnerable/patched pair so the pair still differs only by the fix. "
+            "Stubs are ours, not the original project's, so reconstructed and natively "
+            "compiling samples are reported separately."
+        )
+        meta["reconstruction_report"] = report
+        args.out.write_text(
+            json.dumps({"meta": meta, "items": out_items}, ensure_ascii=False, indent=1),
+            encoding="utf-8",
+        )
+        n_ok = sum(1 for r in report if r["ok"])
+        print(f"\n{n_ok}/{len(report)} groups usable -> {len(out_items)} samples")
+        print(f"usage: {json.dumps(gw.usage.as_dict())}")
         return 0
 
     if args.cmd == "score":
