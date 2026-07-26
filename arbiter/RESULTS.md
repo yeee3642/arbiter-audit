@@ -151,3 +151,114 @@ The gap is still recall, and two rounds of tuning did not close it: 9 of 20 prov
 3 attempts, 10 of 20 at 5. Every one of those samples is provably exploitable inside this
 harness. Closing it needs better exploit construction, which is a research problem rather
 than a configuration one, and guessing at it costs roughly $15 and an hour per attempt.
+
+---
+
+# Adversarial review, and what it broke
+
+An independent review attacked this report. Nearly all of it lands. The findings are
+recorded here rather than quietly patched, and the headline above should be read through
+them.
+
+## Confirmed defects in our own instrument
+
+**The bootstrap was stratifying its own resamples.** `_Lcg` used a power-of-two modulus
+with odd multiplier and increment, so its low bit alternated deterministically — index
+parities ran `1,0,1,0,1,0`. The evaluation set alternates vulnerable and patched by
+index, so parity *is* the label, and every resample was forced to contain exactly 20 of
+each: 10,000 of 10,000, measured. That is stratified, not i.i.d., resampling, and it
+removes the dominant variance term in a paired comparison on a balanced set. Every
+interval was too narrow, in our favour. Fixed; resample composition now spreads 9..31.
+
+**Corrected intervals, ARBITER minus Bastet:**
+
+| metric | delta | 95% CI | excludes 0 |
+|---|---|---|---|
+| F1 | −0.1212 | [−0.3498, +0.0974] | no |
+| precision | +0.1923 | [−0.0250, +0.4143] | no |
+| **MCC** | **+0.2669** | **[−0.0367, +0.5525]** | **no** |
+| accuracy | +0.1250 | [−0.1250, +0.3750] | no |
+| recall | −0.5500 | [−0.7692, −0.3333] | **yes, favours Bastet** |
+| specificity | +0.8000 | [+0.6111, +0.9524] | yes, favours ARBITER |
+
+The metric this project promoted as decisive, MCC, **does not significantly differ from
+Bastet's**. The only significant results are that Bastet has better recall and ARBITER
+has better specificity.
+
+**Only the losing metric had an interval.** `cli.py` computed a CI for F1 alone. MCC and
+specificity — the two carrying the claim — never got one, and MCC's includes zero. Fixed:
+all six metrics now get intervals.
+
+**`specificity` cannot be a headline, and our fairness machinery was asymmetric.** A
+predictor that reads nothing and always answers "safe" scores specificity **1.000**,
+beating ARBITER's 0.800 outright. `constant_yes_baseline` existed; `constant_no_baseline`
+did not. Added. Both degenerate predictors score MCC 0.000 — which is the actual reason
+MCC belongs in a headline and specificity does not.
+
+**`"underpowered": false` was misleading.** The flag fired only below 6 discordant pairs,
+which answers "could this ever reach p<0.05", not "could it detect a real effect". At 27
+discordant pairs the minimum detectable split is **0.788**: about four fifths of all
+disagreements would have to fall one way before this design could call it. Renamed and
+joined by an explicit MDE.
+
+**`repeats=1` violates this suite's own docstring**, which states that every headline
+number must be a mean over repeats and never a single run, because the gateway is
+nondeterministic and offers no seed. The reported run is a single pass, and it recorded
+**two different vLLM fingerprints**, so even within it the backend was not constant.
+
+**The 3-vs-5 ablation has no committed artifacts.** `runs/` holds three files and the
+ablation commit added none. Every number in that table is prose, which is precisely what
+this project says a finding must not be. The attempts=5 run was overwritten on the test
+machine before being copied back, and that machine is currently unreachable, so the
+artifacts may be unrecoverable. The table stands as an unverified claim until they are.
+
+## Confirmed weaknesses in the argument
+
+**"Degree, not kind" undermines the foundation.** Conceding that more attempts push false
+positives from 4 to 6 concedes that the predicate is a stricter heuristic rather than a
+proof. "Proof-carrying" then means "a checker that brute-force search can defeat", which
+is a weaker thing than this project has been claiming.
+
+**At 5 attempts, ARBITER's MCC (0.204) is below Bastet's best single detector (0.227).**
+Not noticed until the review pointed it out.
+
+**`attempts=3` was selected by comparing two configurations on the only evaluation set
+there is.** That is model selection on the test set. The headline configuration is
+therefore tuned on the data it is reported against.
+
+**`require_honest` is asymmetric.** Admission runs with `require_honest=False`; the agent
+defaults to `True`. So the claim that "all 11 false negatives are provably exploitable"
+is established under a *weaker* predicate than the one the agent must satisfy. The
+samples are provable; they are not proven provable under the agent's own bar.
+
+## Confirmed limits on generalisation
+
+**The benchmark is self-authored with a 100% admission rate**, at toy scale — roughly
+1,600 characters, single file, no inheritance, against real Code4rena targets of
+thousands of lines across many files. 20 of 20 offered pairs were admitted, which is
+itself a warning sign about how hard the bar is.
+
+**Per-sample per-detector data was discarded from the committed summary**, which keeps
+only aggregate `fires_on_vuln` / `fires_on_safe`. A "k of N detectors must fire" voting
+baseline therefore cannot be evaluated from what is in this repository, so Bastet was
+never given a fairly tuned decision threshold. The raw rows exist in
+`h2h-bastet.jobs.jsonl` on the test machine and should be committed.
+
+**The compute is not matched.** ARBITER spent 23.4M prompt tokens across 3 attempts;
+Bastet spent 3.8M in a single pass with no re-check. `BENCH_PROTOCOL` clause 3 requires an
+equal-request control when the challenger samples repeatedly; that was waived on the
+grounds that ARBITER used fewer *requests*, which is true and is not the same thing as
+matched compute. Bastet is owed a 3-sample majority-vote arm before any architectural
+claim is safe.
+
+## What survives
+
+That both degenerate predictors score MCC 0.000 while Bastet also scores exactly 0.000,
+having flagged all 20 patched contracts, and that ARBITER's positives are backed by
+executions its own harness ran. That is a qualitative statement about what the two
+systems can express, and it does not depend on any of the intervals above.
+
+What does not survive is the claim of a measured advantage. On this evaluation set, at
+this sample size, with the corrected bootstrap, **ARBITER is not shown to beat Bastet on
+any metric except specificity — and a predictor that always answers "safe" beats them
+both on that.**
