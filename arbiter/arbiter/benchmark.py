@@ -118,7 +118,7 @@ def verify_pair(
                 observed_getter=getter,
                 token_expr=pair.get("token_expr", "") or "",
                 attack_body=pair.get("attack_body", "") or "",
-                honest_body=pair.get("honest_body", "") or "",
+                honest_body=pair.get("honest_body", "") or "{}",
                 mode=pair.get("mode", "contract") or "contract",
                 require_honest=False,
             )

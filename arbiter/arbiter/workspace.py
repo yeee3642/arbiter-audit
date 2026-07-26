@@ -162,7 +162,7 @@ class Workspace:
         """
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
-        if predicate != "state_change" and not honest_body.strip():
+        if not honest_body.strip():
             if require_honest:
                 raise ValueError(
                     "profit predicates need honest_body: the statements an ordinary, "
@@ -200,9 +200,11 @@ class Workspace:
                 if mode == "contract"
                 else _EOA_ACTION.format(attack_body=_indent(attack_body, 8))
             )
-            check = _STATE_CHANGE_BODY.replace(
-                "__GETTER__", observed_getter.strip()
-            ).replace("__ACTION__", action)
+            check = (
+                _STATE_CHANGE_BODY.replace("__GETTER__", observed_getter.strip())
+                .replace("__ACTION__", action)
+                .replace("__HONEST__", _indent(honest_body, 8))
+            )
         else:
             # Profit alone does not mean a vulnerability. The reentrancy pair proves it:
             # UtopiaVault pays every caller a 1 ether airdrop by design, so
@@ -394,15 +396,34 @@ _EOA_ACTION = """        vm.startPrank(eoa, eoa);
 # Did privileged state move when an unprivileged account acted? Read through a
 # staticcall before and after, so any public view function works and the harness never
 # needs to know the contract's type.
-_STATE_CHANGE_BODY = """        (bool okPre, bytes memory pre) =
+_STATE_CHANGE_BODY = """        (bool ok0, bytes memory v0) =
             address(target).staticcall(abi.encodeWithSignature("__GETTER__"));
-        require(okPre, "ARBITER: observed_getter did not execute before the attack");
-__ACTION__
-        (bool okPost, bytes memory post) =
+        require(ok0, "ARBITER: observed_getter did not execute");
+
+        // First establish that the state named really is privileged: an ordinary user
+        // running the intended happy path must NOT be able to move it. Without this the
+        // predicate accepts any mutation at all, which is how a patched sample was
+        // reported as vulnerable for "changing" coverageRatio() -- a view over the
+        // contract balance that ordinary staking moves too.
+        address ctrl = address(uint160(uint256(keccak256("arbiter.control"))));
+        vm.deal(ctrl, 10000000000000000000);
+        vm.startPrank(ctrl, ctrl);
+__HONEST__
+        vm.stopPrank();
+        (bool ok1, bytes memory v1) =
             address(target).staticcall(abi.encodeWithSignature("__GETTER__"));
-        require(okPost, "ARBITER: observed_getter did not execute after the attack");
+        require(ok1, "ARBITER: observed_getter did not execute after the honest path");
         require(
-            keccak256(pre) != keccak256(post),
+            keccak256(v0) == keccak256(v1),
+            "ARBITER: ordinary use already moves this state, so it is not privileged"
+        );
+
+__ACTION__
+        (bool ok2, bytes memory v2) =
+            address(target).staticcall(abi.encodeWithSignature("__GETTER__"));
+        require(ok2, "ARBITER: observed_getter did not execute after the attack");
+        require(
+            keccak256(v1) != keccak256(v2),
             "ARBITER: privileged state did not change"
         );"""
 
