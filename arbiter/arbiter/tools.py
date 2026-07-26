@@ -83,12 +83,19 @@ def tool_schemas() -> list[dict[str, Any]]:
                     "e.g. 'UtopiaVault target = new UtopiaVault{value: 10 ether}();'; "
                     "(b) attacker_code must define a contract literally named 'Attacker' "
                     "with 'constructor(address)' and a function 'attack() external'; it "
-                    "may also define helper contracts and a receive() function. The "
-                    "harness funds the Attacker, records the measurement, calls "
-                    "attack(), and then checks the predicate. Choose eth_profit to prove "
-                    "the attacker ends up with more ether than it was given, or "
-                    "state_change to prove privileged state moved when an unprivileged "
-                    "account acted."
+                    "may also define helper contracts and a receive() function. "
+                    "IMPORTANT: if the target guards with require(msg.sender == "
+                    "tx.origin), a contract attacker is impossible -- set mode='eoa' "
+                    "instead and supply attack_body, plain Solidity statements that the "
+                    "harness runs from a real externally owned account under "
+                    "vm.startPrank(eoa, eoa), operating on the variable 'target'. "
+                    "deploy_code may also set up scenario state (fund the contract, "
+                    "have the owner airdrop to eoa) before the measurement starts. "
+                    "Predicates: eth_profit (attacker ends up with more ether), "
+                    "token_profit (attacker's balance of the token named by token_expr "
+                    "goes up -- use this whenever the value stolen is an ERC20), or "
+                    "state_change (privileged state moved when an unprivileged account "
+                    "acted)."
                 ),
                 "parameters": {
                     "type": "object",
@@ -111,7 +118,31 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "predicate": {
                             "type": "string",
-                            "enum": ["eth_profit", "state_change"],
+                            "enum": ["eth_profit", "token_profit", "state_change"],
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["contract", "eoa"],
+                            "description": (
+                                "contract: you supply attacker_code. eoa: you supply "
+                                "attack_body and the calls come from a real EOA, which "
+                                "is the only way past a tx.origin check."
+                            ),
+                        },
+                        "attack_body": {
+                            "type": "string",
+                            "description": (
+                                "For mode='eoa'. Solidity statements run as the "
+                                "attacker EOA, e.g. 'target.redeem(1000e9);'"
+                            ),
+                        },
+                        "token_expr": {
+                            "type": "string",
+                            "description": (
+                                "For token_profit. A Solidity expression for the token "
+                                "whose balance should rise, e.g. 'address(usdg)' -- it "
+                                "must be in scope from deploy_code."
+                            ),
                         },
                         "observed_getter": {
                             "type": "string",
@@ -123,13 +154,7 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "hypothesis": {"type": "string"},
                     },
-                    "required": [
-                        "name",
-                        "deploy_code",
-                        "attacker_code",
-                        "predicate",
-                        "hypothesis",
-                    ],
+                    "required": ["name", "deploy_code", "predicate", "hypothesis"],
                 },
             },
         },
@@ -441,11 +466,18 @@ class ToolDispatcher:
         repeated = squashed and squashed in self._hypotheses
         self._hypotheses.append(squashed)
 
-        if "contract Attacker" not in attacker_code:
+        mode = str(args.get("mode") or ("eoa" if args.get("attack_body") else "contract"))
+        attack_body = str(args.get("attack_body") or "")
+
+        if mode == "contract" and "contract Attacker" not in attacker_code:
             return (
-                "error: attacker_code must define a contract named exactly 'Attacker'.",
+                "error: mode='contract' needs attacker_code defining a contract named "
+                "exactly 'Attacker'. If the target requires msg.sender == tx.origin, "
+                "use mode='eoa' with attack_body instead.",
                 False,
             )
+        if mode == "eoa" and not attack_body.strip():
+            return "error: mode='eoa' needs attack_body statements.", False
         if "target" not in deploy_code:
             return (
                 "error: deploy_code must assign the contract under audit to a variable "
@@ -459,6 +491,9 @@ class ToolDispatcher:
                 attacker_code=attacker_code,
                 predicate=predicate,
                 observed_getter=str(args.get("observed_getter") or ""),
+                token_expr=str(args.get("token_expr") or ""),
+                attack_body=attack_body,
+                mode=mode,
             )
         except ValueError as exc:
             return f"error: {exc}", False
