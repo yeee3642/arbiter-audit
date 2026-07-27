@@ -77,7 +77,8 @@ def diff_line_count(a: str, b: str) -> int:
 
 
 def verify_pair(
-    pair: dict[str, Any], workspace_root: Path, keep_failed: bool = False
+    pair: dict[str, Any], workspace_root: Path, keep_failed: bool = False,
+    strict: bool = False,
 ) -> PairVerdict:
     """Run the four admission checks on one pair."""
     slug = pair["slug"]
@@ -119,9 +120,9 @@ def verify_pair(
                 token_expr=pair.get("token_expr", "") or "",
                 liveness_call=pair.get("liveness_call", "") or "",
                 attack_body=pair.get("attack_body", "") or "",
-                honest_body=pair.get("honest_body", "") or "{}",
+                honest_body=pair.get("honest_body", "") or ("" if strict else "{}"),
                 mode=pair.get("mode", "contract") or "contract",
-                require_honest=False,
+                require_honest=strict,
             )
         except ValueError as exc:
             verdict.reasons.append(f"{half}: bad exploit spec: {exc}")
@@ -173,12 +174,13 @@ def build_evalset(
     workspace_root: Path,
     out_path: Path,
     source_note: str = "",
+    strict: bool = False,
 ) -> dict[str, Any]:
     """Verify every pair and emit an evalset containing only the admitted ones."""
     verdicts = []
     items = []
     for pair in pairs:
-        verdict = verify_pair(pair, workspace_root)
+        verdict = verify_pair(pair, workspace_root, strict=strict)
         verdicts.append(verdict)
         mark = "ADMIT " if verdict.admitted else "REJECT"
         print(
@@ -215,6 +217,7 @@ def build_evalset(
         )
 
     meta = {
+        "strict_admission": strict,
         "n": len(items),
         "n_vuln": sum(1 for i in items if i["label"] == "vuln"),
         "n_safe": sum(1 for i in items if i["label"] == "safe"),

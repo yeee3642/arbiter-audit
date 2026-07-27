@@ -69,6 +69,8 @@ def main() -> int:
     bm.add_argument("--pairs", type=Path, required=True)
     bm.add_argument("--out", type=Path, required=True)
     bm.add_argument("--note", default="")
+    bm.add_argument("--strict", action="store_true",
+                    help="require honest_body, matching the bar the agent is held to")
 
     c = sub.add_parser("compare", help="paired comparison of two arms")
     c.add_argument("--a", type=Path, required=True, help="baseline arm summary")
@@ -203,7 +205,8 @@ def main() -> int:
         raw = json.loads(args.pairs.read_text(encoding="utf-8"))
         pairs = raw["pairs"] if isinstance(raw, dict) else raw
         meta = build_evalset(
-            pairs, Path("/tmp/arbiter-bench"), args.out, source_note=args.note
+            pairs, Path("/tmp/arbiter-bench"), args.out, source_note=args.note,
+            strict=args.strict,
         )
         print(
             f"\n{meta['pairs_admitted']}/{meta['pairs_offered']} pairs admitted "
