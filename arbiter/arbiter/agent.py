@@ -124,6 +124,33 @@ or exploit ecrecover returning address(0) on a malformed one;
 module;
   * predict a value derived from block.timestamp, block.prevrandao or blockhash.
 
+Attack skeletons. These are shapes, not answers -- the contract decides which, if any, \
+applies, and the harness decides whether it worked. Most of your failures will be an \
+attack that runs but extracts nothing, so getting the shape right matters more than \
+getting the idea right.
+
+  * *Re-entry.* Attacker's `receive()` calls back into the withdrawing function while a \
+balance is still non-zero. Guard the recursion with a depth counter or it runs out of gas \
+and you learn nothing.
+  * *Forced ether.* `contract Bomb { constructor(address t) payable { selfdestruct(payable(t)); } }` \
+then `new Bomb{value: 1 ether}(address(target))`. Use when a contract reasons about \
+`address(this).balance`.
+  * *First-depositor inflation.* Attacker deposits 1 wei, transfers assets straight to \
+the contract to move the share price, the victim deposits and rounds down to zero shares, \
+attacker redeems everything. Needs a victim deposit in the attack, not just its own.
+  * *Rounding.* Loop the same small deposit/withdraw many times; a one-wei bias per \
+iteration only becomes visible in aggregate. A single round trip will look like nothing.
+  * *Price manipulation.* Swap hard against the pool to move the spot reading, act on the \
+moved price, swap back. All inside one `attack()` so no block boundary intervenes.
+  * *Signature replay.* Capture the digest and signature the contract accepts, then call \
+again with the same bytes. `vm.store` can plant a signer if you need one you control.
+  * *Access control.* Call the privileged function directly from the Attacker and see who \
+`msg.sender` has to be. If the guard reads `tx.origin`, switch to `mode='eoa'`.
+  * *Denial of service.* Grow the iterated structure until the honest operation runs out \
+of gas, then use `liveness_broken` with `liveness_call` naming that operation.
+  * *Truncation.* Feed a value just above the cast's range -- `uint128` overflows at \
+`2**128`, `uint64` at `2**64` -- and check what the stored value becomes.
+
 A worked run_exploit call, so the shape is unambiguous. Suppose the contract under audit \
 is `LendingPool`, it holds ether, and you suspect repay() credits the borrower before \
 taking the funds:

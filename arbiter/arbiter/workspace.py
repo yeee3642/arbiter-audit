@@ -369,6 +369,20 @@ contract Harness {
     function assertTrue(bool cond, string memory why) internal pure {
         require(cond, why);
     }
+
+    /// Render a uint so the harness can tell the auditor HOW MUCH it fell short by.
+    /// A bare "you did not profit" is a dead end; "you gained 1000000000000000000,
+    /// honest gained 1000000000000000000" says the attack merely reproduced the
+    /// intended behaviour, which points at what to change.
+    function _u(uint256 v) internal pure returns (string memory) {
+        if (v == 0) return "0";
+        uint256 n = v;
+        uint256 digits;
+        while (n != 0) { digits++; n /= 10; }
+        bytes memory buf = new bytes(digits);
+        while (v != 0) { digits--; buf[digits] = bytes1(uint8(48 + v % 10)); v /= 10; }
+        return string(buf);
+    }
 }
 """
 
@@ -516,5 +530,6 @@ __ACTION__
         (bool okAfter, ) = address(target).call(__CALL__);
         require(
             !okAfter,
-            "ARBITER: the honest operation still succeeds, so nothing was broken"
+            "ARBITER: the honest operation still succeeds after the attack, so "
+            "availability was not broken"
         );"""
