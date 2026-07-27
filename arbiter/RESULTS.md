@@ -432,3 +432,79 @@ hypotheses at the same rate it rejects incorrect ones, and it does not report wh
 
 The configuration this project stands behind remains `--attempts 3` with `ruled_out`
 disabled. The change is kept in the tree behind its flag, and this table is why it is off.
+
+---
+
+# The cascade: hypothesis refuted, one lead surviving
+
+Bastet's per-detector hits were fed to ARBITER as a hypothesis queue, ranked by
+corpus-wide rarity (unsupervised, no labels). The prediction was explicit: 8 of the 11
+missed vulnerabilities had an on-class detector fire, so supplying those classes should
+raise recall.
+
+**It did not. Recall fell from 0.450 to 0.300.**
+
+| arm | P | R | spec | F1 | acc | MCC |
+|---|---|---|---|---|---|---|
+| Bastet, shipped k≥1 | 0.500 | 1.000 | 0.000 | 0.6667 | 0.500 | +0.000 |
+| Bastet, tuned k≥9 | 0.526 | 1.000 | 0.100 | **0.6897** | 0.550 | +0.229 |
+| ARBITER alone, attempts=3 | 0.692 | 0.450 | 0.800 | 0.5455 | 0.625 | +0.267 |
+| **Cascade** | **0.857** | 0.300 | **0.950** | 0.4444 | 0.625 | **+0.329** |
+
+## Why the hypothesis failed
+
+Paired against ARBITER alone: **6 samples gained, 6 lost, p = 1.0000.** Every metric's
+bootstrap CI includes zero. The two configurations are indistinguishable.
+
+The direction of the flips is what refutes the mechanism:
+
+| | count | of which |
+|---|---|---|
+| gained | 6 | **4 were false positives removed**, only 2 were new proofs |
+| lost | 6 | **5 were vulnerabilities newly missed**, 1 a new false positive |
+
+The proposals did not supply missing hypotheses. They made the agent *more conservative* —
+it discarded more, both correctly and incorrectly. The 73% on-class ceiling measured no
+constraint that was actually binding: knowing the class was never what the agent lacked.
+Net true positives fell by 3.
+
+The plausible mechanism, unverified: fourteen mostly-noise classes cost turns. The agent
+spends its budget triaging a list instead of reading arithmetic, and a turn spent
+dismissing "Flash Loan Attacks (fires on 90% of contracts)" is a turn not spent on the
+rounding direction.
+
+## The one lead that survives
+
+The cascade is the only configuration whose MCC advantage over Bastet has a bootstrap CI
+excluding zero:
+
+| comparison | ΔMCC | CI95 | McNemar p |
+|---|---|---|---|
+| ARBITER alone vs Bastet | +0.267 | [−0.037, +0.553] | 0.442 |
+| **Cascade vs Bastet** | **+0.329** | **[+0.040, +0.553]** | 0.487 |
+
+Four reasons that is a lead and not a result:
+
+1. **It is tuning-set data.** These same 40 samples chose every configuration in this
+   project. `PREREGISTRATION_V2.md` classifies anything measured on them as a tuning
+   number, and this is one.
+2. **The lower bound is +0.040.** It clears zero by a margin smaller than the difference
+   between our own configurations.
+3. **McNemar disagrees at p = 0.487.** Two tests of the same comparison pointing different
+   ways means fragility, not significance.
+4. **It is not the mechanism that was proposed.** The MCC gain comes from removing false
+   positives, and specificity — where both arms' CIs exclude zero — is a metric the
+   constant "safe" predictor wins outright at 1.000. `constant_no_baseline` exists in the
+   scorer precisely so that cannot be quoted as a headline.
+
+F1 remains a loss in every configuration, and against tuned Bastet's 0.6897 the cascade's
+0.4444 is the largest loss yet.
+
+## What this costs the project's thesis
+
+The cascade was proposed as the composition that makes two failing systems work: Bastet
+proposes, ARBITER decides. Measured, the proposal channel contributed nothing to
+discovery — it traded 5 true positives for 4 false-positive removals, and the net was
+noise. The claim that Bastet's discarded per-detector signal is recoverable is
+**unsupported by this experiment**, and the 73% figure should be read as what it always
+was: an upper bound on a channel, not evidence the channel carries.

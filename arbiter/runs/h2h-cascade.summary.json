@@ -1,0 +1,357 @@
+{
+ "arm": "arbiter_cascade",
+ "run_id": "h2h-cascade",
+ "model": "ais3/nemotron-3-ultra-550b",
+ "evalset": "evalsets/v3_authored.json",
+ "evalset_meta": {
+  "n": 40,
+  "n_vuln": 20,
+  "n_safe": 20,
+  "pairs_admitted": 20,
+  "pairs_offered": 20,
+  "source": "",
+  "admission_rule": "A pair enters only if both halves compile, the reference exploit PASSES against the vulnerable half under the harness-owned predicate, and the SAME exploit FAILS against the patched half. No model adjudicates this.",
+  "negative_design": "Every negative is the patched version of a positive, differing only by the security fix. Unrelated safe code as a negative would inflate precision for both arms and destroy the discriminative power of the comparison.",
+  "comment_policy": "Comments that would reveal the label are stripped, and the halves carry identical comment text.",
+  "verdicts": [
+   {
+    "slug": "reentrancy_unstake",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 4,
+    "reasons": []
+   },
+   {
+    "slug": "missing_access_control_disburse",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "unchecked_call_return_buyback",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "tx_origin_auth_router",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "unbounded_queue_dos",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "forced_ether_refund",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "approval_double_spend",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "delegatecall_unchecked_module",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "amm_spot_price_oracle",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "slippage_check_skipped_branch",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "missing_deadline_signed_order",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "stale_cached_price_liquidation",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "first_depositor_share_inflation",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 4,
+    "reasons": []
+   },
+   {
+    "slug": "withdraw_rounding_favours_user",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "fee_on_transfer_credit",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 3,
+    "reasons": []
+   },
+   {
+    "slug": "uint128_downcast_reward_debt",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "signature_replay_voucher",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "ecrecover_zero_address_session",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 2,
+    "reasons": []
+   },
+   {
+    "slug": "commit_reveal_frontrun",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   },
+   {
+    "slug": "weak_randomness_flip_payout",
+    "admitted": true,
+    "vuln_compiles": true,
+    "patched_compiles": true,
+    "exploit_passes_on_vuln": true,
+    "exploit_fails_on_patched": true,
+    "diff_lines": 1,
+    "reasons": []
+   }
+  ]
+ },
+ "repeats": 1,
+ "attempts_per_sample": 3,
+ "proposals_from": "runs/h2h-bastet.jobs.jsonl",
+ "max_turns": 16,
+ "max_tokens": 4096,
+ "wall_clock_s": 2449.6,
+ "usage": {
+  "requests": 1560,
+  "prompt_tokens": 25118964,
+  "completion_tokens": 793782,
+  "cost_usd": 14.305802,
+  "retries": 0,
+  "http_errors": 0,
+  "parse_failures": 0,
+  "reasoning_recoveries": 0,
+  "system_fingerprints": [
+   "vllm-0.24.0-tp8-ep-d6a91272",
+   "vllm-0.24.0-tp8-ep-e50784a2"
+  ],
+  "models_seen": [
+   "ais3/nemotron-3-ultra-550b"
+  ]
+ },
+ "predictions_by_repeat": {
+  "0": {
+   "V_unchecked_call_return_buyback": "vuln",
+   "V_missing_access_control_disburse": "vuln",
+   "V_reentrancy_unstake": "vuln",
+   "V_unbounded_queue_dos": "vuln",
+   "S_reentrancy_unstake": "safe",
+   "S_tx_origin_auth_router": "vuln",
+   "S_missing_access_control_disburse": "safe",
+   "S_unchecked_call_return_buyback": "safe",
+   "V_forced_ether_refund": "safe",
+   "V_tx_origin_auth_router": "safe",
+   "V_delegatecall_unchecked_module": "vuln",
+   "S_unbounded_queue_dos": "safe",
+   "S_forced_ether_refund": "safe",
+   "S_approval_double_spend": "vuln",
+   "V_approval_double_spend": "safe",
+   "S_delegatecall_unchecked_module": "safe",
+   "V_amm_spot_price_oracle": "safe",
+   "V_slippage_check_skipped_branch": "safe",
+   "S_slippage_check_skipped_branch": "safe",
+   "V_missing_deadline_signed_order": "safe",
+   "S_amm_spot_price_oracle": "safe",
+   "S_missing_deadline_signed_order": "vuln",
+   "S_stale_cached_price_liquidation": "safe",
+   "V_first_depositor_share_inflation": "safe",
+   "V_stale_cached_price_liquidation": "safe",
+   "S_first_depositor_share_inflation": "safe",
+   "V_withdraw_rounding_favours_user": "safe",
+   "S_withdraw_rounding_favours_user": "safe",
+   "V_uint128_downcast_reward_debt": "safe",
+   "V_ecrecover_zero_address_session": "vuln",
+   "S_fee_on_transfer_credit": "safe",
+   "V_signature_replay_voucher": "safe",
+   "S_uint128_downcast_reward_debt": "safe",
+   "V_fee_on_transfer_credit": "safe",
+   "V_weak_randomness_flip_payout": "vuln",
+   "S_signature_replay_voucher": "safe",
+   "V_commit_reveal_frontrun": "safe",
+   "S_weak_randomness_flip_payout": "vuln",
+   "S_ecrecover_zero_address_session": "safe",
+   "S_commit_reveal_frontrun": "safe"
+  }
+ },
+ "no_verdict_rate": 0.025,
+ "proven_rate": 1.0,
+ "mean_turns": 14.3,
+ "mean_requests_per_sample": 39.0,
+ "scored": {
+  "repeats": 1,
+  "runs": [
+   {
+    "TP": 7,
+    "TN": 16,
+    "FP": 4,
+    "FN": 13,
+    "precision": 0.6364,
+    "recall": 0.35,
+    "specificity": 0.8,
+    "f1": 0.4516,
+    "accuracy": 0.575,
+    "mcc": 0.168
+   }
+  ],
+  "TP": {
+   "mean": 7.0,
+   "min": 7,
+   "max": 7
+  },
+  "TN": {
+   "mean": 16.0,
+   "min": 16,
+   "max": 16
+  },
+  "FP": {
+   "mean": 4.0,
+   "min": 4,
+   "max": 4
+  },
+  "FN": {
+   "mean": 13.0,
+   "min": 13,
+   "max": 13
+  },
+  "precision": {
+   "mean": 0.6364,
+   "min": 0.6364,
+   "max": 0.6364
+  },
+  "recall": {
+   "mean": 0.35,
+   "min": 0.35,
+   "max": 0.35
+  },
+  "specificity": {
+   "mean": 0.8,
+   "min": 0.8,
+   "max": 0.8
+  },
+  "f1": {
+   "mean": 0.4516,
+   "min": 0.4516,
+   "max": 0.4516
+  },
+  "accuracy": {
+   "mean": 0.575,
+   "min": 0.575,
+   "max": 0.575
+  },
+  "mcc": {
+   "mean": 0.168,
+   "min": 0.168,
+   "max": 0.168
+  }
+ }
+}
