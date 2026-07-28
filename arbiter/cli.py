@@ -40,6 +40,18 @@ def main() -> int:
     r.add_argument("--proposals", type=Path, default=None,
                    help="Bastet jobs.jsonl; enables cascade mode (detector hits become hypotheses)")
 
+    a = sub.add_parser(
+        "audit", help="audit .sol files directly, no evaluation set or labels needed"
+    )
+    a.add_argument("paths", type=Path, nargs="+", help=".sol files or directories")
+    a.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
+    a.add_argument("--run-id", default="audit")
+    a.add_argument("--out", type=Path, default=Path("runs"))
+    a.add_argument("--attempts", type=int, default=2)
+    a.add_argument("--max-turns", type=int, default=26)
+    a.add_argument("--concurrency", type=int, default=6)
+    a.add_argument("--rpm", type=int, default=45)
+
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
     s.add_argument("--evalset", type=Path, required=True)
@@ -106,6 +118,54 @@ def main() -> int:
         print(json.dumps({k: agg[k] for k in ("TP", "TN", "FP", "FN", "precision",
                                               "recall", "specificity", "f1", "mcc")
                           if k in agg}, indent=1))
+        print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "audit":
+        # Real-world use: no ground truth, so nothing is scored. The output is the
+        # findings and the exploit that backs each one.
+        sols: list[Path] = []
+        for p in args.paths:
+            sols.extend(sorted(p.rglob("*.sol")) if p.is_dir() else [p])
+        if not sols:
+            print("no .sol files found")
+            return 1
+        tmp = args.out / f"{args.run_id}.input.json"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps({
+            "meta": {"source": "audit", "n": len(sols)},
+            "items": [
+                {"id": f.stem, "label": "unknown", "code": f.read_text(encoding="utf-8")}
+                for f in sols
+            ],
+        }, ensure_ascii=False), encoding="utf-8")
+        print(f"auditing {len(sols)} contract(s)")
+        summary = run_arbiter(
+            evalset=tmp, model=args.model, run_id=args.run_id, out_dir=args.out,
+            repeats=1, attempts=args.attempts, concurrency=args.concurrency,
+            max_turns=args.max_turns, rpm=args.rpm,
+        )
+        rows = [
+            json.loads(l) for l in
+            (args.out / f"{args.run_id}.results.jsonl").read_text(encoding="utf-8").splitlines()
+            if l.strip()
+        ]
+        print()
+        for r in rows:
+            o = r["outcome"]
+            if o["verdict"] != "vulnerable":
+                print(f"  CLEAR       {r['sample_id']}")
+                continue
+            for f in o["findings"]:
+                print(f"  VULNERABLE  {r['sample_id']}: {f.get('title','')}")
+                print(f"              function: {f.get('vulnerable_function','')}")
+                print(f"              severity: {f.get('severity','')}")
+                print(f"              proof:    {f.get('poc_name','')} "
+                      f"(executed, predicate satisfied)")
+        n_v = sum(1 for r in rows if r["outcome"]["verdict"] == "vulnerable")
+        print()
+        print(f"{n_v}/{len(rows)} reported vulnerable, each backed by an executed exploit")
+        print(f"full transcripts: {args.out / (args.run_id + '.results.jsonl')}")
         print(f"usage: {json.dumps(summary['usage'])}")
         return 0
 
