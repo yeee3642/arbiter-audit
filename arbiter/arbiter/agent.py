@@ -228,7 +228,7 @@ def audit(
     gateway: Gateway,
     workspace: Workspace,
     *,
-    max_turns: int = 16,
+    max_turns: int = 26,
     max_tokens: int = 4096,
     trace_sink: list[dict[str, Any]] | None = None,
     ruled_out: list[str] | None = None,

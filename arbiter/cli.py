@@ -32,7 +32,7 @@ def main() -> int:
     r.add_argument("--attempts", type=int, default=1,
                    help="independent audit attempts per sample; unioned, stops on first proof")
     r.add_argument("--concurrency", type=int, default=8)
-    r.add_argument("--max-turns", type=int, default=16)
+    r.add_argument("--max-turns", type=int, default=26)
     r.add_argument("--max-tokens", type=int, default=4096)
     r.add_argument("--rpm", type=int, default=45)
     r.add_argument("--carry-ruled-out", action="store_true",

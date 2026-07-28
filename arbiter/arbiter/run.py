@@ -44,7 +44,7 @@ def run_arbiter(
     repeats: int = 1,
     attempts: int = 1,
     concurrency: int = 8,
-    max_turns: int = 16,
+    max_turns: int = 26,
     max_tokens: int = 4096,
     rpm: int = 45,
     workspace_root: Path | None = None,
