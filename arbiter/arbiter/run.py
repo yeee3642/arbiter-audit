@@ -23,12 +23,18 @@ from typing import Any
 from .agent import audit, outcome_to_label
 from .gateway import Gateway, RateLimiter
 from .proposals import load_hits, proposal_block, rarity
+from .repo import plan_for
 from .workspace import Workspace
 
 
 def load_evalset(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return data.get("meta", {}), data["items"]
+
+
+def _root_of(item: dict[str, Any]) -> Path | None:
+    root = item.get("repo_root")
+    return Path(root) if root else None
 
 
 def truth_map(items: list[dict[str, Any]]) -> dict[str, str]:
@@ -85,6 +91,55 @@ def run_arbiter(
     write_lock = threading.Lock()
     started = time.monotonic()
 
+    def _row(
+        repeat: int,
+        item: dict[str, Any],
+        outcome: Any,
+        tried: list[dict[str, Any]],
+        trace: list[dict[str, Any]],
+        error: str,
+        t0: float,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "repeat": repeat,
+            "sample_id": item["id"],
+            # The repository the contract came from. Absent, repo-level scoring -- the
+            # unit OneSavie's own evaluation uses -- collapses every row into "?".
+            "repo": item.get("repo", ""),
+            "path": item.get("path", ""),
+            "truth": item["label"],
+            "predicted": outcome_to_label(outcome),
+            # The contract under audit travels with the record. Without it a dumped
+            # exploit has nothing to run against, and evidence that cannot be replayed
+            # is an assertion with extra steps.
+            "source": item["code"],
+            # Whether the harness could compile the contract at all, and how. A verdict
+            # of "safe" means something entirely different when this is false.
+            "context": context,
+            "attempts_used": len(tried),
+            "attempts": tried,
+            "elapsed_s": round(time.monotonic() - t0, 2),
+            "error": error,
+            "outcome": outcome.as_dict(),
+            "trace": trace,
+        }
+
+    def _emit(row: dict[str, Any], outcome: Any) -> None:
+        with write_lock:
+            with results_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+        hit = "OK " if row["predicted"] == row["truth"] else "MISS"
+        proven = "proven" if outcome.proven else outcome.stop_reason
+        print(
+            f"  [{hit}] r{row['repeat']} {row['sample_id'][:44]:46s} "
+            f"-> {row['predicted']:5s} ({proven}, "
+            f"{row['attempts_used']}x{outcome.turns}t, {row['elapsed_s']}s)",
+            flush=True,
+        )
+
     def one(repeat: int, item: dict[str, Any]) -> dict[str, Any] | None:
         key = f"{repeat}::{item['id']}"
         if key in done:
@@ -94,6 +149,38 @@ def run_arbiter(
         error = ""
         outcome = None
         tried: list[dict[str, Any]] = []
+
+        # A contract that lives in a repository is compiled in that repository's context.
+        # Built once per sample, not per attempt: indexing a 400-file repo is not free,
+        # and the remappings the repair loop discovers are worth carrying forward.
+        plan = None
+        context: dict[str, Any] = {"ok": True, "mode": "hermetic"}
+        if item.get("path"):
+            try:
+                plan = plan_for(Path(item["path"]), repo_root=_root_of(item))
+                probe = Workspace(
+                    ws_root / "ctx", f"{item['id']}__ctx", item["code"], plan=plan
+                )
+                try:
+                    context = probe.prepare_context()
+                finally:
+                    probe.cleanup()
+            except Exception as exc:  # noqa: BLE001
+                context = {"ok": False, "mode": "error",
+                           "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+        # No compilable context means no execution, and no execution means this run has
+        # no evidence either way. Spending 26 turns of a rationed gateway to arrive at a
+        # verdict the harness could never have backed is waste; the sample is recorded as
+        # unbuildable and the summary reports how many there were, so a low recall caused
+        # by a toolchain gap is never presented as a clean bill of health.
+        if not context.get("ok"):
+            from .tools import AgentOutcome
+
+            outcome = AgentOutcome(stop_reason="context_unbuildable")
+            row = _row(repeat, item, outcome, [], [], "", t0, context)
+            _emit(row, outcome)
+            return row
 
         # Independent attempts, unioned: the sample is vulnerable if ANY attempt
         # produced a harness-adjudicated exploit. Unioning is safe here in a way it is
@@ -113,7 +200,8 @@ def run_arbiter(
                 # hitting a transient disk or toolchain error propagated out of the
                 # worker, through future.result(), and killed the entire run.
                 ws = Workspace(
-                    ws_root / f"r{repeat}a{attempt}", item["id"], item["code"]
+                    ws_root / f"r{repeat}a{attempt}", item["id"], item["code"],
+                    plan=plan,
                 )
                 outcome = audit(
                     gateway,
@@ -157,35 +245,8 @@ def run_arbiter(
                 ):
                     ruled_out.append(text)
 
-        row = {
-            "repeat": repeat,
-            "sample_id": item["id"],
-            "truth": item["label"],
-            "predicted": outcome_to_label(outcome),
-            # The contract under audit travels with the record. Without it a dumped
-            # exploit has nothing to run against, and evidence that cannot be replayed
-            # is an assertion with extra steps.
-            "source": item["code"],
-            "attempts_used": len(tried),
-            "attempts": tried,
-            "elapsed_s": round(time.monotonic() - t0, 2),
-            "error": error,
-            "outcome": outcome.as_dict(),
-            "trace": trace,
-        }
-        with write_lock:
-            with results_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-                fh.flush()
-                os.fsync(fh.fileno())
-        hit = "OK " if row["predicted"] == row["truth"] else "MISS"
-        proven = "proven" if outcome.proven else outcome.stop_reason
-        print(
-            f"  [{hit}] r{repeat} {item['id'][:44]:46s} "
-            f"-> {row['predicted']:5s} ({proven}, {len(tried)}x{outcome.turns}t, "
-            f"{row['elapsed_s']}s)",
-            flush=True,
-        )
+        row = _row(repeat, item, outcome, tried, trace, error, t0, context)
+        _emit(row, outcome)
         return row
 
     jobs = [(r, item) for r in range(repeats) for item in items]
@@ -226,6 +287,7 @@ def run_arbiter(
         "wall_clock_s": round(time.monotonic() - started, 1),
         "usage": gateway.usage.as_dict(),
         "predictions_by_repeat": _by_repeat(rows),
+        "context": _context_stats(rows),
         "no_verdict_rate": _no_verdict_rate(rows),
         "proven_rate": _proven_rate(rows),
         "mean_turns": _mean_turns(rows),
@@ -242,6 +304,29 @@ def _by_repeat(rows: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     for row in rows:
         out.setdefault(str(row["repeat"]), {})[row["sample_id"]] = row["predicted"]
     return out
+
+
+def _context_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """How many contracts the harness could actually compile, and by which route.
+
+    This is the number that decides whether a low recall is a finding or an artifact. A
+    tool that compiles nothing reports everything safe, which is a degenerate predictor
+    pointed the other way from a 53-detector OR -- so the count travels in the summary
+    rather than being left to be inferred from a confusion matrix.
+    """
+    if not rows:
+        return {}
+    modes: dict[str, int] = {}
+    for row in rows:
+        ctx = row.get("context") or {}
+        modes[str(ctx.get("mode", "unknown"))] = modes.get(str(ctx.get("mode", "unknown")), 0) + 1
+    ok = sum(1 for r in rows if (r.get("context") or {}).get("ok"))
+    return {
+        "buildable": ok,
+        "n": len(rows),
+        "buildable_rate": round(ok / len(rows), 4),
+        "by_mode": modes,
+    }
 
 
 def _no_verdict_rate(rows: list[dict[str, Any]]) -> float:

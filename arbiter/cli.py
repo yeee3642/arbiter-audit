@@ -19,6 +19,28 @@ from arbiter.score import (  # noqa: E402
 )
 
 
+def _repo_of(f: Path, roots: list[Path]) -> str:
+    """Which requested root this file came from, so repo-level scoring can group by it."""
+    for r in roots:
+        try:
+            if r.is_dir() and f.resolve().is_relative_to(r.resolve()):
+                return r.name
+        except (OSError, ValueError):
+            continue
+    return f.parent.name
+
+
+def _root_for(f: Path, roots: list[Path]) -> Path:
+    """The repository root a contract belongs to, for resolving its imports."""
+    for r in roots:
+        try:
+            if r.is_dir() and f.resolve().is_relative_to(r.resolve()):
+                return r.resolve()
+        except (OSError, ValueError):
+            continue
+    return f.resolve().parent
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="arbiter")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -72,6 +94,15 @@ def main() -> int:
     dp.add_argument("--out", type=Path, required=True, help="directory to write into")
     dp.add_argument("--evalset", type=Path, default=None,
                     help="optional: supplies contract sources for older runs")
+
+    ev = sub.add_parser(
+        "eval", help="score a run in Bastet's own output format, for side-by-side reading"
+    )
+    ev.add_argument("--results", type=Path, required=True)
+    ev.add_argument("--by-repo", action="store_true",
+                    help="aggregate with Bastet's rule: a repo is positive iff any file is")
+    ev.add_argument("--truth", type=Path, default=None,
+                    help="Bastet's evaluation_results.csv, for repo-level labels")
 
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
@@ -156,7 +187,16 @@ def main() -> int:
         tmp.write_text(json.dumps({
             "meta": {"source": "audit", "n": len(sols)},
             "items": [
-                {"id": f.stem, "label": "unknown", "code": f.read_text(encoding="utf-8")}
+                # id carries the repo so two contracts with the same basename in
+                # different repositories do not collide into one workspace.
+                {"id": f"{_repo_of(f, args.paths)}::{f.stem}", "label": "unknown",
+                 "repo": _repo_of(f, args.paths),
+                 # path and repo_root are what turn the hermetic workspace into an
+                 # in-repo one: the contract is compiled where it actually lives,
+                 # with its imports resolved, instead of as an orphaned file.
+                 "path": str(f.resolve()),
+                 "repo_root": str(_root_for(f, args.paths)),
+                 "code": f.read_text(encoding="utf-8", errors="ignore")}
                 for f in sols
             ],
         }, ensure_ascii=False), encoding="utf-8")
@@ -276,6 +316,32 @@ def main() -> int:
         if man["exploits"]:
             print()
             print(f"reproduce any of them:  cd {man['exploits'][0]['path']} && forge test -vvv")
+        return 0
+
+    if args.cmd == "eval":
+        from arbiter.evaluate import (
+            load_repo_truth, load_results, render, score_repos, score_samples,
+        )
+
+        rows = load_results(args.results)
+        if args.by_repo:
+            if not args.truth:
+                print("--by-repo needs --truth pointing at evaluation_results.csv")
+                return 1
+            counts, detail = score_repos(rows, load_repo_truth(args.truth))
+            print(render(counts))
+            print()
+            print(f"{'repository':<34} {'truth':<7} {'ours':<7} flagged/files")
+            for repo, actual, predicted, flagged, total in detail:
+                mark = " " if actual == predicted else "*"
+                print(f"{mark}{repo[:33]:<33} "
+                      f"{'vuln' if actual else 'safe':<7} "
+                      f"{'vuln' if predicted else 'safe':<7} {flagged}/{total}")
+            print()
+            print("* marks a disagreement with the labels. Aggregation is Bastet's own "
+                  "rule: a repository counts positive if ANY contract in it does.")
+        else:
+            print(render(score_samples(rows)))
         return 0
 
     if args.cmd == "bastet":

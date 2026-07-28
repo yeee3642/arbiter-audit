@@ -23,13 +23,17 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .repo import RepoPlan
 
 # Chosen because it satisfies every pragma in the evaluation set that is not an exact
 # pin, and because forge fetches per-file compilers for the ones that are.
 FALLBACK_SOLC = "0.8.24"
 
 FOUNDRY_TOML = """[profile.default]
-src = "src"
+src = "{src}"
 test = "test"
 out = "out"
 libs = []
@@ -68,14 +72,44 @@ class CommandResult:
 
 
 class Workspace:
-    """One forge project holding one contract under test plus agent-written PoCs."""
+    """One forge project holding one contract under test plus agent-written PoCs.
 
-    def __init__(self, root: Path, sample_id: str, source: str) -> None:
-        self.root = root / sample_id
+    Two modes, and which one is in force is recorded on the run rather than assumed:
+
+      * **hermetic** -- the source is written to `src/Target.sol` and nothing else
+        exists. Correct for self-contained contracts, and it guarantees a dependency
+        download failure can never be mistaken for a safe verdict.
+      * **in-repo** -- a `RepoPlan` supplies remappings that reach the contract where it
+        actually lives, together with its import closure. Nothing is copied; forge
+        resolves the graph and inlines the sources, so the workspace stays a few hundred
+        bytes and hundreds run concurrently.
+
+    The second mode exists because the first compiled 0 of 24 contracts drawn from
+    OneSavie's own dataset. A harness that cannot compile the code under audit cannot
+    produce evidence, and a tool that produces no evidence answers "safe" to everything,
+    which is a degenerate predictor pointed the other way from a 53-detector OR.
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        sample_id: str,
+        source: str,
+        plan: "RepoPlan | None" = None,
+    ) -> None:
+        self.root = root / re.sub(r"[^A-Za-z0-9_.-]", "_", sample_id)
         self.sample_id = sample_id
         self.source = source
+        self.plan = plan
         self.build_ok: bool | None = None
         self.pocs: dict[str, str] = {}
+        # Where a PoC reaches the contract under audit, and what syntax the harness may
+        # use to talk about it. Both follow the contract rather than forcing it upward:
+        # a target pinned to 0.6.12 cannot be compiled alongside a >=0.8.0 test, and
+        # custom errors did not exist before 0.8.4.
+        self.target_import = "../src/Target.sol" if plan is None else plan.target_import
+        self.pragma = ">=0.8.0" if plan is None else plan.test_pragma
+        self.custom_errors = True if plan is None else plan.custom_errors_ok
         self._scaffold()
 
     # -- setup ---------------------------------------------------------------
@@ -85,13 +119,21 @@ class Workspace:
             shutil.rmtree(self.root)
         (self.root / "src").mkdir(parents=True)
         (self.root / "test").mkdir(parents=True)
-        (self.root / "foundry.toml").write_text(FOUNDRY_TOML, encoding="utf-8")
-        (self.root / "src" / "Target.sol").write_text(self.source, encoding="utf-8")
-        # forge-std is not vendored, and no git submodule is fetched. The workspace is
-        # hermetic so that a dependency download failure can never be mistaken for a
-        # safe verdict. Cheatcodes are still available: they live at a fixed address on
-        # the Foundry EVM, so a hand-written interface reaches them with no dependency.
-        (self.root / "test" / "Vm.sol").write_text(VM_SOL, encoding="utf-8")
+        self._write_toml("src" if self.plan is None else self.plan.chosen_src)
+        if self.plan is None:
+            (self.root / "src" / "Target.sol").write_text(self.source, encoding="utf-8")
+        else:
+            # src stays empty on purpose: forge compiles what the test reaches, so only
+            # the target's import closure is built. A repository whose unrelated half
+            # does not compile still yields evidence for the contract under audit.
+            (self.root / "remappings.txt").write_text(
+                "\n".join(self.plan.remappings) + "\n", encoding="utf-8"
+            )
+        # Cheatcodes are available in both modes with no dependency at all: they live at
+        # a fixed address on the Foundry EVM, so a hand-written interface reaches them.
+        (self.root / "test" / "Vm.sol").write_text(
+            VM_SOL.replace("__PRAGMA__", self.pragma), encoding="utf-8"
+        )
 
     # -- source access -------------------------------------------------------
 
@@ -255,6 +297,7 @@ class Workspace:
                 if mode == "contract"
                 else "",
                 attack_action=attack_action,
+                fail_report=_FAIL_CUSTOM_ERROR if self.custom_errors else _FAIL_REQUIRE,
             )
 
         if mode == "contract":
@@ -273,6 +316,13 @@ class Workspace:
             setup = _EOA_SETUP.format(funding_wei=int(funding_wei))
 
         return _EXPLOIT_TEMPLATE.format(
+            pragma=self.pragma,
+            target_import=self.target_import,
+            error_decl=(
+                "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
+                if self.custom_errors
+                else ""
+            ),
             attacker_code=attacker_code.strip(),
             deploy_code=deploy_code.strip(),
             setup=setup,
@@ -304,6 +354,95 @@ class Workspace:
         result = self._forge(["build"], timeout=timeout)
         self.build_ok = result.ok
         return result
+
+    def context_ok(self, timeout: int = 300) -> CommandResult:
+        """Does the contract under audit compile at all, before any exploit is written?
+
+        Reported separately from the exploit build because the two failures mean opposite
+        things. An exploit that does not compile is the agent's problem and it can be
+        told to fix it. A *context* that does not compile is the harness's problem, and
+        answering "safe" there is not a verdict -- it is a missing measurement. Keeping
+        them apart is what turned "0 of 24 vulnerable" into a diagnosable defect instead
+        of a plausible-looking result.
+        """
+        probe = _CONTEXT_PROBE.format(
+            pragma=self.pragma, target_import=self.target_import
+        )
+        self.write_poc("ArbiterContext", probe)
+        result = self._forge(["build"], timeout=timeout)
+        for stale in (self.root / "test").glob("*.t.sol"):
+            stale.unlink()
+        self.pocs.pop("ArbiterContextPoc", None)
+        return result
+
+    def _write_toml(self, src: str) -> None:
+        (self.root / "foundry.toml").write_text(
+            FOUNDRY_TOML.format(src=src), encoding="utf-8"
+        )
+
+    def prepare_context(self, rounds: int = 3, timeout: int = 300) -> dict[str, object]:
+        """Compile the contract under audit, repairing until it does.
+
+        Two escalating compilation sets, cheapest first, because they fail for different
+        reasons and the cheap one is right most of the time:
+
+          1. **minimal** -- only the test is a compilation root, so forge builds exactly
+             the target's import closure. Fast, and unaffected by a broken sibling.
+          2. **project** -- the project's own source root becomes `src`, reproducing the
+             compilation set its toolchain used. Needed for projects that rely on
+             Solidity's transitive re-export through an import cycle, which resolves only
+             when the files involved are roots. Measured on defiprotocol: minimal fails
+             with "Identifier not found or not unique", project succeeds.
+
+        Each set gets its own repair loop, which feeds the exact source names the
+        compiler asked for back into the remappings. Bounded and recorded: "it still does
+        not build" is a result the run must carry, not round down to a clean bill.
+        """
+        if self.plan is None:
+            result = self.context_ok(timeout=timeout)
+            return {"ok": result.ok, "mode": "hermetic", "rounds": 0,
+                    "error": _first_error(result.combined)}
+
+        from .repo import repair
+
+        attempts: list[dict[str, object]] = []
+        modes = [("minimal", "src"), ("project", self.plan.source_root.as_posix())]
+        # A plan that already knows which set worked starts there, so re-auditing the
+        # same contract does not repeat the discovery.
+        if self.plan.chosen_src != "src":
+            modes.reverse()
+        for mode, src in modes:
+            self._write_toml(src)
+            result = None
+            for attempt in range(rounds + 1):
+                result = self.context_ok(timeout=timeout)
+                if result.ok:
+                    self.plan.chosen_src = src
+                    return {
+                        "ok": True, "mode": mode, "rounds": attempt,
+                        "remappings": len(self.plan.remappings),
+                        "external": list(self.plan.external_used),
+                        "failed_modes": attempts,
+                    }
+                if attempt == rounds or not repair(self.plan, result.combined):
+                    break
+                (self.root / "remappings.txt").write_text(
+                    "\n".join(self.plan.remappings) + "\n", encoding="utf-8"
+                )
+            attempts.append(
+                {"mode": mode, "error": _first_error(result.combined if result else "")}
+            )
+
+        # Leave the workspace in the cheaper configuration: a failed project-wide build
+        # usually means an unrelated sibling is broken, and the agent's own PoCs should
+        # not be charged for that.
+        self._write_toml("src")
+        return {
+            "ok": False, "mode": "none", "rounds": rounds,
+            "remappings": len(self.plan.remappings),
+            "error": attempts[-1]["error"] if attempts else "",
+            "failed_modes": attempts,
+        }
 
     def run_poc(self, name: str, timeout: int = 240) -> CommandResult:
         return self._forge(
@@ -337,7 +476,7 @@ class Workspace:
 # and the cheatcode precompile sits at a fixed address, so declaring the interface by
 # hand gives a PoC prank/deal/warp/expectRevert without vendoring anything.
 VM_SOL = """// SPDX-License-Identifier: Apache-2.0
-pragma solidity >=0.8.0;
+pragma solidity __PRAGMA__;
 
 /// Subset of the Foundry cheatcode interface, declared by hand so that a proof of
 /// concept needs no external dependency and the workspace stays hermetic.
@@ -387,23 +526,46 @@ contract Harness {
 """
 
 
+# The smallest file that proves the contract under audit and its whole import closure
+# resolve and compile. It asserts nothing; it exists so a failure to build can be
+# attributed to the harness rather than charged to the contract as a clean bill of health.
+_CONTEXT_PROBE = """// SPDX-License-Identifier: Apache-2.0
+pragma solidity {pragma};
+
+import "{target_import}";
+import "./Vm.sol";
+
+contract TestArbiterContextPoc is Harness {{
+    function testArbiterContext() public pure {{ }}
+}}
+"""
+
+
 def _indent(text: str, spaces: int) -> str:
     pad = " " * spaces
     return "\n".join(pad + line for line in text.strip().splitlines())
 
 
+def _first_error(output: str) -> str:
+    """The first compiler diagnostic, for the run record. Full text stays in the trace."""
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Error") or "Error (" in stripped:
+            return stripped[:200]
+    return output.strip().splitlines()[-1][:200] if output.strip() else ""
+
+
 # The exploit test. Everything outside the agent-supplied holes is fixed, so the success
 # condition is the same sentence for every sample, every predicate and every model.
 _EXPLOIT_TEMPLATE = """// SPDX-License-Identifier: Apache-2.0
-pragma solidity >=0.8.0;
+pragma solidity {pragma};
 
-import "../src/Target.sol";
+import "{target_import}";
 import "./Vm.sol";
 
 interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
 
-error ArbiterNoGain(uint256 honestGain, uint256 attackGain);
-
+{error_decl}
 {attacker_code}
 
 contract TestArbiterExploit is Harness {{
@@ -500,13 +662,25 @@ _PROFIT_BODY = """        address ctrl = address(uint160(uint256(keccak256("arbi
         uint256 atkPost = {measure_atk};
         uint256 attackGain = atkPost > atkPre ? atkPost - atkPre : 0;
 
-        // A custom error rather than a require string, so the two quantities reach the
-        // agent. "did not satisfy the predicate" told it nothing it could act on; the
-        // actual pair of numbers tells it whether the attack extracted nothing at all,
-        // or extracted something and was outrun by an over-generous honest baseline.
-        if (attackGain <= honestGain) {{
+        // Both quantities reach the agent, not just a verdict. "did not satisfy the
+        // predicate" told it nothing it could act on; the actual pair of numbers tells
+        // it whether the attack extracted nothing at all, or extracted something and was
+        // outrun by an over-generous honest baseline.
+{fail_report}"""
+
+# Custom errors arrived in 0.8.4. Above it the two quantities travel in the revert data
+# and forge decodes them; below it they are rendered into the revert string instead, so a
+# contract pinned to 0.6 or 0.7 gets the same feedback rather than no harness at all.
+_FAIL_CUSTOM_ERROR = """        if (attackGain <= honestGain) {
             revert ArbiterNoGain(honestGain, attackGain);
-        }}"""
+        }"""
+
+_FAIL_REQUIRE = """        if (attackGain <= honestGain) {
+            revert(string(abi.encodePacked(
+                "ArbiterNoGain(honestGain=", _u(honestGain),
+                ", attackGain=", _u(attackGain), ")"
+            )));
+        }"""
 
 
 # Denial of service is a real vulnerability class that no profit predicate can express:
