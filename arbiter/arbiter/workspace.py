@@ -330,10 +330,12 @@ class Workspace:
         # with -- ether, or a token balance.
         if predicate == "eth_profit":
             measure = "{who}.balance"
+            drained = "address(target).balance"
         elif predicate == "token_profit":
             if not token_expr.strip():
                 raise ValueError("token_profit predicate needs token_expr")
             measure = f"_ArbiterToken({token_expr.strip()}).balanceOf({{who}})"
+            drained = f"_ArbiterToken({token_expr.strip()}).balanceOf(address(target))"
         elif predicate == "state_change":
             if not observed_getter.strip():
                 raise ValueError("state_change predicate needs observed_getter")
@@ -388,11 +390,16 @@ class Workspace:
                 honest_body=_indent(honest_body, 8),
                 measure_ctrl=measure.format(who="ctrl"),
                 measure_atk=measure.format(who=attacker_expr),
+                measure_drained=drained,
                 setup=_ATTACKER_SETUP.format(funding_wei=int(funding_wei))
                 if mode == "contract"
                 else "",
                 attack_action=attack_action,
                 fail_report=_FAIL_CUSTOM_ERROR if self.custom_errors else _FAIL_REQUIRE,
+                drain_report=(
+                    _NOT_DRAINED_CUSTOM_ERROR if self.custom_errors
+                    else _NOT_DRAINED_REQUIRE
+                ),
             )
 
         if mode == "contract":
@@ -424,11 +431,7 @@ class Workspace:
             pragma=self.pragma,
             target_import=self.target_import,
             extra_imports=("\n" + extras if extras else ""),
-            error_decl=(
-                "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
-                if self.custom_errors
-                else ""
-            ),
+            error_decl=(_ERROR_DECLS if self.custom_errors else ""),
             attacker_code=attacker_code.strip(),
             deploy_code=deploy_code.strip(),
             setup=setup,
@@ -478,10 +481,12 @@ class Workspace:
         attacker_expr = "address(atk)" if mode == "contract" else "eoa"
         if predicate == "eth_profit":
             m_ctrl, m_atk = "ctrl.balance", f"{attacker_expr}.balance"
+            m_drained = "address(target).balance"
         else:
             t = token_expr.strip()
             m_ctrl = f"_ArbiterToken({t}).balanceOf(ctrl)"
             m_atk = f"_ArbiterToken({t}).balanceOf({attacker_expr})"
+            m_drained = f"_ArbiterToken({t}).balanceOf(address(target))"
 
         trials = []
         for i, (endow, repeats, warp) in enumerate(grid):
@@ -500,8 +505,13 @@ class Workspace:
                     attack_action=action,
                     measure_ctrl=m_ctrl,
                     measure_atk=m_atk,
+                    measure_drained=m_drained,
                     fail_report=(
                         _FAIL_CUSTOM_ERROR if self.custom_errors else _FAIL_REQUIRE
+                    ),
+                    drain_report=(
+                        _NOT_DRAINED_CUSTOM_ERROR if self.custom_errors
+                        else _NOT_DRAINED_REQUIRE
                     ),
                     prank_attacker=(
                         "" if mode == "contract"
@@ -522,10 +532,7 @@ class Workspace:
                 pragma=self.pragma,
                 target_import=self.target_import,
                 extra_imports=("\n" + extras if extras else ""),
-                error_decl=(
-                    "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
-                    if self.custom_errors else ""
-                ),
+                error_decl=(_ERROR_DECLS if self.custom_errors else ""),
                 attacker_code=attacker_code.strip(),
                 trials="\n".join(trials),
             ),
@@ -805,6 +812,7 @@ interface _ArbiterToken {{ function balanceOf(address) external view returns (ui
 {attacker_code}
 
 contract TestArbiterSweep is Harness {{
+
 {trials}
 }}
 """
@@ -829,12 +837,16 @@ _SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={wa
 
 {setup}
         uint256 atkPre = {measure_atk};
+        uint256 tgtPre = {measure_drained};
 {prank_attacker}
         for (uint256 _r = 0; _r < {repeats}; _r++) {{
 {attack_action}
         }}
 {unprank_attacker}
         uint256 attackGain = {measure_atk} > atkPre ? {measure_atk} - atkPre : 0;
+        uint256 tgtPost = {measure_drained};
+
+{drain_report}
 
 {fail_report}
     }}
@@ -959,9 +971,21 @@ _PROFIT_BODY = """        address ctrl = address(uint160(uint256(keccak256("arbi
 
 {setup}
         uint256 atkPre = {measure_atk};
+        // What the contract under audit is holding, immediately before the attack.
+        uint256 tgtPre = {measure_drained};
 {attack_action}
         uint256 atkPost = {measure_atk};
         uint256 attackGain = atkPost > atkPre ? atkPost - atkPre : 0;
+        uint256 tgtPost = {measure_drained};
+
+        // The value must have come OUT OF the contract under audit. Without this, an
+        // agent can satisfy a profit predicate entirely inside scenery it wrote itself:
+        // measured on a real repository, an "exploit" deployed a mock redeemer whose
+        // only behaviour was to transfer tokens on request, funded it, and then drained
+        // it -- the contract under audit was never touched, and the differential passed
+        // because the honest baseline had been pointed at a third address and gained
+        // nothing. A finding about a contract has to be a finding about that contract.
+{drain_report}
 
         // Both quantities reach the agent, not just a verdict. "did not satisfy the
         // predicate" told it nothing it could act on; the actual pair of numbers tells
@@ -979,6 +1003,25 @@ _FAIL_CUSTOM_ERROR = """        if (attackGain <= honestGain) {
 _FAIL_REQUIRE = """        if (attackGain <= honestGain) {
             revert(string(abi.encodePacked(
                 "ArbiterNoGain(honestGain=", _u(honestGain),
+                ", attackGain=", _u(attackGain), ")"
+            )));
+        }"""
+
+_ERROR_DECLS = (
+    "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
+    "error ArbiterNotDrained(uint256 targetBefore, uint256 targetAfter, "
+    "uint256 attackGain);\n"
+)
+
+_NOT_DRAINED_CUSTOM_ERROR = """        if (attackGain > 0 && (tgtPost >= tgtPre || tgtPre - tgtPost < attackGain)) {
+            revert ArbiterNotDrained(tgtPre, tgtPost, attackGain);
+        }"""
+
+# Pre-0.8.4 has no custom errors, so the same two quantities travel in the revert string.
+_NOT_DRAINED_REQUIRE = """        if (attackGain > 0 && (tgtPost >= tgtPre || tgtPre - tgtPost < attackGain)) {
+            revert(string(abi.encodePacked(
+                "ArbiterNotDrained(targetBefore=", _u(tgtPre),
+                ", targetAfter=", _u(tgtPost),
                 ", attackGain=", _u(attackGain), ")"
             )));
         }"""

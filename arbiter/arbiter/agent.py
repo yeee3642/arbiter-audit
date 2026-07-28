@@ -178,6 +178,20 @@ separate account to see what an ordinary depositor gets back, runs attack(), and
 accepts the finding if the attacker came out strictly ahead of the honest depositor. You \
 never write that comparison.
 
+It also checks something you cannot talk it out of: **the value has to come out of the \
+contract under audit**. Its holdings must fall by at least what you gained. This is the \
+single most common way an exploit looks like it worked and proved nothing. The shape, \
+measured on a real repository: the agent deployed a mock of a collaborator contract whose \
+only behaviour was to hand out tokens on request, funded it, called it, and got tokens -- \
+the contract under audit was never touched. Mocks exist to let the contract under audit \
+RUN, not to be the source of the money. If your scenario needs a collaborator, make it \
+behave the way the real one does, and make sure the assets at risk sit in the contract \
+you are auditing.
+
+The same applies to honest_body: it must be a real user getting a real result. If you \
+send the honest user's proceeds to some other address, its gain is zero by construction \
+and the comparison you passed was against nothing.
+
 Three things that make run_exploit fail to compile, so check them before you call it: \
 the attacker contract must be named exactly `Attacker` and take `constructor(address)`; \
 the deployment must land in a variable named exactly `target`; and you must not write a \

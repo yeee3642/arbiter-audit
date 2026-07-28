@@ -939,6 +939,12 @@ _EXPLOIT_FAILED_HEAD = (
     "attackGain is large but honestGain is as large or larger, the attack works and your "
     "honest_body is too generous: it must be the MINIMAL intended use, not a maximal "
     "one. If they are equal, you reproduced the happy path.\n"
+    "  'ArbiterNotDrained(targetBefore, targetAfter, attackGain)' -- you profited, but "
+    "the value did not come out of the contract under audit. Its holdings did not fall "
+    "by what you gained. That means you drained scenery you built yourself -- a mock you "
+    "deployed and funded, a token you minted -- and nothing you have shown is a "
+    "statement about this contract. Rebuild the scenario so the assets at risk are held "
+    "BY the contract under audit, and take them from it.\n"
     "  anything else -- the target reverted, so a guard stopped you.\n"
     "A guard stopping you is evidence of safety, not a failure on your part.\n\n"
 )
