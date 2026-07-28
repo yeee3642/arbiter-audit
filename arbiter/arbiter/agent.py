@@ -57,10 +57,24 @@ probe behaviour cheaply, but understand that a passing run_poc is worth nothing 
 evidence -- you chose what it asserts, so all it can prove is that your own assertion is \
 true.
 
-   The profit predicates are DIFFERENTIAL, and this is the part people get wrong. You \
-must supply honest_body: what an ordinary user does with this contract. The harness runs \
-that first, as a separate funded account, and your exploit has to produce STRICTLY MORE \
-gain than it did. So collecting a reward the contract hands out on purpose is not an \
+   **Prefer predicate='victim_loss'.** It is the one that matches what a vulnerability \
+actually is: somebody else loses. You give victim_enter and victim_exit -- what an \
+ordinary user does to take a position and to get their money back -- and the harness runs \
+the whole scenario TWICE from the same code, once with your attack in between and once \
+without. The finding is admitted only if that user recovered strictly less in the run \
+where you attacked, and you came out ahead.
+
+   That closes the hole in every other predicate, which is worth knowing about because it \
+is the way most wrong answers get made here. Audited over this project's own 68 accepted \
+proofs, 25 were against contracts that were already fixed: the setup forced ether into \
+the target, the attack took it back out, and the profit comparison said yes. Real profit, \
+real drain, nobody harmed. Under victim_loss that is refused, because the depositor still \
+gets everything back.
+
+   The other profit predicates are DIFFERENTIAL, and this is the part people get wrong. \
+You must supply honest_body: what an ordinary user does with this contract. The harness \
+runs that first, as a separate funded account, and your exploit has to produce STRICTLY \
+MORE gain than it did. So collecting a reward the contract hands out on purpose is not an \
 exploit -- an honest user collects it too. Draining five times the reward is.
 
    Not every vulnerability makes the attacker richer. If the harm is that the protocol \

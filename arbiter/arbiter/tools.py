@@ -196,7 +196,26 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "predicate": {
                             "type": "string",
-                            "enum": ["eth_profit", "token_profit", "state_change", "liveness_broken"],
+                            "enum": ["victim_loss", "eth_profit", "token_profit",
+                                     "state_change", "liveness_broken"],
+                        },
+                        "victim_enter": {
+                            "type": "string",
+                            "description": (
+                                "For victim_loss. What an ordinary user does to take a "
+                                "position, e.g. 'target.deposit{value: 2 ether}();'. Run "
+                                "by a harness-owned account, in BOTH trials."
+                            ),
+                        },
+                        "victim_exit": {
+                            "type": "string",
+                            "description": (
+                                "For victim_loss. What that same user does to get their "
+                                "money back, e.g. 'target.withdraw();'. The harness runs "
+                                "the whole scenario twice, once with your attack in "
+                                "between and once without, and admits the finding only "
+                                "if your attack is what stopped them getting it out."
+                            ),
                         },
                         "mode": {
                             "type": "string",
@@ -685,6 +704,20 @@ class ToolDispatcher:
             )
 
         try:
+            if predicate == "victim_loss":
+                solidity = self.ws.compose_victim_loss(
+                    deploy_code=deploy_code,
+                    victim_enter=str(args.get("victim_enter") or ""),
+                    victim_exit=str(args.get("victim_exit") or ""),
+                    attacker_code=attacker_code,
+                    attack_body=attack_body,
+                    mode=mode,
+                    token_expr=str(args.get("token_expr") or ""),
+                    extra_imports=[str(x) for x in (args.get("imports") or [])],
+                )
+                return self._finish_exploit(
+                    raw_name, solidity, hypothesis, predicate, repeated, sweep=False
+                )
             solidity = self.ws.compose_exploit(
                 deploy_code=deploy_code,
                 attacker_code=attacker_code,
@@ -783,6 +816,68 @@ class ToolDispatcher:
                     "Repeating it will not change the result. Attack a different "
                     "function or a different invariant, or call conclude_safe.\n\n"
                 )
+        return head + _tail(run.combined), False
+
+    def _finish_exploit(
+        self,
+        raw_name: str,
+        solidity: str,
+        hypothesis: str,
+        predicate: str,
+        repeated: bool,
+        sweep: bool,
+    ) -> tuple[str, bool]:
+        """Compile, run and record an adjudicated exploit with no environment sweep.
+
+        The victim-loss predicate runs its own two trials, so there is nothing for the
+        sweep to add and the failure text has to name the quantities IT reports.
+        """
+        name = self.ws.write_poc(f"{raw_name}Exploit", solidity)
+        build = self.ws.build()
+        if not build.ok:
+            record = PocRecord(name, hypothesis, solidity, False, False, build.combined,
+                               adjudicated=True, predicate=predicate)
+            self._poc_by_name[name] = record
+            self.outcome.pocs.append(record)
+            listing = "\n".join(
+                f"{i:>3}| {line}" for i, line in enumerate(solidity.splitlines(), 1)
+            )
+            return (
+                "COMPILATION FAILED. Below is the COMPLETE file the harness assembled "
+                "from your fragments -- the compiler's line numbers refer to this.\n\n"
+                "----- composed exploit -----\n" + listing[:7000] +
+                "\n----- compiler output -----\n" + _tail(build.combined),
+                False,
+            )
+        run = self.ws.run_poc(name)
+        passed = _test_passed(run)
+        record = PocRecord(name, hypothesis, solidity, True, passed, run.combined,
+                           adjudicated=True, predicate=predicate)
+        self._poc_by_name[name] = record
+        self.outcome.pocs.append(record)
+        if passed:
+            return (
+                f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}. The victim "
+                "recovered strictly less because your attack ran, and the attacker came "
+                "out ahead. This is admissible evidence; call submit_finding citing this "
+                "name.\n\n" + _tail(run.combined),
+                False,
+            )
+        head = (
+            f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}.\n"
+            "  'ArbiterNoHarm(withoutAttack, withAttack, attackerGain)' -- the first two "
+            "numbers are what an ordinary user got back when nobody attacked and when you "
+            "did. If they are EQUAL, your attack cost that user nothing, so whatever it "
+            "extracted was not theirs; taking a donation out of a contract is not a "
+            "vulnerability in it. If attackerGain is 0 the attack extracted nothing.\n"
+            "  'the victim gets nothing back even with no attack' -- victim_enter and "
+            "victim_exit do not work as an ordinary round trip, so no harm can be shown. "
+            "Fix them first.\n"
+            "  'the attack itself reverted' -- a guard stopped you, which is evidence of "
+            "safety.\n\n"
+        )
+        if repeated:
+            head += _REPEATED_HYPOTHESIS
         return head + _tail(run.combined), False
 
     def _sweep(

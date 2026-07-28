@@ -447,6 +447,105 @@ class Workspace:
             check=check,
         )
 
+    def compose_victim_loss(
+        self,
+        *,
+        deploy_code: str,
+        victim_enter: str,
+        victim_exit: str,
+        attacker_code: str = "",
+        attack_body: str = "",
+        mode: str = "contract",
+        token_expr: str = "",
+        extra_imports: list[str] | None = None,
+        funding_wei: int = 10**19,
+    ) -> str:
+        """A predicate the agent cannot satisfy by choosing a weak baseline.
+
+        Auditing this project's own 68 claimed proofs found 25 of them on the PATCHED
+        half of an authored pair. The gate had not been bypassed; it had been satisfied
+        without a vulnerability being present. The reason is structural and none of the
+        gates added since touches it: `honest_body` is written by the same agent that
+        writes the attack, so a weak baseline beside a strong attack clears the
+        differential on any contract at all. The recurring shape was ether donated into
+        the target during setup and then extracted -- real profit, real drain, no defect.
+
+        What that comparison is missing is the thing that actually defines a
+        vulnerability: SOMEONE ELSE LOSES. So the harness stops asking whether the
+        attacker did better than a baseline, and asks whether a third party was harmed:
+
+          Trial A   setup -> victim enters -> (no attack) -> victim exits
+          Trial B   setup -> victim enters ->    attack    -> victim exits
+
+        Same setup, same victim code, same account, one difference. The exploit is
+        admitted only if the victim recovers strictly LESS in B than in A, and the
+        attacker ends up ahead. The agent still writes the victim's two fragments,
+        because only it knows the ABI -- but it cannot fake harm, since trial A is its own
+        code with the attack removed. Extracting a donation leaves every depositor whole
+        and is refused; draining a vault does not, and is not.
+
+        Both trials run inside one test on a state snapshot, so setup happens once and
+        the two worlds are identical up to the attack.
+        """
+        if not victim_enter.strip() or not victim_exit.strip():
+            raise ValueError(
+                "victim_loss needs victim_enter and victim_exit: what an ordinary user "
+                "does to take a position in this contract, and what they do to get it "
+                "back. The harness runs both twice -- once with your attack in between "
+                "and once without -- and admits the finding only if your attack is what "
+                "stopped them getting their money out."
+            )
+        if mode == "contract" and "contract Attacker" not in attacker_code:
+            raise ValueError("contract mode needs an Attacker contract")
+        _reject_halting(deploy_code, "deploy_code")
+        _reject_halting(attack_body, "attack_body")
+        _reject_halting(victim_enter, "victim_enter")
+        _reject_halting(victim_exit, "victim_exit")
+
+        if token_expr.strip():
+            measure_victim = f"_ArbiterToken({token_expr.strip()}).balanceOf(arbVictim)"
+            attacker_expr = "address(atk)" if mode == "contract" else "eoa"
+            measure_atk = f"_ArbiterToken({token_expr.strip()}).balanceOf({attacker_expr})"
+        else:
+            measure_victim = "arbVictim.balance"
+            measure_atk = (
+                "address(atk).balance" if mode == "contract" else "eoa.balance"
+            )
+
+        setup = (
+            _ATTACKER_SETUP.format(funding_wei=int(funding_wei))
+            if mode == "contract"
+            else _EOA_SETUP.format(funding_wei=int(funding_wei))
+        )
+        action = (
+            _CONTRACT_ATTACK
+            if mode == "contract"
+            else _EOA_ACTION.format(attack_body=_indent(attack_body, 8))
+        )
+        extras = "\n".join(
+            f'import "{spec.strip()}";'
+            for spec in (extra_imports or []) if spec and spec.strip()
+        )
+        _state_decls, _hoisted = hoist_declarations(deploy_code)
+        _hoisted = _indent(_hoisted, 8)
+        return _VICTIM_TEMPLATE.format(
+            pragma=self.pragma,
+            target_import=self.target_import,
+            extra_imports=("\n" + extras if extras else ""),
+            error_decl=(_VICTIM_ERROR if self.custom_errors else ""),
+            attacker_code=attacker_code.strip(),
+            state_decls=_state_decls,
+            deploy_code=_hoisted,
+            victim_enter=_indent(victim_enter, 8),
+            victim_exit=_indent(victim_exit, 8),
+            setup=setup,
+            attack_action=action,
+            measure_victim=measure_victim,
+            measure_atk=measure_atk,
+            funding_wei=int(funding_wei),
+            fail_report=(_VICTIM_FAIL if self.custom_errors else _VICTIM_FAIL_REQUIRE),
+        )
+
     def compose_sweep(
         self,
         *,
@@ -791,6 +890,11 @@ interface Vm {
     function label(address, string calldata) external;
     function store(address, bytes32, bytes32) external;
     function load(address, bytes32) external returns (bytes32);
+    // Two worlds from one setup: the victim-loss predicate runs the same scenario with
+    // and without the attack and compares what the victim gets back, which is only
+    // meaningful if both start from byte-identical state.
+    function snapshotState() external returns (uint256);
+    function revertToState(uint256) external returns (bool);
 }
 
 /// Inherit this in a PoC to get `vm` and `assertTrue`.
@@ -845,6 +949,157 @@ def _indent(text: str, spaces: int) -> str:
 # cannot reach on its own, at the coarsest granularity that still separates them: a
 # thousand-fold endowment gap, a thirty-two-fold repetition gap, and a week of elapsed
 # time. Twelve variants, one compile.
+_VICTIM_ERROR = (
+    "error ArbiterNoHarm(uint256 recoveredWithoutAttack, uint256 recoveredWithAttack,\n"
+    "                    uint256 attackerGain);\n"
+)
+
+_VICTIM_FAIL = """        if (recoveredB >= recoveredA || attackGain == 0) {
+            revert ArbiterNoHarm(recoveredA, recoveredB, attackGain);
+        }"""
+
+_VICTIM_FAIL_REQUIRE = """        if (recoveredB >= recoveredA || attackGain == 0) {
+            revert(string(abi.encodePacked(
+                "ArbiterNoHarm(withoutAttack=", _u(recoveredA),
+                ", withAttack=", _u(recoveredB),
+                ", attackerGain=", _u(attackGain), ")"
+            )));
+        }"""
+
+DECL_RE = re.compile(
+    r"^[ \t]*([A-Za-z_]\w*(?:\[\])?)[ \t]+(?:payable[ \t]+)?([A-Za-z_]\w*)[ \t]*=",
+    re.MULTILINE,
+)
+
+
+def hoist_declarations(deploy_code: str) -> tuple[str, str]:
+    """Lift the setup's locals to storage so the trial can be run in stages.
+
+    The victim-loss predicate has to survive a victim whose withdrawal REVERTS -- that is
+    the strongest evidence of harm there is, and inline it takes the whole test down with
+    it. Tolerating it means each stage has to be its own external call, and locals do not
+    survive that. Since the agent is already required to name the contract under audit
+    `target`, every top-level declaration in its setup can be lifted mechanically.
+
+    Returns (state variable declarations, rewritten setup).
+    """
+    seen: dict[str, str] = {}
+    for type_name, var in DECL_RE.findall(deploy_code):
+        if type_name in ("return", "if", "for", "while", "uint", "int", "bool") or var in seen:
+            continue
+        seen[var] = type_name
+    if "target" not in seen:
+        raise ValueError(
+            "deploy_code must declare the contract under audit as a local named exactly "
+            "'target', for example 'MyVault target = new MyVault{value: 10 ether}();'"
+        )
+    decls = "\n".join(f"    {t} internal {v};" for v, t in seen.items())
+    body = DECL_RE.sub(lambda m: f"        {m.group(2)} =", deploy_code)
+    return decls, body
+
+
+# Two worlds, one code path. Each trial builds its own copy of the scenario and differs
+# only in whether the attack runs, so any difference in what the victim recovers is
+# attributable to the attack and to nothing else. Every stage is a separate external call
+# so that a stage which reverts is a RESULT rather than an abort -- a victim who cannot
+# withdraw at all is the strongest evidence of harm, and inline it would just kill the run.
+_VICTIM_TEMPLATE = """// SPDX-License-Identifier: Apache-2.0
+pragma solidity {pragma};
+
+import "{target_import}";{extra_imports}
+import "./Vm.sol";
+
+interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
+
+{error_decl}
+{attacker_code}
+
+contract TestArbiterVictim is Harness {{
+    bytes32 internal constant ARB_COMPLETED = keccak256("arbiter.predicate.reached");
+    address internal constant arbVictim =
+        address(uint160(uint256(keccak256("arbiter.victim"))));
+
+{state_decls}
+    Attacker internal atk;
+
+    function testArbiterVictimLoss() public {{
+        require(
+            this.arbiterRun() == ARB_COMPLETED,
+            "ARBITER: execution halted before the harness predicate ran"
+        );
+    }}
+
+    // ---- agent-supplied fragments, each in its own frame ----
+
+    function arbSetup() external {{
+{deploy_code}
+    }}
+
+    function arbEnter() external {{
+        vm.startPrank(arbVictim, arbVictim);
+{victim_enter}
+        vm.stopPrank();
+    }}
+
+    function arbExit() external {{
+        vm.startPrank(arbVictim, arbVictim);
+{victim_exit}
+        vm.stopPrank();
+    }}
+
+    function arbAttack() external returns (uint256) {{
+{setup}
+        uint256 atkPre = {measure_atk};
+{attack_action}
+        uint256 atkPost = {measure_atk};
+        return atkPost > atkPre ? atkPost - atkPre : 0;
+    }}
+
+    /// One world. `withAttack` is the only thing that differs between the two runs.
+    function arbTrial(bool withAttack)
+        external
+        returns (uint256 recovered, uint256 gain, bool attackRan)
+    {{
+        this.arbSetup();
+        vm.deal(arbVictim, {funding_wei});
+        this.arbEnter();
+        uint256 mid = {measure_victim};
+
+        attackRan = true;
+        if (withAttack) {{
+            (bool ok, bytes memory data) =
+                address(this).call(abi.encodeWithSignature("arbAttack()"));
+            attackRan = ok;
+            if (ok && data.length >= 32) {{ gain = abi.decode(data, (uint256)); }}
+        }}
+
+        // A victim who cannot get out AT ALL has recovered nothing. That is the harm,
+        // not an error, so the revert is caught rather than propagated.
+        (bool exited, ) = address(this).call(abi.encodeWithSignature("arbExit()"));
+        recovered = exited && {measure_victim} > mid ? {measure_victim} - mid : 0;
+    }}
+
+    function arbiterRun() external returns (bytes32) {{
+        (uint256 recoveredA, , ) = this.arbTrial(false);
+        require(
+            recoveredA > 0,
+            "ARBITER: the victim gets nothing back even with no attack, so this scenario "
+            "cannot show harm. Give victim_enter and victim_exit that work."
+        );
+
+        (uint256 recoveredB, uint256 attackGain, bool attackRan) = this.arbTrial(true);
+        require(attackRan, "ARBITER: the attack itself reverted");
+
+        // The definition of the vulnerability, and the one thing the agent cannot
+        // arrange for itself: the victim got less back BECAUSE the attack happened, and
+        // the attacker is holding more than they started with.
+{fail_report}
+        return ARB_COMPLETED;
+    }}
+}}
+"""
+
+
 DEFAULT_SWEEP: list[tuple[int, int, int]] = [
     (10**19, 1, 0),          # the current default, so variant 0 reproduces today's result
     (10**19, 4, 0),
