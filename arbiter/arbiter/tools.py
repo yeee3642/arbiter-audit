@@ -488,12 +488,23 @@ class ToolDispatcher:
     # scored negative. Exploration is useful; unbounded exploration is how the run dies.
     MAX_FREEFORM_POCS = 3
 
+    # Repository navigation before the first exploit attempt. Giving the agent the rest
+    # of the repository was necessary -- a protocol is not exploitable through one file --
+    # but it is also the most inviting way to spend a turn, and turns are the budget.
+    # Measured on the first in-repo run: 41 navigation calls, 0 exploit attempts, three
+    # samples burning 52 requests each to reach a verdict by reading alone. Reading is not
+    # evidence here; only execution is. The cap does not remove the tools, it stops them
+    # being an alternative to using the EVM.
+    MAX_RECON_BEFORE_EXPLOIT = 10
+
     def __init__(self, workspace: Workspace) -> None:
         self.ws = workspace
         self.outcome = AgentOutcome()
         self._poc_by_name: dict[str, PocRecord] = {}
         self._freeform_calls = 0
         self._exploit_calls = 0
+        self._recon_calls = 0
+        self._refused_safe = False
         self._hypotheses: list[str] = []
 
     @property
@@ -530,10 +541,34 @@ class ToolDispatcher:
     def _grep_source(self, args: dict[str, Any]) -> tuple[str, bool]:
         return self.ws.grep(str(args.get("pattern", "")))[:MAX_TOOL_OUTPUT], False
 
+    def _recon_budget(self) -> str:
+        """Empty while reconnaissance is affordable; a refusal once it is not."""
+        if self._exploit_calls:
+            return ""
+        self._recon_calls += 1
+        if self._recon_calls <= self.MAX_RECON_BEFORE_EXPLOIT:
+            return ""
+        return (
+            f"Repository reconnaissance is CLOSED: you have used all "
+            f"{self.MAX_RECON_BEFORE_EXPLOIT} reads without attempting a single "
+            "exploit. Reading is not evidence here -- only an execution is, and every "
+            "turn you spend reading is a turn you cannot spend building. Call "
+            "run_exploit with the best hypothesis you have now, even if you are not "
+            "certain of it; a failed exploit tells you more than another file will. "
+            "If you genuinely have no hypothesis, call conclude_safe. Reconnaissance "
+            "reopens once you have made an attempt."
+        )
+
     def _list_repo_files(self, args: dict[str, Any]) -> tuple[str, bool]:
+        refusal = self._recon_budget()
+        if refusal:
+            return refusal, False
         return self.ws.repo_files(str(args.get("pattern") or ""))[:MAX_TOOL_OUTPUT], False
 
     def _read_repo_file(self, args: dict[str, Any]) -> tuple[str, bool]:
+        refusal = self._recon_budget()
+        if refusal:
+            return refusal, False
         end = args.get("end_line")
         return (
             self.ws.read_repo(
@@ -545,6 +580,9 @@ class ToolDispatcher:
         )
 
     def _grep_repo(self, args: dict[str, Any]) -> tuple[str, bool]:
+        refusal = self._recon_budget()
+        if refusal:
+            return refusal, False
         return self.ws.grep_repo(str(args.get("pattern") or ""))[:MAX_TOOL_OUTPUT], False
 
     # -- the execution tool --------------------------------------------------
@@ -776,6 +814,25 @@ class ToolDispatcher:
         return "Finding accepted with execution evidence. Audit complete.", True
 
     def _conclude_safe(self, args: dict[str, Any]) -> tuple[str, bool]:
+        # A clean bill of health that was never tested is an opinion, and an opinion is
+        # what this architecture exists to replace. Refused once -- not permanently, since
+        # forcing a hopeless exploit would be its own kind of theatre -- so that "safe"
+        # means "I attacked it and it held" rather than "I read it and nothing jumped out".
+        if self._exploit_calls == 0 and not self._refused_safe:
+            self._refused_safe = True
+            self.outcome.rejected_submissions.append(
+                {"reason": "conclude_safe before any exploit attempt", "submission": args}
+            )
+            return (
+                "NOT YET. You are certifying this contract as safe without having "
+                "attacked it once. Reading it and finding nothing is how the tool you "
+                "are replacing works; the whole point here is that you have an EVM. "
+                "Take your single best hypothesis -- even a weak one -- and run it "
+                "through run_exploit. If a guard stops it, that failure is real evidence "
+                "of safety and you can call conclude_safe again immediately, this time "
+                "with something behind it.",
+                False,
+            )
         guards = [str(g) for g in (args.get("guards_verified") or [])]
         verified = [g for g in guards if self.ws.contains_verbatim(g)]
         invented = [g for g in guards if not self.ws.contains_verbatim(g)]

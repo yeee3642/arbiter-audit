@@ -73,6 +73,8 @@ def main() -> int:
     a.add_argument("--max-turns", type=int, default=26)
     a.add_argument("--concurrency", type=int, default=6)
     a.add_argument("--rpm", type=int, default=45)
+    a.add_argument("--all-files", action="store_true",
+                   help="audit every .sol including interfaces, libraries and mocks")
 
     bs = sub.add_parser(
         "broadside", help="batch candidate generation, all executed in parallel"
@@ -180,12 +182,39 @@ def main() -> int:
     if args.cmd == "audit":
         # Real-world use: no ground truth, so nothing is scored. The output is the
         # findings and the exploit that backs each one.
+        from arbiter.triage import triage_all
+
         sols: list[Path] = []
         for p in args.paths:
             sols.extend(sorted(p.rglob("*.sol")) if p.is_dir() else [p])
         if not sols:
             print("no .sol files found")
             return 1
+
+        # Most of a checkout is not attack surface. Skipping interfaces, type libraries
+        # and test scaffolding is a cost decision, not a verdict, so what was skipped and
+        # why is written out alongside the results rather than silently dropped.
+        skipped: list = []
+        if not args.all_files:
+            keep, skipped = triage_all(sols)
+            sols = [t.path for t in keep]
+            args.out.mkdir(parents=True, exist_ok=True)
+            (args.out / f"{args.run_id}.skipped.json").write_text(
+                json.dumps([t.as_dict() for t in skipped], ensure_ascii=False, indent=1),
+                encoding="utf-8",
+            )
+            reasons: dict[str, int] = {}
+            for t in skipped:
+                reasons[t.reason.split("(")[0].strip()] = (
+                    reasons.get(t.reason.split("(")[0].strip(), 0) + 1
+                )
+            print(f"triage: {len(sols)} of {len(sols) + len(skipped)} files carry "
+                  f"deployable, externally reachable state")
+            for reason, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
+                print(f"  skipped {n:4d}  {reason}")
+            if not sols:
+                print("nothing left to audit; pass --all-files to override")
+                return 1
         tmp = args.out / f"{args.run_id}.input.json"
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_text(json.dumps({
