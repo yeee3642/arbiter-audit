@@ -167,6 +167,100 @@ class Workspace:
             out.append(f"... {len(hits) - max_hits} more matches suppressed")
         return "\n".join(out)
 
+    # -- the rest of the repository ------------------------------------------
+    #
+    # An exploit against a real protocol is rarely written against one file. The vault
+    # under audit is deployed by a factory, holds a token declared elsewhere, and takes a
+    # constructor argument whose type lives in an interface directory. Without these the
+    # agent can read the bug and still not be able to stand the contract up, which shows
+    # up as a compile failure it has no way to fix -- indistinguishable, in the run
+    # record, from a contract that is actually safe.
+
+    @property
+    def in_repo(self) -> bool:
+        return self.plan is not None
+
+    def repo_files(self, pattern: str = "") -> str:
+        if self.plan is None:
+            return "this contract was audited standalone; there is no repository to list"
+        from .repo import SKIP_DIRS
+
+        root = self.plan.repo_root
+        try:
+            rx = re.compile(pattern) if pattern else None
+        except re.error as exc:
+            return f"invalid regex: {exc}"
+        out: list[str] = []
+        for dirpath, dirnames, filenames in __import__("os").walk(root):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for name in sorted(filenames):
+                if not name.endswith(".sol"):
+                    continue
+                rel = (Path(dirpath) / name).relative_to(root).as_posix()
+                if rx is None or rx.search(rel):
+                    out.append(rel)
+        if not out:
+            return f"no .sol file matches {pattern!r}"
+        head = out[:200]
+        text = "\n".join(head)
+        if len(out) > len(head):
+            text += f"\n... {len(out) - len(head)} more suppressed; narrow the pattern"
+        return text
+
+    def read_repo(self, rel: str, start: int = 1, end: int | None = None) -> str:
+        path = self._repo_path(rel)
+        if isinstance(path, str):
+            return path
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        end = len(lines) if end is None else min(end, len(lines))
+        start = max(1, start)
+        if start > len(lines):
+            return f"({rel} has only {len(lines)} lines)"
+        width = len(str(end))
+        return "\n".join(f"{i:>{width}}| {lines[i - 1]}" for i in range(start, end + 1))
+
+    def grep_repo(self, pattern: str, max_hits: int = 60) -> str:
+        if self.plan is None:
+            return "this contract was audited standalone; there is no repository to search"
+        from .repo import SKIP_DIRS
+
+        try:
+            rx = re.compile(pattern)
+        except re.error as exc:
+            return f"invalid regex: {exc}"
+        root = self.plan.repo_root
+        hits: list[str] = []
+        for dirpath, dirnames, filenames in __import__("os").walk(root):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for name in sorted(filenames):
+                if not name.endswith(".sol"):
+                    continue
+                path = Path(dirpath) / name
+                rel = path.relative_to(root).as_posix()
+                try:
+                    text = path.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                for i, line in enumerate(text.splitlines(), 1):
+                    if rx.search(line):
+                        hits.append(f"{rel}:{i}| {line.strip()[:160]}")
+                        if len(hits) >= max_hits:
+                            return "\n".join(hits) + "\n... truncated; narrow the pattern"
+        return "\n".join(hits) if hits else f"no match for {pattern!r} in the repository"
+
+    def _repo_path(self, rel: str) -> "Path | str":
+        if self.plan is None:
+            return "this contract was audited standalone; there is no repository"
+        root = self.plan.repo_root
+        candidate = (root / rel.lstrip("/")).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return f"{rel!r} is outside the repository"
+        if not candidate.is_file():
+            return f"{rel!r} does not exist; use list_repo_files to see what does"
+        return candidate
+
     def contains_verbatim(self, fragment: str) -> bool:
         """Whitespace-insensitive verbatim containment check.
 
@@ -195,6 +289,7 @@ class Workspace:
         mode: str = "contract",
         require_honest: bool = True,
         funding_wei: int = 10**19,
+        extra_imports: list[str] | None = None,
     ) -> str:
         """Build the exploit test file. The agent never writes the success check.
 
@@ -315,9 +410,20 @@ class Workspace:
             # and there is nowhere else to put them.
             setup = _EOA_SETUP.format(funding_wei=int(funding_wei))
 
+        # Named imports do not re-export, so a token or interface the target imported
+        # that way is not in scope here. The agent asks for what it needs by the same
+        # path the repository's own files use, which resolves through the same
+        # remappings; `arbiter-repo/<path from the repo root>` reaches anything else.
+        extras = "\n".join(
+            f'import "{spec.strip()}";'
+            for spec in (extra_imports or [])
+            if spec and spec.strip()
+        )
+
         return _EXPLOIT_TEMPLATE.format(
             pragma=self.pragma,
             target_import=self.target_import,
+            extra_imports=("\n" + extras if extras else ""),
             error_decl=(
                 "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
                 if self.custom_errors
@@ -350,8 +456,21 @@ class Workspace:
         self.pocs[safe] = solidity
         return safe
 
+    @property
+    def _force(self) -> list[str]:
+        """Whether this workspace must recompile everything rather than incrementally.
+
+        In project mode the contract only resolves when the project's own files are
+        compilation roots -- that is the whole reason the mode exists. forge's cache
+        defeats it: with only the test file changed it recompiles that file alone, the
+        repository drops out of the unit, and a build that passed a moment earlier fails
+        with the same cycle error. Costly and unavoidable, so it is paid only in the mode
+        that needs it.
+        """
+        return ["--force"] if self.plan is not None and self.plan.chosen_src != "src" else []
+
     def build(self, timeout: int = 240) -> CommandResult:
-        result = self._forge(["build"], timeout=timeout)
+        result = self._forge(["build", *self._force], timeout=timeout)
         self.build_ok = result.ok
         return result
 
@@ -413,11 +532,13 @@ class Workspace:
             modes.reverse()
         for mode, src in modes:
             self._write_toml(src)
+            # Set before probing, not after: `_force` reads it, and the project-mode
+            # probe is exactly the build that must not come from cache.
+            self.plan.chosen_src = src
             result = None
             for attempt in range(rounds + 1):
                 result = self.context_ok(timeout=timeout)
                 if result.ok:
-                    self.plan.chosen_src = src
                     return {
                         "ok": True, "mode": mode, "rounds": attempt,
                         "remappings": len(self.plan.remappings),
@@ -436,6 +557,7 @@ class Workspace:
         # Leave the workspace in the cheaper configuration: a failed project-wide build
         # usually means an unrelated sibling is broken, and the agent's own PoCs should
         # not be charged for that.
+        self.plan.chosen_src = "src"
         self._write_toml("src")
         return {
             "ok": False, "mode": "none", "rounds": rounds,
@@ -446,7 +568,8 @@ class Workspace:
 
     def run_poc(self, name: str, timeout: int = 240) -> CommandResult:
         return self._forge(
-            ["test", "--match-path", f"test/{name}.t.sol", "-vvv"], timeout=timeout
+            ["test", "--match-path", f"test/{name}.t.sol", "-vvv", *self._force],
+            timeout=timeout,
         )
 
     def _forge(self, args: list[str], timeout: int) -> CommandResult:
@@ -560,7 +683,7 @@ def _first_error(output: str) -> str:
 _EXPLOIT_TEMPLATE = """// SPDX-License-Identifier: Apache-2.0
 pragma solidity {pragma};
 
-import "{target_import}";
+import "{target_import}";{extra_imports}
 import "./Vm.sol";
 
 interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}

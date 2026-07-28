@@ -301,6 +301,11 @@ class RepoContext:
 # The workspace reaches the contract under audit through a remapping rather than a
 # relative path, so nothing has to be copied and no import escapes the project root.
 TARGET_PREFIX = "arbiter-target/"
+# The whole repository, addressable from an exploit. Real attacks need more than the file
+# under audit -- the factory that deploys it, the token it holds, the interface its
+# constructor takes -- and named imports (`import { IERC20 } from ...`) do not re-export,
+# so those types are not in scope just because the target imported them.
+REPO_PREFIX = "arbiter-repo/"
 
 
 @dataclass
@@ -374,6 +379,7 @@ def plan_for(
     source = target.read_text(encoding="utf-8", errors="ignore")
     remappings = res.as_lines()
     remappings.append(f"{TARGET_PREFIX}={target.parent.as_posix()}/")
+    remappings.append(f"{REPO_PREFIX}={root.as_posix()}/")
     return RepoPlan(
         repo_root=root,
         target=target,

@@ -73,6 +73,63 @@ def tool_schemas() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "list_repo_files",
+                "description": (
+                    "List the Solidity files in the repository this contract belongs to, "
+                    "optionally filtered by regex on the path. Use it to find the "
+                    "factory that deploys the target, the token it holds, or the "
+                    "interface its constructor takes -- an exploit against a real "
+                    "protocol usually needs more than the file under audit."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Regex on the path, e.g. 'interfaces/|Factory'.",
+                        }
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_repo_file",
+                "description": (
+                    "Read numbered lines of another file in the repository, by path "
+                    "relative to the repository root as shown by list_repo_files."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "start_line": {"type": "integer", "minimum": 1},
+                        "end_line": {"type": "integer", "minimum": 1},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "grep_repo",
+                "description": (
+                    "Regex search every Solidity file in the repository, returning "
+                    "path:line matches. Use it to find who calls the vulnerable "
+                    "function, where a role is granted, or how the protocol is wired."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"pattern": {"type": "string"}},
+                    "required": ["pattern"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "run_exploit",
                 "description": (
                     "Run an adjudicated exploit. THIS IS THE ONLY EVIDENCE THAT CAN "
@@ -183,6 +240,20 @@ def tool_schemas() -> list[dict[str, Any]]:
                                 "Required for state_change. A zero-argument public view "
                                 "function with its signature, e.g. 'owner()' or "
                                 "'totalSupply()'."
+                            ),
+                        },
+                        "imports": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Extra files your exploit needs in scope. Use the SAME "
+                                "import strings the repository's own files use, e.g. "
+                                "'@openzeppelin/contracts/token/ERC20/IERC20.sol' -- they "
+                                "resolve identically here. Any other file in the "
+                                "repository is reachable as "
+                                "'arbiter-repo/<path from the repository root>'. Needed "
+                                "because a named import in the target does not put that "
+                                "type in scope for your exploit."
                             ),
                         },
                         "hypothesis": {"type": "string"},
@@ -409,6 +480,9 @@ class ToolDispatcher:
         handler = {
             "read_source": self._read_source,
             "grep_source": self._grep_source,
+            "list_repo_files": self._list_repo_files,
+            "read_repo_file": self._read_repo_file,
+            "grep_repo": self._grep_repo,
             "run_poc": self._run_poc,
             "run_exploit": self._run_exploit,
             "submit_finding": self._submit_finding,
@@ -430,6 +504,23 @@ class ToolDispatcher:
 
     def _grep_source(self, args: dict[str, Any]) -> tuple[str, bool]:
         return self.ws.grep(str(args.get("pattern", "")))[:MAX_TOOL_OUTPUT], False
+
+    def _list_repo_files(self, args: dict[str, Any]) -> tuple[str, bool]:
+        return self.ws.repo_files(str(args.get("pattern") or ""))[:MAX_TOOL_OUTPUT], False
+
+    def _read_repo_file(self, args: dict[str, Any]) -> tuple[str, bool]:
+        end = args.get("end_line")
+        return (
+            self.ws.read_repo(
+                str(args.get("path") or ""),
+                int(args.get("start_line") or 1),
+                int(end) if end else None,
+            )[:MAX_TOOL_OUTPUT],
+            False,
+        )
+
+    def _grep_repo(self, args: dict[str, Any]) -> tuple[str, bool]:
+        return self.ws.grep_repo(str(args.get("pattern") or ""))[:MAX_TOOL_OUTPUT], False
 
     # -- the execution tool --------------------------------------------------
 
@@ -529,6 +620,7 @@ class ToolDispatcher:
                 attack_body=attack_body,
                 honest_body=str(args.get("honest_body") or ""),
                 mode=mode,
+                extra_imports=[str(x) for x in (args.get("imports") or [])],
             )
         except ValueError as exc:
             return f"error: {exc}", False

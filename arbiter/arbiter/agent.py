@@ -197,7 +197,7 @@ over several careless ones.\
 """
 
 USER_TEMPLATE = """\
-Audit the contract at src/Target.sol.
+Audit the contract at {location}.
 
 It is {n_lines} lines. Here it is in full:
 
@@ -207,6 +207,38 @@ It is {n_lines} lines. Here it is in full:
 
 Determine whether it contains an exploitable vulnerability. Prove it with a PoC that \
 runs, or clear the contract with conclude_safe. Begin.\
+"""
+
+# Appended when the contract is being audited inside a real repository rather than as a
+# standalone file. Everything here is a capability the agent has no way to discover on its
+# own, and without it the failure looks like an exploit that will not compile -- which in
+# the run record is indistinguishable from a contract that is genuinely safe.
+REPO_BRIEF = """\
+
+This contract is part of the repository `{repo}`, and it is compiled in that \
+repository's own context: its imports resolve, its dependencies are present, and its \
+sibling contracts are available to you.
+
+That matters for building an exploit, because a real protocol is rarely exploitable \
+through one file. Before you write `deploy_code`, find out how this contract is actually \
+stood up:
+
+  * `list_repo_files` with a pattern, to see what else is here -- factories, interfaces, \
+tokens, mocks;
+  * `read_repo_file` to read any of them;
+  * `grep_repo` to find who deploys this contract, who calls the function you suspect, \
+and where a role or an approval is granted.
+
+A contract that takes constructor arguments, or that is only reachable through a factory, \
+cannot be deployed with `new Target()` alone. Read the repository's own deployment or \
+test code and reproduce it.
+
+When your exploit needs a type that is not in scope -- an ERC20 interface, a factory, a \
+mock -- pass it in the `imports` array of run_exploit. Use the SAME import string the \
+repository's own files use, for example \
+"@openzeppelin/contracts/token/ERC20/IERC20.sol"; those resolve here identically. Any \
+other file in the repository is reachable as `arbiter-repo/<path from the repository \
+root>`, exactly as `list_repo_files` prints it.\
 """
 
 NUDGE_TO_EXPLOIT = """\
@@ -246,9 +278,17 @@ def audit(
     """
     dispatcher = ToolDispatcher(workspace)
     schemas = tool_schemas()
+    plan = workspace.plan
     task = USER_TEMPLATE.format(
-        n_lines=len(workspace.lines), source=workspace.source
+        location=(
+            "src/Target.sol" if plan is None
+            else plan.target.relative_to(plan.repo_root).as_posix()
+        ),
+        n_lines=len(workspace.lines),
+        source=workspace.source,
     )
+    if plan is not None:
+        task += REPO_BRIEF.format(repo=plan.repo_root.name)
     if proposals:
         task += proposals
     if ruled_out:
