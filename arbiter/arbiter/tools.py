@@ -196,8 +196,14 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "predicate": {
                             "type": "string",
-                            "enum": ["victim_loss", "eth_profit", "token_profit",
-                                     "state_change", "liveness_broken"],
+                            # eth_profit, token_profit and state_change are retired from
+                            # the tool surface. Audited over 68 accepted proofs they
+                            # carried a 37% false positive rate with a hole that cannot
+                            # be closed: the baseline they compare against is written by
+                            # the same agent that writes the attack. They remain in the
+                            # harness for benchmark admission, where a patched twin
+                            # settles the question instead.
+                            "enum": ["victim_loss", "liveness_broken"],
                         },
                         "victim_enter": {
                             "type": "string",

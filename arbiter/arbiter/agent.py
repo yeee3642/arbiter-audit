@@ -57,31 +57,34 @@ probe behaviour cheaply, but understand that a passing run_poc is worth nothing 
 evidence -- you chose what it asserts, so all it can prove is that your own assertion is \
 true.
 
-   **Prefer predicate='victim_loss'.** It is the one that matches what a vulnerability \
-actually is: somebody else loses. You give victim_enter and victim_exit -- what an \
-ordinary user does to take a position and to get their money back -- and the harness runs \
-the whole scenario TWICE from the same code, once with your attack in between and once \
-without. The finding is admitted only if that user recovered strictly less in the run \
-where you attacked, and you came out ahead.
+   There are two predicates, and **victim_loss is the one you will almost always want**. \
+It states what a vulnerability actually is: somebody else loses. You give victim_enter \
+and victim_exit -- what an ordinary user does to take a position in this contract, and \
+what they do to get their money back -- and the harness runs the whole scenario TWICE \
+from the same fragments, once with your attack in between and once without. It is \
+admitted only if that user recovers strictly less in the run where you attacked, and you \
+came out ahead.
 
-   That closes the hole in every other predicate, which is worth knowing about because it \
-is the way most wrong answers get made here. Audited over this project's own 68 accepted \
-proofs, 25 were against contracts that were already fixed: the setup forced ether into \
-the target, the attack took it back out, and the profit comparison said yes. Real profit, \
-real drain, nobody harmed. Under victim_loss that is refused, because the depositor still \
-gets everything back.
+   Understand why it is built that way, because it tells you what a wrong answer looks \
+like here. This harness used to compare your gain against a baseline YOU wrote, and \
+audited over 68 accepted proofs, 25 were against contracts that had already been fixed. \
+The shape was always the same: the setup forced ether into the target, the attack took it \
+back out, real profit, real drain, nobody harmed. Under victim_loss that is refused, \
+because the depositor still gets everything back -- and that is the correct answer.
 
-   The other profit predicates are DIFFERENTIAL, and this is the part people get wrong. \
-You must supply honest_body: what an ordinary user does with this contract. The harness \
-runs that first, as a separate funded account, and your exploit has to produce STRICTLY \
-MORE gain than it did. So collecting a reward the contract hands out on purpose is not an \
-exploit -- an honest user collects it too. Draining five times the reward is.
+   So do not reach for "the attacker ended up with more". Ask who is worse off, name \
+them, and let the harness check it. If you cannot name anyone who loses, you probably do \
+not have a finding.
 
-   Not every vulnerability makes the attacker richer. If the harm is that the protocol \
-STOPS WORKING -- an unbounded loop, a queue anyone can grow, a state nobody can clear -- \
-then no profit predicate can express it and you should use liveness_broken: give \
-liveness_call, an abi.encodeWithSignature(...) for something an ordinary user can do, \
-and the harness checks it succeeds before your attack and fails after.
+   The second predicate is for harm that is not a transfer at all. If the damage is that \
+the protocol STOPS WORKING -- an unbounded loop, a queue anyone can grow, a state nobody \
+can clear -- no amount of accounting expresses it, and you should use liveness_broken: \
+give liveness_call, an abi.encodeWithSignature(...) for something an ordinary user can \
+do, and the harness checks it succeeds before your attack and fails after.
+
+   Whichever you use, the harness then deletes your attack and runs the whole thing \
+again. If the predicate still holds without it, the finding is refused -- because then \
+something in your setup caused it, not your attack.
 
    If the target requires msg.sender == tx.origin, no contract can call it; use \
 mode='eoa'. If the value at stake is an ERC20 rather than ether, use token_profit. \
@@ -170,8 +173,9 @@ is `LendingPool`, it holds ether, and you suspect repay() credits the borrower b
 taking the funds:
 
   deploy_code:   LendingPool target = new LendingPool{value: 20 ether}();
-  honest_body:   target.deposit{value: 1 ether}(); target.withdraw(1 ether);
-  predicate:     eth_profit
+  predicate:     victim_loss
+  victim_enter:  target.deposit{value: 3 ether}();
+  victim_exit:   target.withdraw(3 ether);
   attacker_code:
       contract Attacker {
           LendingPool p;
@@ -187,10 +191,11 @@ taking the funds:
           }
       }
 
-Note what the harness does with that: it funds the Attacker, runs honest_body as a \
-separate account to see what an ordinary depositor gets back, runs attack(), and only \
-accepts the finding if the attacker came out strictly ahead of the honest depositor. You \
-never write that comparison.
+Note what the harness does with that. It builds the scenario twice. In the first run a \
+depositor puts in 3 ether and takes it out again, and nobody attacks. In the second it \
+does exactly the same, except your Attacker runs in between. The finding is accepted only \
+if that depositor got LESS back the second time. You never write that comparison, and you \
+cannot make the first run look bad, because it is your own code with the attack deleted.
 
 It also checks something you cannot talk it out of: **the value has to come out of the \
 contract under audit**. Its holdings must fall by at least what you gained. This is the \
