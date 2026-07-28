@@ -997,11 +997,20 @@ _VICTIM_ERROR = (
     "                    uint256 attackerGain);\n"
 )
 
-_VICTIM_FAIL = """        if (recoveredB >= recoveredA || attackGain == 0) {
+# Three conditions, and the third is the one measurement forced. Harm alone is not
+# enough: a victim recovers less whenever anyone else competes for the same pool, and
+# three of arm B's four surviving false positives were exactly that -- a fixed-size
+# redemption that reverted because an attacker had legitimately consumed liquidity.
+# What separates a drain from contention is CONSERVATION: in a drain, what the victim
+# lost is in the attacker's hands. In contention it is not, because the attacker took
+# value they had a claim to. So the attacker's gain must cover the victim's shortfall.
+_VICTIM_FAIL = """        uint256 shortfall = recoveredA > recoveredB ? recoveredA - recoveredB : 0;
+        if (recoveredB >= recoveredA || attackGain == 0 || attackGain < shortfall) {
             revert ArbiterNoHarm(recoveredA, recoveredB, attackGain);
         }"""
 
-_VICTIM_FAIL_REQUIRE = """        if (recoveredB >= recoveredA || attackGain == 0) {
+_VICTIM_FAIL_REQUIRE = """        uint256 shortfall = recoveredA > recoveredB ? recoveredA - recoveredB : 0;
+        if (recoveredB >= recoveredA || attackGain == 0 || attackGain < shortfall) {
             revert(string(abi.encodePacked(
                 "ArbiterNoHarm(withoutAttack=", _u(recoveredA),
                 ", withAttack=", _u(recoveredB),
