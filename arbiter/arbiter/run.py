@@ -162,6 +162,10 @@ def run_arbiter(
             "sample_id": item["id"],
             "truth": item["label"],
             "predicted": outcome_to_label(outcome),
+            # The contract under audit travels with the record. Without it a dumped
+            # exploit has nothing to run against, and evidence that cannot be replayed
+            # is an assertion with extra steps.
+            "source": item["code"],
             "attempts_used": len(tried),
             "attempts": tried,
             "elapsed_s": round(time.monotonic() - t0, 2),

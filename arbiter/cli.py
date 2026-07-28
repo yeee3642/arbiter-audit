@@ -52,6 +52,27 @@ def main() -> int:
     a.add_argument("--concurrency", type=int, default=6)
     a.add_argument("--rpm", type=int, default=45)
 
+    bs = sub.add_parser(
+        "broadside", help="batch candidate generation, all executed in parallel"
+    )
+    bs.add_argument("--evalset", type=Path, required=True)
+    bs.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
+    bs.add_argument("--run-id", required=True)
+    bs.add_argument("--out", type=Path, default=Path("runs"))
+    bs.add_argument("-k", type=int, default=8, help="candidates per request")
+    bs.add_argument("--shards", type=int, default=1, help="generation requests per sample")
+    bs.add_argument("--concurrency", type=int, default=4, help="samples in flight")
+    bs.add_argument("--exec-workers", type=int, default=8, help="candidates compiled at once")
+    bs.add_argument("--rpm", type=int, default=45)
+
+    dp = sub.add_parser(
+        "dump", help="write every proven exploit as a runnable Foundry project"
+    )
+    dp.add_argument("--results", type=Path, required=True, help="a run's .results.jsonl")
+    dp.add_argument("--out", type=Path, required=True, help="directory to write into")
+    dp.add_argument("--evalset", type=Path, default=None,
+                    help="optional: supplies contract sources for older runs")
+
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
     s.add_argument("--evalset", type=Path, required=True)
@@ -167,6 +188,94 @@ def main() -> int:
         print(f"{n_v}/{len(rows)} reported vulnerable, each backed by an executed exploit")
         print(f"full transcripts: {args.out / (args.run_id + '.results.jsonl')}")
         print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "broadside":
+        import os, threading, time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from arbiter.broadside import broadside_audit
+        from arbiter.gateway import Gateway, RateLimiter
+
+        meta, items = load_evalset(args.evalset)
+        truth = truth_map(items)
+        args.out.mkdir(parents=True, exist_ok=True)
+        gw = Gateway(model=args.model, limiter=RateLimiter(args.rpm),
+                     ledger_path=args.out / f"{args.run_id}.ledger.jsonl")
+        rp = args.out / f"{args.run_id}.results.jsonl"
+        done = set()
+        if rp.exists():
+            for ln in rp.read_text(encoding="utf-8").splitlines():
+                try: done.add(json.loads(ln)["sample_id"])
+                except Exception: pass
+        lock = threading.Lock()
+        t0 = time.monotonic()
+
+        def one(item):
+            if item["id"] in done: return
+            res = broadside_audit(gw, item["id"], item["code"],
+                                  Path("/tmp/broadside") / args.run_id,
+                                  k=args.k, shards=args.shards,
+                                  workers=args.exec_workers)
+            pred = "vuln" if res.verdict == "vulnerable" else "safe"
+            row = {"sample_id": item["id"], "truth": item["label"],
+                   "predicted": pred, "repeat": 0, "result": res.as_dict()}
+            with lock:
+                with rp.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(row, ensure_ascii=False) + chr(10))
+                    fh.flush(); os.fsync(fh.fileno())
+            d = res.as_dict()
+            mark = "OK " if pred == item["label"] else "MISS"
+            print(f"  [{mark}] {item['id'][:44]:46s} -> {pred:5s} "
+                  f"({d['n_compiled']}/{d['n_candidates']} built, "
+                  f"{d['n_passed']} passed, {res.requests} req)", flush=True)
+
+        print(f"BROADSIDE  model={args.model}  samples={len(items)}  "
+              f"k={args.k} x {args.shards} shards  rpm={args.rpm}", flush=True)
+        with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
+            for f in as_completed([pool.submit(one, i) for i in items]):
+                try: f.result()
+                except Exception as e: print(f"  [ERR ] {type(e).__name__}: {e}", flush=True)
+
+        rows = [json.loads(l) for l in rp.read_text(encoding="utf-8").splitlines() if l.strip()]
+        preds = {r["sample_id"]: r["predicted"] for r in rows}
+        agg = summarise_runs([preds], truth)
+        summary = {"arm": "broadside", "run_id": args.run_id, "model": args.model,
+                   "evalset": str(args.evalset), "k": args.k, "shards": args.shards,
+                   "wall_clock_s": round(time.monotonic() - t0, 1),
+                   "usage": gw.usage.as_dict(),
+                   "predictions_by_repeat": {"0": preds}, "scored": agg}
+        (args.out / f"{args.run_id}.summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(json.dumps(agg, indent=1))
+        print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "dump":
+        from arbiter.dump import dump_run
+
+        # Older runs predate sources being stored in the record; splice them back in.
+        if args.evalset:
+            _, items = load_evalset(args.evalset)
+            src = {i["id"]: i["code"] for i in items}
+            patched = args.results.parent / (args.results.stem + ".withsrc.jsonl")
+            out_lines = []
+            for line in args.results.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                row.setdefault("source", src.get(row.get("sample_id"), ""))
+                out_lines.append(json.dumps(row, ensure_ascii=False))
+            patched.write_text(chr(10).join(out_lines), encoding="utf-8")
+            args.results = patched
+
+        man = dump_run(args.results, args.out)
+        print(f"wrote {man['exploits_written']} runnable exploit project(s) to {args.out}")
+        print(f"{man['samples_without_admissible_exploit']} sample(s) had no admissible exploit")
+        for e in man["exploits"][:25]:
+            print(f"  {e['sample_id'][:44]:46s} {e['predicate']:16s} {e['title'][:60]}")
+        if man["exploits"]:
+            print()
+            print(f"reproduce any of them:  cd {man['exploits'][0]['path']} && forge test -vvv")
         return 0
 
     if args.cmd == "bastet":
