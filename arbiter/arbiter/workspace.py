@@ -309,6 +309,9 @@ class Workspace:
         """
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
+        _reject_halting(deploy_code, "deploy_code")
+        _reject_halting(attack_body, "attack_body")
+        _reject_halting(honest_body, "honest_body")
         if not honest_body.strip():
             if require_honest:
                 raise ValueError(
@@ -812,6 +815,7 @@ interface _ArbiterToken {{ function balanceOf(address) external view returns (ui
 {attacker_code}
 
 contract TestArbiterSweep is Harness {{
+    bytes32 internal constant ARB_COMPLETED = keccak256("arbiter.predicate.reached");
 
 {trials}
 }}
@@ -821,6 +825,13 @@ contract TestArbiterSweep is Harness {{
 # variant's failure cannot contaminate another's.
 _SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={warp}s
     function test_arbSweep{i}() public {{
+        require(
+            this.arbSweepRun{i}() == ARB_COMPLETED,
+            "ARBITER: execution halted before the harness predicate ran"
+        );
+    }}
+
+    function arbSweepRun{i}() external returns (bytes32) {{
 {deploy_code}
         vm.warp(block.timestamp + {warp});
         vm.roll(block.number + 1 + {warp} / 12);
@@ -849,6 +860,7 @@ _SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={wa
 {drain_report}
 
 {fail_report}
+        return ARB_COMPLETED;
     }}
 """
 
@@ -857,6 +869,29 @@ _SWEEP_ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
 
 _SWEEP_EOA_SETUP = """        address eoa = address(uint160(uint256(keccak256("arbiter.attacker"))));
         vm.deal(eoa, {endow});"""
+
+
+_HALTING_RE = re.compile(r"\b(selfdestruct|suicide)\s*\(")
+
+
+def _reject_halting(fragment: str, field: str) -> None:
+    """Refuse an instruction that ends the test before the harness can measure anything.
+
+    The sentinel return already catches this -- a halted body returns no data and the
+    decode reverts -- but the compiler error that produces says nothing useful. Naming it
+    here turns a mysterious failure into a fixable one, and points at the technique that
+    does work, since forcing ether into a contract is a legitimate attack.
+    """
+    if _HALTING_RE.search(fragment or ""):
+        raise ValueError(
+            f"{field} calls selfdestruct directly. That halts the test at that line, so "
+            "every harness check below it is skipped -- it does not satisfy the "
+            "predicate, it escapes it. To force ether into the target, do it from a "
+            "helper contract declared in attacker_code:\n"
+            "  contract Bomb { constructor(address t) payable { "
+            "selfdestruct(payable(t)); } }\n"
+            "then in deploy_code:  new Bomb{value: 1 ether}(address(target));"
+        )
 
 
 def _first_error(output: str) -> str:
@@ -882,11 +917,29 @@ interface _ArbiterToken {{ function balanceOf(address) external view returns (ui
 {attacker_code}
 
 contract TestArbiterExploit is Harness {{
+    bytes32 internal constant ARB_COMPLETED = keccak256("arbiter.predicate.reached");
+
+    /// The exploit runs one call deeper than the test, and the test only passes if that
+    /// call RETURNS the sentinel. forge reports a test as passing whenever it does not
+    /// revert, and several EVM instructions -- selfdestruct above all -- halt execution
+    /// and return success. Measured on a real repository: an "exploit" put
+    /// `selfdestruct(payable(address(target)))` in its setup, execution stopped there,
+    /// every harness check below it was skipped, and forge printed [PASS]. The predicate
+    /// had not been satisfied; it had never run. A halted body returns no data, so the
+    /// decode below reverts and the test fails, which is the correct outcome.
     function testArbiterExploit() public {{
+        require(
+            this.arbiterRun() == ARB_COMPLETED,
+            "ARBITER: execution halted before the harness predicate ran"
+        );
+    }}
+
+    function arbiterRun() external returns (bytes32) {{
         // ---- agent-supplied deployment and scenario setup ----
         {deploy_code}
 {setup}
 {check}
+        return ARB_COMPLETED;
     }}
 }}
 """
