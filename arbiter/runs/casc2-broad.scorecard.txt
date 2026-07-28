@@ -1,0 +1,68 @@
+casc2, broad pass -- 70 samples, permissive predicates, 2 attempts, 26 turns
+model ais3/nemotron-3-ultra-550b
+
+    TP 11   TN 30   FP 5   FN 24
+    prec 0.688   rec 0.314   f1 0.431   mcc 0.204   acc 0.586
+
+READ THIS BEFORE USING THE NUMBERS
+----------------------------------
+This run does not measure the code in this repository. The process started at
+23:27:58 and workspace.py was edited at 23:37:17 -- ten minutes later, and Python
+had already imported the module. The Vm-interface repair and strip_preamble are
+on disk but were never executed here. The proof is in the error census below:
+67 `Member "sign" not found` and 51 `Did you mean "Vm"?` are exactly the failures
+that repair removes.
+
+Keep it as a baseline for the version before that repair. Do not quote it as
+current performance.
+
+WHERE THE ATTACKS DIED
+----------------------
+    1266 attempts
+      40 passed                          3.2%
+     837 built, ran, extracted nothing  66.1%
+     389 did not compile                30.7%
+
+    161  Undeclared identifier.
+     67  Member "sign" not found                      <- repaired, not in this run
+     54  Undeclared identifier. Did you mean "assert"?
+     51  Undeclared identifier. Did you mean "Vm"?    <- repaired, not in this run
+     41  Identifier already declared.
+     28  Invalid type for argument in function call
+     22  Only local variables are supported
+     22  Explicit type conversion from "contract MockERC20"
+     19  Explicit type conversion from "contract IERC20"
+     17  Cannot set option "value" on a non-payable constructor
+     14  Identifier not found or not unique.
+
+`Identifier already declared` and the two `Explicit type conversion` rows share a
+cause: the target is imported unnamed, so every top-level symbol it declares is in
+scope, and an agent that writes its own IERC20 to cast with collides with the one
+already there. Nine of the 35 vulnerable samples declare IERC20 themselves.
+
+WHAT THE FALSE POSITIVES SAY
+----------------------------
+    S_amm_spot_priced_collateral
+    S_lock_duration_uint64_downcast                    <- V_ half also accepted
+    S_reward_claim_callback_reentrancy
+    S_self_reported_collateral_balance_callback        <- V_ half also accepted
+    S_withdrawal_queue_unbounded_batch
+
+Two of the five are the patched half of a pair whose vulnerable half was also
+accepted. The same attack passed against both, so whatever it proved did not
+depend on the defect. That is the failure mode the paired benchmark exists to
+make visible, and it is visible.
+
+TRUE POSITIVES
+--------------
+    V_delegatecall_unrestricted_strategy_adapter
+    V_forced_ether_solvency_invariant
+    V_lock_duration_uint64_downcast
+    V_module_allowlist_checked_by_code_length
+    V_proxy_implementation_slot_unguarded_upgrade
+    V_self_reported_collateral_balance_callback
+    V_stablevault_price_deadline_never_checked
+    V_unchecked_allowance_subtraction
+    V_unprotected_fee_recipient_setter
+    V_vault_first_deposit_share_inflation
+    V_withdrawqueue_nonce_bumped_after_call
