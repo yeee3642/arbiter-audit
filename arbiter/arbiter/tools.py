@@ -33,6 +33,20 @@ from .workspace import CommandResult, Workspace
 
 MAX_TOOL_OUTPUT = 6000
 
+# The taxonomy OneSavie's own dataset labels findings with -- 35 tags over 504 curated
+# findings from real audit contests. Adopted verbatim rather than invented, because the
+# comparison is only meaningful if both arms answer the same question, and the question
+# that evaluation actually asks is "does this repository contain a finding tagged X".
+# Bastet cannot answer it: its decision rule is `any(detector fired)` over 53 detectors
+# with no class filter at all, so it returns the same 1 whatever tag is being scored.
+VULN_CLASSES = (
+    "Access Control", "Accounting Error", "Arithmetic", "Bad Randomness", "Bridge",
+    "Chainlink", "Cross-Chain", "DAO", "DoS", "EIP712", "ERC1155", "ERC20", "ERC721",
+    "ERC777", "ERC4626", "Flashloan", "Governance", "Input Validation", "Liquidation",
+    "Logic error", "MEV", "Oracle", "Pause", "Replay Attack", "Reentrancy", "Slippage",
+    "TWAP", "Uniswap", "Upgradeable", "call / delegatecall",
+)
+
 
 def tool_schemas() -> list[dict[str, Any]]:
     """OpenAI-style function schemas for the gateway's native tool calling."""
@@ -344,6 +358,16 @@ def tool_schemas() -> list[dict[str, Any]]:
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
                         },
+                        "vuln_class": {
+                            "type": "string",
+                            "enum": list(VULN_CLASSES),
+                            "description": (
+                                "Which class of defect this is. Required because the "
+                                "question a user actually asks is 'does this code have a "
+                                "bug of kind X', and a report that cannot name the kind "
+                                "cannot answer it."
+                            ),
+                        },
                     },
                     "required": [
                         "poc_name",
@@ -352,6 +376,7 @@ def tool_schemas() -> list[dict[str, Any]]:
                         "offending_expression",
                         "attack_path",
                         "severity",
+                        "vuln_class",
                     ],
                 },
             },

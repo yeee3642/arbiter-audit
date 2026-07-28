@@ -103,6 +103,10 @@ def main() -> int:
                     help="aggregate with Bastet's rule: a repo is positive iff any file is")
     ev.add_argument("--truth", type=Path, default=None,
                     help="Bastet's evaluation_results.csv, for repo-level labels")
+    ev.add_argument("--tag", default=None,
+                    help="score the class-conditional question Bastet's evaluator "
+                         "actually asks: does this repo contain a finding tagged X "
+                         "(its own default is Slippage). Needs --truth.")
 
     s = sub.add_parser("score", help="score one arm's summary against ground truth")
     s.add_argument("--summary", type=Path, required=True)
@@ -320,10 +324,33 @@ def main() -> int:
 
     if args.cmd == "eval":
         from arbiter.evaluate import (
-            load_repo_truth, load_results, render, score_repos, score_samples,
+            load_repo_truth, load_results, load_scored_rows, render, score_by_tag,
+            score_repos, score_samples,
         )
 
         rows = load_results(args.results)
+        if args.tag:
+            if not args.truth:
+                print("--tag needs --truth pointing at evaluation_results.csv")
+                return 1
+            scored = load_scored_rows(args.truth)
+            counts, detail = score_by_tag(rows, scored, args.tag)
+            print(f"class-conditional question: does the repository contain a "
+                  f"{args.tag!r} finding?")
+            print(f"scored on the same {len(scored)} rows as the baseline run\n")
+            print(render(counts))
+            print()
+            print(f"{'repository':<32} {'truth':<7} {'ours':<7} proven classes")
+            for repo, actual, predicted, note in detail:
+                mark = " " if actual == predicted else "*"
+                print(f"{mark}{repo[:31]:<31} "
+                      f"{'yes' if actual else 'no':<7} "
+                      f"{'yes' if predicted else 'no':<7} {note[:60]}")
+            print()
+            print("* marks a disagreement. Note that the row set contains repositories "
+                  "labelled both yes and no for the same tag, so 20/20 is unreachable "
+                  "for any repository-level predictor.")
+            return 0
         if args.by_repo:
             if not args.truth:
                 print("--by-repo needs --truth pointing at evaluation_results.csv")
