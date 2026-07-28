@@ -40,7 +40,7 @@ out = "out"
 libs = []
 {solc}
 optimizer = false
-via_ir = false
+via_ir = {via_ir}
 # Deterministic: no fork, no network access during tests.
 ffi = false
 fs_permissions = []
@@ -109,6 +109,8 @@ class Workspace:
         self.plan = plan
         self.build_ok: bool | None = None
         self.pocs: dict[str, str] = {}
+        self._via_ir = False
+        self._toml_args: tuple[str, str] = ("src", "")
         # Where a PoC reaches the contract under audit, and what syntax the harness may
         # use to talk about it. Both follow the contract rather than forcing it upward:
         # a target pinned to 0.6.12 cannot be compiled alongside a >=0.8.0 test, and
@@ -702,6 +704,16 @@ class Workspace:
 
     def build(self, timeout: int = 240) -> CommandResult:
         result = self._forge(["build", *self._force], timeout=timeout)
+        # "Stack too deep" is the harness's own fault, not the agent's. Every gate added
+        # to the profit template put another local in the same function, and Solidity has
+        # sixteen stack slots -- so six of this project's own reference exploits stopped
+        # compiling the moment the drain invariant landed, and every one of them was a
+        # recall loss charged to the wrong party. The IR pipeline has no such limit; it is
+        # slower, so it is a fallback rather than the default.
+        if not result.ok and "Stack too deep" in result.combined and not self._via_ir:
+            self._via_ir = True
+            self._write_toml(*self._toml_args, via_ir=True)
+            result = self._forge(["build", "--force"], timeout=timeout)
         self.build_ok = result.ok
         return result
 
@@ -725,14 +737,17 @@ class Workspace:
         self.pocs.pop("ArbiterContextPoc", None)
         return result
 
-    def _write_toml(self, src: str, solc: str = "") -> None:
+    def _write_toml(self, src: str, solc: str = "", via_ir: bool = False) -> None:
         # Pinning beats auto-detection here: auto_detect_solc picks the HIGHEST version
         # satisfying every pragma, so a repository written for 0.8.9 and pinned ^0.8.0
         # compiles under 0.8.35 and fails on constructs that were legal when it was
         # written. The plan reads the version out of the project's own configuration.
         line = f'solc = "{solc}"' if solc else "auto_detect_solc = true"
+        self._toml_args = (src, solc)
         (self.root / "foundry.toml").write_text(
-            FOUNDRY_TOML.format(src=src, solc=line), encoding="utf-8"
+            FOUNDRY_TOML.format(src=src, solc=line,
+                                via_ir="true" if via_ir else "false"),
+            encoding="utf-8",
         )
 
     def prepare_context(self, rounds: int = 3, timeout: int = 300) -> dict[str, object]:
@@ -1480,6 +1495,13 @@ _PROFIT_BODY = """        address ctrl = address(uint160(uint256(keccak256("arbi
         // it -- the contract under audit was never touched, and the differential passed
         // because the honest baseline had been pointed at a third address and gained
         // nothing. A finding about a contract has to be a finding about that contract.
+        //
+        // It applies only when the contract did not end up HOLDING MORE. A stale-oracle
+        // attack deposits overvalued collateral and borrows real value against it: the
+        // target's holdings of the measured asset rise while it is being robbed. Treating
+        // that as "no drain" cost a real finding, and the honest reading is that this
+        // test cannot speak there rather than that it failed. Equal holdings still fail,
+        // which is what catches profit drawn from scenery.
 {drain_report}
 
         // Both quantities reach the agent, not just a verdict. "did not satisfy the
@@ -1508,12 +1530,12 @@ _ERROR_DECLS = (
     "uint256 attackGain);\n"
 )
 
-_NOT_DRAINED_CUSTOM_ERROR = """        if (attackGain > 0 && (tgtPost >= tgtPre || tgtPre - tgtPost < attackGain)) {
+_NOT_DRAINED_CUSTOM_ERROR = """        if (attackGain > 0 && tgtPost <= tgtPre && tgtPre - tgtPost < attackGain) {
             revert ArbiterNotDrained(tgtPre, tgtPost, attackGain);
         }"""
 
 # Pre-0.8.4 has no custom errors, so the same two quantities travel in the revert string.
-_NOT_DRAINED_REQUIRE = """        if (attackGain > 0 && (tgtPost >= tgtPre || tgtPre - tgtPost < attackGain)) {
+_NOT_DRAINED_REQUIRE = """        if (attackGain > 0 && tgtPost <= tgtPre && tgtPre - tgtPost < attackGain) {
             revert(string(abi.encodePacked(
                 "ArbiterNotDrained(targetBefore=", _u(tgtPre),
                 ", targetAfter=", _u(tgtPost),
