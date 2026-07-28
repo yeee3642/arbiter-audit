@@ -37,7 +37,7 @@ src = "{src}"
 test = "test"
 out = "out"
 libs = []
-auto_detect_solc = true
+{solc}
 optimizer = false
 via_ir = false
 # Deterministic: no fork, no network access during tests.
@@ -119,7 +119,13 @@ class Workspace:
             shutil.rmtree(self.root)
         (self.root / "src").mkdir(parents=True)
         (self.root / "test").mkdir(parents=True)
-        self._write_toml("src" if self.plan is None else self.plan.chosen_src)
+        self._write_toml(
+            "src" if self.plan is None else self.plan.chosen_src,
+            "" if self.plan is None else (
+                self.plan.solc_version if self.plan.chosen_solc is None
+                else self.plan.chosen_solc
+            ),
+        )
         if self.plan is None:
             (self.root / "src" / "Target.sol").write_text(self.source, encoding="utf-8")
         else:
@@ -601,9 +607,14 @@ class Workspace:
         self.pocs.pop("ArbiterContextPoc", None)
         return result
 
-    def _write_toml(self, src: str) -> None:
+    def _write_toml(self, src: str, solc: str = "") -> None:
+        # Pinning beats auto-detection here: auto_detect_solc picks the HIGHEST version
+        # satisfying every pragma, so a repository written for 0.8.9 and pinned ^0.8.0
+        # compiles under 0.8.35 and fails on constructs that were legal when it was
+        # written. The plan reads the version out of the project's own configuration.
+        line = f'solc = "{solc}"' if solc else "auto_detect_solc = true"
         (self.root / "foundry.toml").write_text(
-            FOUNDRY_TOML.format(src=src), encoding="utf-8"
+            FOUNDRY_TOML.format(src=src, solc=line), encoding="utf-8"
         )
 
     def prepare_context(self, rounds: int = 3, timeout: int = 300) -> dict[str, object]:
@@ -629,25 +640,69 @@ class Workspace:
             return {"ok": result.ok, "mode": "hermetic", "rounds": 0,
                     "error": _first_error(result.combined)}
 
+        from .repo import plan_for, repair
+
+        result = self._prepare_one(rounds, timeout)
+        if result.get("ok"):
+            return result
+
+        # Neither import-resolution order is right everywhere, and which one a repository
+        # needs is not predictable from its layout -- so the other one is tried rather
+        # than guessed at. Pure CPU to re-resolve, under a second to rebuild.
+        try:
+            other = plan_for(
+                self.plan.target,
+                repo_root=self.plan.repo_root,
+                long_tail_first=not self.plan.long_tail_first,
+            )
+        except Exception:  # noqa: BLE001
+            return result
+        self.plan = other
+        self.target_import = other.target_import
+        (self.root / "remappings.txt").write_text(
+            "\n".join(other.remappings) + "\n", encoding="utf-8"
+        )
+        second = self._prepare_one(rounds, timeout)
+        second["first_order_failed"] = result.get("failed_modes")
+        second["resolution_order"] = (
+            "long_tail" if other.long_tail_first else "long_prefix"
+        )
+        return second
+
+    def _prepare_one(self, rounds: int, timeout: int) -> dict[str, object]:
+        """One resolution order, across the four compilation configurations."""
         from .repo import repair
 
+        assert self.plan is not None
         attempts: list[dict[str, object]] = []
-        modes = [("minimal", "src"), ("project", self.plan.source_root.as_posix())]
-        # A plan that already knows which set worked starts there, so re-auditing the
-        # same contract does not repeat the discovery.
-        if self.plan.chosen_src != "src":
-            modes.reverse()
-        for mode, src in modes:
-            self._write_toml(src)
+        root = self.plan.source_root.as_posix()
+        pinned = self.plan.solc_version
+        # Four configurations, cheapest first. The compilation SET decides whether a
+        # cyclic re-export resolves; the compiler VERSION decides whether constructs that
+        # were legal when the repository was written still compile. They fail
+        # independently, so both are tried rather than guessed at.
+        modes = [
+            ("minimal", "src", pinned),
+            ("project", root, pinned),
+            ("minimal", "src", ""),
+            ("project", root, ""),
+        ]
+        if self.plan.chosen_src != "src":  # a plan that already knows starts there
+            modes.sort(key=lambda m: m[1] == "src")
+
+        for mode, src, solc in modes:
+            self._write_toml(src, solc)
             # Set before probing, not after: `_force` reads it, and the project-mode
             # probe is exactly the build that must not come from cache.
             self.plan.chosen_src = src
+            self.plan.chosen_solc = solc
             result = None
             for attempt in range(rounds + 1):
                 result = self.context_ok(timeout=timeout)
                 if result.ok:
                     return {
                         "ok": True, "mode": mode, "rounds": attempt,
+                        "solc": solc or "auto",
                         "remappings": len(self.plan.remappings),
                         "external": list(self.plan.external_used),
                         "failed_modes": attempts,
@@ -657,15 +712,17 @@ class Workspace:
                 (self.root / "remappings.txt").write_text(
                     "\n".join(self.plan.remappings) + "\n", encoding="utf-8"
                 )
-            attempts.append(
-                {"mode": mode, "error": _first_error(result.combined if result else "")}
-            )
+            attempts.append({
+                "mode": mode, "solc": solc or "auto",
+                "error": _first_error(result.combined if result else ""),
+            })
 
         # Leave the workspace in the cheaper configuration: a failed project-wide build
         # usually means an unrelated sibling is broken, and the agent's own PoCs should
         # not be charged for that.
         self.plan.chosen_src = "src"
-        self._write_toml("src")
+        self.plan.chosen_solc = pinned
+        self._write_toml("src", pinned)
         return {
             "ok": False, "mode": "none", "rounds": rounds,
             "remappings": len(self.plan.remappings),
@@ -895,12 +952,20 @@ def _reject_halting(fragment: str, field: str) -> None:
 
 
 def _first_error(output: str) -> str:
-    """The first compiler diagnostic, for the run record. Full text stays in the trace."""
-    for line in output.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("Error") or "Error (" in stripped:
-            return stripped[:200]
-    return output.strip().splitlines()[-1][:200] if output.strip() else ""
+    """The first compiler diagnostic that says something, for the run record.
+
+    `Error: Compiler run failed:` is forge's banner, not a diagnostic -- it was 79 of the
+    111 recorded failures and told us nothing about any of them. The numbered solc error
+    underneath is the one worth keeping.
+    """
+    lines = [ln.strip() for ln in output.splitlines()]
+    for line in lines:
+        if re.match(r"Error \(\d+\)", line):
+            return line[:200]
+    for line in lines:
+        if line.startswith("Error") and "Compiler run failed" not in line:
+            return line[:200]
+    return next((ln for ln in reversed(lines) if ln), "")[:200]
 
 
 # The exploit test. Everything outside the agent-supplied holes is fixed, so the success

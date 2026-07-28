@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
 
 from arbiter.repo import SKIP_DIRS, plan_for  # noqa: E402
+from arbiter.triage import triage_all  # noqa: E402
 from arbiter.workspace import Workspace  # noqa: E402
 
 WS_ROOT = Path("/tmp/arbiter-ctx")
@@ -70,6 +71,10 @@ def main() -> int:
     ap.add_argument("repos", nargs="+", type=Path)
     ap.add_argument("--hermetic", action="store_true",
                     help="probe the OLD one-file workspace, for the before/after number")
+    ap.add_argument("--triaged", action="store_true",
+                    help="only the files an audit would actually spend requests on. The "
+                         "rate over ALL files is flattered by interfaces and type "
+                         "libraries, which compile trivially and are never audited.")
     ap.add_argument("--limit", type=int, default=0, help="contracts per repo, 0 = all")
     ap.add_argument("--workers", type=int, default=max(2, (os.cpu_count() or 4) - 4))
     ap.add_argument("--out", type=Path, default=None)
@@ -78,6 +83,9 @@ def main() -> int:
     jobs: list[tuple[str, str, bool]] = []
     for repo in args.repos:
         files = contracts_in(repo)
+        if args.triaged:
+            keep, _ = triage_all(files)
+            files = [t.path for t in keep]
         if args.limit:
             files = files[: args.limit]
         jobs += [(f.as_posix(), repo.as_posix(), args.hermetic) for f in files]
@@ -124,6 +132,15 @@ def main() -> int:
     print("\ntop failure modes:")
     for msg, n in errs.most_common(12):
         print(f"  {n:5d}  {msg}")
+
+    unresolved = collections.Counter()
+    for r in records:
+        for spec in r.get("unresolved") or []:
+            unresolved[str(spec).split(" (")[0]] += 1
+    if unresolved:
+        print("\nimports the resolver could not place at all:")
+        for spec, n in unresolved.most_common(15):
+            print(f"  {n:5d}  {spec}")
 
     if args.out:
         args.out.write_text(
