@@ -120,6 +120,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=max(2, (os.cpu_count() or 4) - 4))
+    ap.add_argument("--out", type=Path, default=None,
+                    help="write per-sample verdicts, so arms can be combined")
     args = ap.parse_args()
 
     src = sources()
@@ -155,6 +157,11 @@ def main() -> int:
           f"{fp['accepted']} still accepted, {fp['refused']} now refused")
     print(f"true positives:  {sum(tp.values())} -> "
           f"{tp['accepted']} still accepted, {tp['refused']} now refused")
+    if args.out:
+        args.out.write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in out), encoding="utf-8"
+        )
+        print(f"\nper-sample verdicts -> {args.out}")
     print("\nA gate is worth having only if the first line moves more than the second.")
     return 0
 
