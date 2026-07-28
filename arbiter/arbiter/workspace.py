@@ -323,6 +323,8 @@ class Workspace:
         _reject_halting(deploy_code, "deploy_code")
         _reject_halting(attack_body, "attack_body")
         _reject_halting(honest_body, "honest_body")
+        _reject_forgery(attack_body, "attack_body")
+        _reject_forgery(attacker_code, "attacker_code")
         if not honest_body.strip():
             if require_honest:
                 raise ValueError(
@@ -506,6 +508,12 @@ class Workspace:
         _reject_halting(attack_body, "attack_body")
         _reject_halting(victim_enter, "victim_enter")
         _reject_halting(victim_exit, "victim_exit")
+        _reject_forgery(attack_body, "attack_body")
+        _reject_forgery(attacker_code, "attacker_code")
+        # The victim is an ordinary user, so their fragments may not forge anything
+        # either -- a "victim" who pranks the owner is not a victim.
+        _reject_forgery(victim_enter, "victim_enter")
+        _reject_forgery(victim_exit, "victim_exit")
 
         if token_expr.strip():
             measure_victim = f"_ArbiterToken({token_expr.strip()}).balanceOf(arbVictim)"
@@ -1213,6 +1221,59 @@ _SWEEP_EOA_SETUP = """        address eoa = address(uint160(uint256(keccak256("a
 
 
 _HALTING_RE = re.compile(r"\b(selfdestruct|suicide)\s*\(")
+
+# Cheatcodes that manufacture authority or assets out of nothing. Setup may use them --
+# building a world is what setup is for -- but the ATTACK may not, because an attacker in
+# front of a deployed contract cannot become its owner, cannot write its storage and
+# cannot mint themselves a balance.
+#
+# This was the largest hole in the whole harness and it defeated every predicate,
+# victim_loss included. Measured on a patched sample: the agent wrote
+#   vm.startPrank(owner); target.emergencyWithdraw(attacker); vm.stopPrank();
+# against an onlyOwner function, and the depositor really did lose their money, so the
+# harm was real and the finding was still false. The contract was working exactly as
+# designed; the cheatcode was doing the attacking.
+# Two tiers, because the receiver cannot be relied on: an attacker contract can declare
+# its own `Vm v = Vm(0x7109...)` and call `v.prank(...)`, so anchoring on the name `vm`
+# misses it -- measured, that is exactly what slipped through.
+#
+# These names belong to nothing but the cheatcode interface, so any receiver counts.
+_CHEATS_UNAMBIGUOUS = (
+    "prank|startPrank|stopPrank|etch|mockCall|mockCallRevert|setNonce|"
+    "startBroadcast|resetNonce"
+)
+# These are plausible method names on a real contract, so they only count on `vm` itself.
+_CHEATS_AMBIGUOUS = "store|deal|sign|broadcast|coinbase|chainId"
+_FORGERY_RE = re.compile(
+    rf"\.\s*({_CHEATS_UNAMBIGUOUS})\s*\(|\bvm\s*\.\s*({_CHEATS_AMBIGUOUS})\s*\("
+)
+# And the address itself, which is the only way to reach cheatcodes at all, so a fragment
+# carrying it is reaching for them however it dresses the call up.
+_CHEAT_ADDRESS_RE = re.compile(r"7109709ecfa91a80626ff3989d68f67f5b1dd12d", re.IGNORECASE)
+
+
+def _reject_forgery(fragment: str, field: str) -> None:
+    """Refuse a cheatcode that fabricates what the attacker would have to earn."""
+    match = _FORGERY_RE.search(fragment or "")
+    if not match and _CHEAT_ADDRESS_RE.search(fragment or ""):
+        raise ValueError(
+            f"{field} contains the Foundry cheatcode address. Reaching the cheatcode "
+            "precompile from an attack means the attack is not something a real attacker "
+            "could perform. Build the world in deploy_code instead."
+        )
+    if not match:
+        return
+    raise ValueError(
+        f"{field} calls vm.{match.group(1) or match.group(2)}, which forges something "
+        "a real attacker "
+        "cannot have. An attacker standing in front of a deployed contract cannot become "
+        "its owner, cannot write its storage and cannot mint themselves a balance -- so "
+        "an attack that does is not an attack, and a harm it produces is not a "
+        "vulnerability. Set the world up in deploy_code, where cheatcodes ARE allowed, "
+        "and then attack it with nothing but calls anybody could make. "
+        "vm.warp and vm.roll stay available everywhere, because waiting is something "
+        "an attacker really can do."
+    )
 
 
 def _reject_halting(fragment: str, field: str) -> None:
