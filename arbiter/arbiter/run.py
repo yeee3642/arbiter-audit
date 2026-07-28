@@ -105,9 +105,16 @@ def run_arbiter(
         # only on samples we are failing to crack.
         ruled_out: list[str] = []
         for attempt in range(attempts):
-            ws = Workspace(ws_root / f"r{repeat}a{attempt}", item["id"], item["code"])
             attempt_trace: list[dict[str, Any]] = []
+            ws = None
             try:
+                # Workspace construction is inside the try. It was outside, and it
+                # touches the filesystem and shells out to forge, so a single sample
+                # hitting a transient disk or toolchain error propagated out of the
+                # worker, through future.result(), and killed the entire run.
+                ws = Workspace(
+                    ws_root / f"r{repeat}a{attempt}", item["id"], item["code"]
+                )
                 outcome = audit(
                     gateway,
                     ws,
@@ -122,7 +129,9 @@ def run_arbiter(
 
                 outcome = AgentOutcome(stop_reason=f"error: {type(exc).__name__}: {exc}")
                 error = f"{type(exc).__name__}: {exc}"
-            ws.cleanup()
+            finally:
+                if ws is not None:
+                    ws.cleanup()
             tried.append(
                 {
                     "attempt": attempt,
@@ -185,7 +194,13 @@ def run_arbiter(
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(one, r, item) for r, item in jobs]
         for future in as_completed(futures):
-            future.result()
+            try:
+                future.result()
+            except Exception as exc:  # noqa: BLE001
+                # One sample must never take the run with it. A 70-sample run that
+                # dies on sample 3 costs an hour and produces nothing; a run that
+                # loses sample 3 costs one row and says so in the summary.
+                print(f"  [ERR ] worker raised {type(exc).__name__}: {exc}", flush=True)
 
     rows = [
         json.loads(line)
