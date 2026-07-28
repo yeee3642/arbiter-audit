@@ -324,6 +324,10 @@ class Workspace:
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
         _eoa = draw_identity()
+        deploy_code = strip_preamble(deploy_code)
+        attacker_code = strip_preamble(attacker_code)
+        attack_body = strip_preamble(attack_body)
+        honest_body = strip_preamble(honest_body)
         _reject_halting(deploy_code, "deploy_code")
         _reject_halting(attack_body, "attack_body")
         _reject_halting(honest_body, "honest_body")
@@ -500,6 +504,11 @@ class Workspace:
         """
         _eoa = draw_identity()
         _victim = draw_identity()
+        deploy_code = strip_preamble(deploy_code)
+        attacker_code = strip_preamble(attacker_code)
+        attack_body = strip_preamble(attack_body)
+        victim_enter = strip_preamble(victim_enter)
+        victim_exit = strip_preamble(victim_exit)
         if not victim_enter.strip() or not victim_exit.strip():
             raise ValueError(
                 "victim_loss needs victim_enter and victim_exit: what an ordinary user "
@@ -548,7 +557,21 @@ class Workspace:
         )
         _state_decls, _hoisted = hoist_declarations(deploy_code)
         _hoisted = _indent(_hoisted, 8)
+        env = VICTIM_ENVIRONMENTS
         return _VICTIM_TEMPLATE.format(
+            n_env=len(env),
+            endows=", ".join(
+                (f"uint256({e[0]})" if i == 0 else str(e[0]))
+                for i, e in enumerate(env)
+            ),
+            warps=", ".join(
+                (f"uint256({e[1]})" if i == 0 else str(e[1]))
+                for i, e in enumerate(env)
+            ),
+            rounds=", ".join(
+                (f"uint256({e[2]})" if i == 0 else str(e[2]))
+                for i, e in enumerate(env)
+            ),
             victim_addr=_victim,
             pragma=self.pragma,
             target_import=self.target_import,
@@ -954,7 +977,28 @@ interface Vm {
     // meaningful if both start from byte-identical state.
     function snapshotState() external returns (uint256);
     function revertToState(uint256) external returns (bool);
+    // Measured additions. Across two full runs 33 exploits failed to compile on
+    // `vm.sign` alone, and a further handful on addr/assume/fee/difficulty -- every one
+    // of them a recall loss caused by this interface being short, not by the attack
+    // being wrong. Signature forgery is still refused by the attack-side lint; what is
+    // restored here is the ability to write a legitimate signed message.
+    function sign(uint256, bytes32) external pure returns (uint8, bytes32, bytes32);
+    function addr(uint256) external pure returns (address);
+    function assume(bool) external pure;
+    function fee(uint256) external;
+    function difficulty(uint256) external;
+    function prevrandao(bytes32) external;
+    function getNonce(address) external returns (uint64);
+    function expectEmit(bool, bool, bool, bool) external;
+    function recordLogs() external;
 }
+
+// File scope, so a contract the agent writes can reach it too. 13 exploits failed to
+// compile because `vm` is a member of Harness and an Attacker does not inherit it.
+// A plain comment, not a doc comment: solc rejects @notice on a file-level variable.
+// Reaching a cheatcode from an attack is still refused by the lint, which is where that
+// decision belongs, rather than by an accident of scope.
+Vm constant vm_ = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
 /// Inherit this in a PoC to get `vm` and `assertTrue`.
 /// The exploit template below is written by the harness, never by the auditor.
@@ -1131,22 +1175,27 @@ contract TestArbiterVictim is Harness {{
         return atkPost > atkPre ? atkPost - atkPre : 0;
     }}
 
-    /// One world. `withAttack` is the only thing that differs between the two runs.
-    function arbTrial(bool withAttack)
+    /// One world. `withAttack` is the only thing that differs between the two runs of
+    /// a pair; the other three arguments are the environment, which is swept.
+    function arbTrial(bool withAttack, uint256 endow, uint256 warpBy, uint256 rounds)
         external
         returns (uint256 recovered, uint256 gain, bool attackRan)
     {{
         this.arbSetup();
-        vm.deal(arbVictim, {funding_wei});
+        if (warpBy > 0) {{ vm.warp(block.timestamp + warpBy); vm.roll(block.number + 1); }}
+        vm.deal(arbVictim, endow);
         this.arbEnter();
         uint256 mid = {measure_victim};
 
         attackRan = true;
         if (withAttack) {{
-            (bool ok, bytes memory data) =
-                address(this).call(abi.encodeWithSignature("arbAttack()"));
-            attackRan = ok;
-            if (ok && data.length >= 32) {{ gain = abi.decode(data, (uint256)); }}
+            for (uint256 r = 0; r < rounds; r++) {{
+                (bool ok, bytes memory data) =
+                    address(this).call(abi.encodeWithSignature("arbAttack()"));
+                if (r == 0) {{ attackRan = ok; }}
+                if (ok && data.length >= 32) {{ gain += abi.decode(data, (uint256)); }}
+                if (!ok) {{ break; }}
+            }}
         }}
 
         // A victim who cannot get out AT ALL has recovered nothing. That is the harm,
@@ -1155,16 +1204,53 @@ contract TestArbiterVictim is Harness {{
         recovered = exited && {measure_victim} > mid ? {measure_victim} - mid : 0;
     }}
 
+    /// The endowment, the clock and the number of rounds were never the agent's to
+    /// choose -- they are the harness's constants -- so an attack that is right in
+    /// mechanism and short of scale is being failed for the harness's decision. Each
+    /// environment is tried as a matched PAIR, so the comparison inside a pair is always
+    /// like for like and a sweep can only ever surface an asymmetry, never invent one.
     function arbiterRun() external returns (bytes32) {{
-        (uint256 recoveredA, , ) = this.arbTrial(false);
-        require(
-            recoveredA > 0,
-            "ARBITER: the victim gets nothing back even with no attack, so this scenario "
-            "cannot show harm. Give victim_enter and victim_exit that work."
-        );
+        uint256[{n_env}] memory endow = [{endows}];
+        uint256[{n_env}] memory warps = [{warps}];
+        uint256[{n_env}] memory rounds = [{rounds}];
 
-        (uint256 recoveredB, uint256 attackGain, bool attackRan) = this.arbTrial(true);
-        require(attackRan, "ARBITER: the attack itself reverted");
+        uint256 bestA;
+        uint256 bestB;
+        uint256 bestGain;
+        bool anyRan;
+
+        for (uint256 i = 0; i < {n_env}; i++) {{
+            (bool okA, bytes memory ra) = address(this).call(
+                abi.encodeWithSignature(
+                    "arbTrial(bool,uint256,uint256,uint256)",
+                    false, endow[i], warps[i], rounds[i]));
+            if (!okA) {{ continue; }}
+            (uint256 recA, , ) = abi.decode(ra, (uint256, uint256, bool));
+            if (recA == 0) {{ continue; }}   // no baseline, so no harm can be shown
+
+            (bool okB, bytes memory rb) = address(this).call(
+                abi.encodeWithSignature(
+                    "arbTrial(bool,uint256,uint256,uint256)",
+                    true, endow[i], warps[i], rounds[i]));
+            if (!okB) {{ continue; }}
+            (uint256 recB, uint256 g, bool ran) = abi.decode(rb, (uint256, uint256, bool));
+            if (!ran) {{ continue; }}
+            anyRan = true;
+
+            uint256 shortfall = recA > recB ? recA - recB : 0;
+            if (shortfall > 0 && g >= shortfall) {{
+                bestA = recA; bestB = recB; bestGain = g;
+                break;                        // one environment is enough
+            }}
+            if (bestA == 0) {{ bestA = recA; bestB = recB; bestGain = g; }}
+        }}
+
+        require(anyRan, "ARBITER: the attack reverted in every environment, or the "
+                        "victim's own path never worked -- fix victim_enter/victim_exit");
+
+        uint256 recoveredA = bestA;
+        uint256 recoveredB = bestB;
+        uint256 attackGain = bestGain;
 
         // The definition of the vulnerability, and the one thing the agent cannot
         // arrange for itself: the victim got less back BECAUSE the attack happened, and
@@ -1174,6 +1260,18 @@ contract TestArbiterVictim is Harness {{
     }}
 }}
 """
+
+
+# (endowment in wei, seconds warped, attack rounds) for the victim-loss predicate. Four
+# environments rather than twelve: each one costs a matched PAIR of trials, so the budget
+# is doubled relative to the profit sweep, and these four span the three axes an agent
+# cannot reach -- a thousand-fold endowment, a week of elapsed time, and repetition.
+VICTIM_ENVIRONMENTS: list[tuple[int, int, int]] = [
+    (10**19, 0, 1),                  # the default, so environment 0 reproduces today
+    (10**22, 0, 1),                  # a thousand times the stake
+    (10**19, 7 * 24 * 3600, 1),      # a week later
+    (10**19, 0, 8),                  # eight rounds, for a per-round bias
+]
 
 
 DEFAULT_SWEEP: list[tuple[int, int, int]] = [
@@ -1258,6 +1356,9 @@ _SWEEP_ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
 _SWEEP_EOA_SETUP = """        address eoa = address(uint160({eoa_addr}));
         vm.deal(eoa, {endow});"""
 
+
+SP = chr(92) + "s"
+NL = chr(92) + "n"
 
 _HALTING_RE = re.compile(r"\b(selfdestruct|suicide)\s*\(")
 
@@ -1358,6 +1459,24 @@ def _reject_forgery(fragment: str, field: str) -> None:
         "vm.warp and vm.roll stay available everywhere, because waiting is something "
         "an attacker really can do."
     )
+
+
+_PREAMBLE_RE = re.compile(
+    "^" + SP + "*(?://" + SP + "*SPDX-License-Identifier:[^" + NL + "]*"
+    "|pragma" + SP + "+[^;]*;|import" + SP + "+[^;]*;)" + SP + "*$",
+    re.MULTILINE,
+)
+
+
+def strip_preamble(fragment: str) -> str:
+    """Remove a file header the agent added to a fragment that is not a file.
+
+    The harness owns the pragma, the licence line and the imports; a fragment that
+    repeats them produces "Multiple SPDX license identifiers" or a duplicate pragma and
+    the exploit never runs. Nine failures across two runs, every one of them a recall
+    loss for a reason that has nothing to do with the attack.
+    """
+    return _PREAMBLE_RE.sub("", fragment or "")
 
 
 def _reject_halting(fragment: str, field: str) -> None:
