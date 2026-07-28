@@ -57,6 +57,7 @@ def run_arbiter(
     proposals_path: Path | None = None,
     carry_ruled_out: bool = False,
     api_key: str | None = None,
+    predicates: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     meta, items = load_evalset(evalset)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -222,6 +223,7 @@ def run_arbiter(
                     trace_sink=attempt_trace,
                     ruled_out=ruled_out if carry_ruled_out else None,
                     proposals=proposal_block(hits.get(item['id'], []), rare) if hits else "",
+                    predicates=predicates,
                 )
             except Exception as exc:  # noqa: BLE001
                 from .tools import AgentOutcome
@@ -293,6 +295,7 @@ def run_arbiter(
         "attempts_per_sample": attempts,
         "proposals_from": str(proposals_path) if proposals_path else None,
         "carry_ruled_out": carry_ruled_out,
+        "predicates": list(predicates) if predicates else None,
         "max_turns": max_turns,
         "max_tokens": max_tokens,
         "wall_clock_s": round(time.monotonic() - started, 1),

@@ -142,6 +142,22 @@ def main() -> int:
     bm.add_argument("--strict", action="store_true",
                     help="require honest_body, matching the bar the agent is held to")
 
+    cs = sub.add_parser(
+        "cascade",
+        help="generate broadly, adjudicate strictly -- the measured architecture",
+    )
+    cs.add_argument("--evalset", type=Path, required=True)
+    cs.add_argument("--model", default="ais3/nemotron-3-ultra-550b")
+    cs.add_argument("--run-id", required=True)
+    cs.add_argument("--out", type=Path, default=Path("runs"))
+    cs.add_argument("--attempts", type=int, default=2)
+    cs.add_argument("--max-turns", type=int, default=26)
+    cs.add_argument("--concurrency", type=int, default=16)
+    cs.add_argument("--rpm", type=int, default=70)
+    cs.add_argument("--passes", default="broad,strict",
+                    help="comma-separated generation passes; 'broad' offers every "
+                         "predicate, 'strict' only the two that carry evidence")
+
     c = sub.add_parser("compare", help="paired comparison of two arms")
     c.add_argument("--a", type=Path, required=True, help="baseline arm summary")
     c.add_argument("--b", type=Path, required=True, help="challenger arm summary")
@@ -321,6 +337,43 @@ def main() -> int:
             json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
         print(json.dumps(agg, indent=1))
         print(f"usage: {json.dumps(summary['usage'])}")
+        return 0
+
+    if args.cmd == "cascade":
+        # Breadth and strictness are different knobs, and wiring the strict predicates
+        # into the generator cost five net true positives on a measured run. So each pass
+        # GENERATES under its own predicate set, the passes are unioned, and the gates are
+        # applied afterwards -- to what was found, never to what is looked for.
+        from arbiter.tools import ALL_PREDICATES, STRICT_PREDICATES
+
+        sets = {"broad": ALL_PREDICATES, "strict": STRICT_PREDICATES}
+        passes = [p.strip() for p in args.passes.split(",") if p.strip()]
+        unknown = [p for p in passes if p not in sets]
+        if unknown:
+            print(f"unknown pass(es): {unknown}; choose from {sorted(sets)}")
+            return 1
+
+        produced: list[Path] = []
+        for name in passes:
+            run_id = f"{args.run_id}-{name}"
+            print(f"\n=== pass {name!r}: predicates {sets[name]}", flush=True)
+            run_arbiter(
+                evalset=args.evalset, model=args.model, run_id=run_id, out_dir=args.out,
+                attempts=args.attempts, max_turns=args.max_turns,
+                concurrency=args.concurrency, rpm=args.rpm, predicates=sets[name],
+            )
+            produced.append(args.out / f"{run_id}.results.jsonl")
+
+        print("\n=== adjudication: every accepted exploit re-run through the gates",
+              flush=True)
+        from arbiter.cascade_lib import adjudicate, render_cascade
+
+        report = adjudicate(produced, args.out / f"{args.run_id}.cascade.jsonl")
+        _, items = load_evalset(args.evalset)
+        print(render_cascade(report, truth_map(items)))
+        (args.out / f"{args.run_id}.cascade.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
         return 0
 
     if args.cmd == "dump":

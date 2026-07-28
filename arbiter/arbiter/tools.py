@@ -48,8 +48,22 @@ VULN_CLASSES = (
 )
 
 
-def tool_schemas() -> list[dict[str, Any]]:
-    """OpenAI-style function schemas for the gateway's native tool calling."""
+ALL_PREDICATES = ("victim_loss", "liveness_broken", "eth_profit",
+                  "token_profit", "state_change")
+STRICT_PREDICATES = ("victim_loss", "liveness_broken")
+
+
+def tool_schemas(
+    predicates: tuple[str, ...] = STRICT_PREDICATES,
+) -> list[dict[str, Any]]:
+    """OpenAI-style function schemas for the gateway's native tool calling.
+
+    `predicates` is a parameter because breadth and strictness turned out to be
+    different knobs. Measured: running with the strict set found five true
+    positives the permissive set never found and lost ten -- the predicates were
+    steering what the agent looked for, not only what it was allowed to keep. A
+    cascade therefore generates under one set and adjudicates under another.
+    """
     return [
         {
             "type": "function",
@@ -196,14 +210,14 @@ def tool_schemas() -> list[dict[str, Any]]:
                         },
                         "predicate": {
                             "type": "string",
-                            # eth_profit, token_profit and state_change are retired from
-                            # the tool surface. Audited over 68 accepted proofs they
-                            # carried a 37% false positive rate with a hole that cannot
-                            # be closed: the baseline they compare against is written by
-                            # the same agent that writes the attack. They remain in the
-                            # harness for benchmark admission, where a patched twin
-                            # settles the question instead.
-                            "enum": ["victim_loss", "liveness_broken"],
+                            # Which of these the agent may use is chosen by the
+                            # caller. eth_profit, token_profit and state_change carry a
+                            # measured 37% false positive rate with a hole that cannot be
+                            # closed -- the baseline they compare against is written by
+                            # the same agent that writes the attack -- but they also
+                            # generate breadth the strict pair does not, so a cascade
+                            # keeps them for generation and refuses them for acceptance.
+                            "enum": list(predicates),
                         },
                         "victim_enter": {
                             "type": "string",

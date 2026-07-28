@@ -24,7 +24,12 @@ import json
 from typing import Any
 
 from .gateway import Gateway
-from .tools import AgentOutcome, ToolDispatcher, parse_arguments, tool_schemas
+from .tools import (
+    AgentOutcome,
+    ToolDispatcher,
+    parse_arguments,
+    tool_schemas,
+)
 from .workspace import Workspace
 
 SYSTEM_PROMPT = """\
@@ -298,6 +303,7 @@ def audit(
     trace_sink: list[dict[str, Any]] | None = None,
     ruled_out: list[str] | None = None,
     proposals: str = "",
+    predicates: tuple[str, ...] | None = None,
 ) -> AgentOutcome:
     """Run one audit to a terminal verdict. Returns the outcome.
 
@@ -310,7 +316,7 @@ def audit(
     same wrong idea.
     """
     dispatcher = ToolDispatcher(workspace)
-    schemas = tool_schemas()
+    schemas = tool_schemas(predicates) if predicates else tool_schemas()
     plan = workspace.plan
     task = USER_TEMPLATE.format(
         location=(
