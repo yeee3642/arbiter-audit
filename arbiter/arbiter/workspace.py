@@ -516,6 +516,7 @@ class Workspace:
         _reject_halting(victim_exit, "victim_exit")
         _reject_forgery(attack_body, "attack_body")
         _reject_forgery(attacker_code, "attacker_code")
+        _reject_standing(deploy_code, "deploy_code")
         # The victim is an ordinary user, so their fragments may not forge anything
         # either -- a "victim" who pranks the owner is not a victim.
         _reject_forgery(victim_enter, "victim_enter")
@@ -1306,6 +1307,33 @@ _FORGERY_RE = re.compile(
 # And the address itself, which is the only way to reach cheatcodes at all, so a fragment
 # carrying it is reaching for them however it dresses the call up.
 _CHEAT_ADDRESS_RE = re.compile(r"7109709ecfa91a80626ff3989d68f67f5b1dd12d", re.IGNORECASE)
+
+
+# A contract the agent authored, handed standing during setup, is authority the public
+# does not have. Drawing the attacker's identity late stops setup naming the ATTACKER, but
+# not setup deploying a deputy and endowing that instead -- the attacker then calls the
+# deputy and the privilege check passes on the deputy's address. Deploying the same
+# contract inside the attack is fine, because anybody may deploy a contract.
+#
+# Name-based and therefore partial: an agent that calls its deputy `MockRouter` is not
+# caught. It is defence in depth behind the identity draw, not a replacement for it.
+_STANDING_RE = re.compile(
+    "(?<![A-Za-z0-9_])new" + chr(92) + "s+"
+    "(Attacker|Adversary|Bomb|Helper|Exploiter|Malicious" + chr(92) + "w*)"
+)
+
+
+def _reject_standing(fragment: str, field: str) -> None:
+    match = _STANDING_RE.search(fragment or "")
+    if not match:
+        return
+    raise ValueError(
+        f"{field} deploys {match.group(1)!r} during setup. A contract you wrote, which "
+        "the world already trusts before the attack begins, is a capability the public "
+        "does not have -- and the privilege check will pass on ITS address rather than "
+        "yours. Deploy it inside the attack instead, where deploying a contract is "
+        "something anybody can do."
+    )
 
 
 def _reject_forgery(fragment: str, field: str) -> None:
