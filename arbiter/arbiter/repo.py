@@ -210,6 +210,38 @@ class RepoContext:
         except OSError:
             return []
 
+    def declared_remappings(self) -> dict[str, str]:
+        """What the project itself says its prefixes mean.
+
+        Ground truth when it exists, and it was being ignored: salty ships a
+        remappings.txt and olympus declares them in foundry.toml, and between them they
+        account for 38 of the remaining context failures. Only entries whose destination
+        actually exists are kept -- a `lib/` a checkout never fetched is a declaration
+        about a directory that is not there, and inference has a better chance.
+        """
+        out: dict[str, str] = {}
+        raw: list[str] = []
+
+        path = self.root / "remappings.txt"
+        if path.is_file():
+            raw += path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        toml = self.root / "foundry.toml"
+        if toml.is_file():
+            text = toml.read_text(encoding="utf-8", errors="ignore")
+            block = re.search(r"remappings\s*=\s*\[(.*?)\]", text, re.DOTALL)
+            if block:
+                raw += re.findall(r'["\']([^"\']+)["\']', block.group(1))
+
+        for line in raw:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            prefix, dest = line.split("=", 1)
+            resolved = (self.root / dest.strip()).resolve()
+            if resolved.is_dir():
+                out[prefix.strip()] = resolved.as_posix()
+        return out
+
     def resolve(self, target: Path, max_depth: int = 40) -> Resolution:
         """Walk the target's import closure, emitting the remappings that make it build.
 
@@ -220,6 +252,7 @@ class RepoContext:
         target = Path(target).resolve()
         band = pragma_band(target.read_text(encoding="utf-8", errors="ignore"))
         res = Resolution()
+        res.remappings.update(self.declared_remappings())
         seen: set[Path] = set()
         queue: list[Path] = [target]
         depth = 0
@@ -485,8 +518,20 @@ def repair(plan: RepoPlan, build_output: str, dep_cache: Path | None = None) -> 
     added = 0
 
     for spec in dict.fromkeys(missing):
-        if spec.startswith(".") or any(spec.startswith(p) for p in existing):
+        if spec.startswith("."):
             continue
+        # A prefix that is ALREADY mapped and still cannot find this file is a mapping
+        # that is wrong, not one that is missing. Skipping those meant a single bad guess
+        # -- `openzeppelin-contracts/` aimed at a package where half the paths moved
+        # between majors -- poisoned every later import under it, and repair had nothing
+        # to say. Drop the offending mapping and let resolution try again without it.
+        covering = [p for p in existing if spec.startswith(p)]
+        if covering:
+            longest = max(covering, key=len)
+            plan.remappings = [
+                line for line in plan.remappings if not line.startswith(longest + "=")
+            ]
+            existing.discard(longest)
         res = Resolution()
         if ctx._resolve_bare(spec, plan.band, res) is not None:
             for prefix, dest in res.remappings.items():
