@@ -166,8 +166,16 @@ def dump_run(results_path: Path, out_dir: Path, include_failed: bool = False) ->
                 (proj / "remappings.txt").write_text(
                     "\n".join(remappings) + "\n", encoding="utf-8"
                 )
+            # The compiler is pinned to whatever the original run resolved, so the dump
+            # reproduces under the same solc rather than whichever one is newest on the
+            # reader's machine.
+            solc = plan.get("solc") or ""
             (proj / "foundry.toml").write_text(
-                FOUNDRY_TOML.format(src=src_setting), encoding="utf-8"
+                FOUNDRY_TOML.format(
+                    src=src_setting,
+                    solc=f'solc = "{solc}"' if solc else "auto_detect_solc = true",
+                ),
+                encoding="utf-8",
             )
             (proj / "src" / "Target.sol").write_text(
                 row.get("source") or _recover_source(row), encoding="utf-8"
