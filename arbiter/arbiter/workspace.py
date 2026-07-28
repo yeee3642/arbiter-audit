@@ -435,6 +435,103 @@ class Workspace:
             check=check,
         )
 
+    def compose_sweep(
+        self,
+        *,
+        deploy_code: str,
+        attacker_code: str = "",
+        predicate: str,
+        token_expr: str = "",
+        attack_body: str = "",
+        honest_body: str = "",
+        mode: str = "contract",
+        extra_imports: list[str] | None = None,
+        variants: list[tuple[int, int, int]] | None = None,
+    ) -> tuple[str, list[tuple[int, int, int]]]:
+        """Re-run the agent's own exploit across an environment the agent never chose.
+
+        The dominant failure of a proof gate is not a wrong idea and not a syntax error.
+        It is an attack that compiles, runs, and extracts nothing -- right mechanism,
+        wrong magnitude. A rounding bias of one wei per round is invisible in a single
+        trip and obvious after thirty-two; a stake above 2**128 wei is unreachable with a
+        ten-ether endowment; a time-locked withdrawal is unreachable without warping.
+        None of those are things the model can fix by thinking harder, because the
+        endowment and the clock were never in its hands.
+
+        So the harness sweeps them. The knobs -- endowment, repetition, elapsed time --
+        are applied IDENTICALLY to the honest baseline and to the attack, so a sweep can
+        only ever discover an asymmetry that was already there; it cannot mint one. And
+        every variant is a separate test function in a single file, so the whole family
+        costs one compile and zero gateway requests.
+
+        A variant whose honest baseline cannot survive repetition simply reverts and
+        produces no evidence, which is the correct outcome rather than a special case.
+        """
+        if predicate not in ("eth_profit", "token_profit"):
+            raise ValueError("the sweep only applies to profit predicates")
+        if predicate == "token_profit" and not token_expr.strip():
+            raise ValueError("token_profit needs token_expr")
+        if not honest_body.strip():
+            raise ValueError("the sweep needs honest_body; both sides get the same knobs")
+
+        grid = variants or DEFAULT_SWEEP
+        attacker_expr = "address(atk)" if mode == "contract" else "eoa"
+        if predicate == "eth_profit":
+            m_ctrl, m_atk = "ctrl.balance", f"{attacker_expr}.balance"
+        else:
+            t = token_expr.strip()
+            m_ctrl = f"_ArbiterToken({t}).balanceOf(ctrl)"
+            m_atk = f"_ArbiterToken({t}).balanceOf({attacker_expr})"
+
+        trials = []
+        for i, (endow, repeats, warp) in enumerate(grid):
+            if mode == "contract":
+                setup = _SWEEP_ATTACKER_SETUP.format(endow=endow)
+                action = "            atk.attack();"
+            else:
+                setup = _SWEEP_EOA_SETUP.format(endow=endow)
+                action = _indent(attack_body, 12)
+            trials.append(
+                _SWEEP_TRIAL.format(
+                    i=i, endow=endow, repeats=repeats, warp=warp,
+                    deploy_code=_indent(deploy_code, 8),
+                    honest_body=_indent(honest_body, 12),
+                    setup=setup,
+                    attack_action=action,
+                    measure_ctrl=m_ctrl,
+                    measure_atk=m_atk,
+                    fail_report=(
+                        _FAIL_CUSTOM_ERROR if self.custom_errors else _FAIL_REQUIRE
+                    ),
+                    prank_attacker=(
+                        "" if mode == "contract"
+                        else "        vm.startPrank(eoa, eoa);"
+                    ),
+                    unprank_attacker=(
+                        "" if mode == "contract" else "        vm.stopPrank();"
+                    ),
+                )
+            )
+
+        extras = "\n".join(
+            f'import "{spec.strip()}";'
+            for spec in (extra_imports or []) if spec and spec.strip()
+        )
+        return (
+            _SWEEP_TEMPLATE.format(
+                pragma=self.pragma,
+                target_import=self.target_import,
+                extra_imports=("\n" + extras if extras else ""),
+                error_decl=(
+                    "error ArbiterNoGain(uint256 honestGain, uint256 attackGain);\n"
+                    if self.custom_errors else ""
+                ),
+                attacker_code=attacker_code.strip(),
+                trials="\n".join(trials),
+            ),
+            grid,
+        )
+
     def write_poc(self, name: str, solidity: str) -> str:
         safe = re.sub(r"[^A-Za-z0-9_]", "", name) or "Poc"
         if not safe.endswith("Poc"):
@@ -566,6 +663,14 @@ class Workspace:
             "failed_modes": attempts,
         }
 
+    @staticmethod
+    def passing_sweep_variants(output: str) -> list[int]:
+        """Which variants of a sweep the EVM accepted, by index."""
+        found: list[int] = []
+        for match in re.finditer(r"\[PASS\]\s*test_arbSweep(\d+)", output):
+            found.append(int(match.group(1)))
+        return sorted(set(found))
+
     def run_poc(self, name: str, timeout: int = 240) -> CommandResult:
         return self._forge(
             ["test", "--match-path", f"test/{name}.t.sol", "-vvv", *self._force],
@@ -667,6 +772,79 @@ contract TestArbiterContextPoc is Harness {{
 def _indent(text: str, spaces: int) -> str:
     pad = " " * spaces
     return "\n".join(pad + line for line in text.strip().splitlines())
+
+
+# (endowment in wei, repetitions, seconds warped). Chosen to span the three axes a model
+# cannot reach on its own, at the coarsest granularity that still separates them: a
+# thousand-fold endowment gap, a thirty-two-fold repetition gap, and a week of elapsed
+# time. Twelve variants, one compile.
+DEFAULT_SWEEP: list[tuple[int, int, int]] = [
+    (10**19, 1, 0),          # the current default, so variant 0 reproduces today's result
+    (10**19, 4, 0),
+    (10**19, 32, 0),
+    (10**19, 1, 7 * 24 * 3600),
+    (10**22, 1, 0),
+    (10**22, 4, 0),
+    (10**22, 32, 0),
+    (10**22, 1, 7 * 24 * 3600),
+    (10**25, 1, 0),
+    (10**25, 4, 0),
+    (10**25, 32, 0),
+    (10**25, 1, 7 * 24 * 3600),
+]
+
+_SWEEP_TEMPLATE = """// SPDX-License-Identifier: Apache-2.0
+pragma solidity {pragma};
+
+import "{target_import}";{extra_imports}
+import "./Vm.sol";
+
+interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
+
+{error_decl}
+{attacker_code}
+
+contract TestArbiterSweep is Harness {{
+{trials}
+}}
+"""
+
+# Each variant is its own test function, so forge gives it a fresh EVM state and one
+# variant's failure cannot contaminate another's.
+_SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={warp}s
+    function test_arbSweep{i}() public {{
+{deploy_code}
+        vm.warp(block.timestamp + {warp});
+        vm.roll(block.number + 1 + {warp} / 12);
+
+        address ctrl = address(uint160(uint256(keccak256("arbiter.control"))));
+        vm.deal(ctrl, {endow});
+        uint256 ctrlPre = {measure_ctrl};
+        vm.startPrank(ctrl, ctrl);
+        for (uint256 _r = 0; _r < {repeats}; _r++) {{
+{honest_body}
+        }}
+        vm.stopPrank();
+        uint256 honestGain = {measure_ctrl} > ctrlPre ? {measure_ctrl} - ctrlPre : 0;
+
+{setup}
+        uint256 atkPre = {measure_atk};
+{prank_attacker}
+        for (uint256 _r = 0; _r < {repeats}; _r++) {{
+{attack_action}
+        }}
+{unprank_attacker}
+        uint256 attackGain = {measure_atk} > atkPre ? {measure_atk} - atkPre : 0;
+
+{fail_report}
+    }}
+"""
+
+_SWEEP_ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
+        vm.deal(address(atk), {endow});"""
+
+_SWEEP_EOA_SETUP = """        address eoa = address(uint160(uint256(keccak256("arbiter.attacker"))));
+        vm.deal(eoa, {endow});"""
 
 
 def _first_error(output: str) -> str:

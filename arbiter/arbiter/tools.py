@@ -427,6 +427,10 @@ class PocRecord:
     # the agent. Findings may cite these and nothing else.
     adjudicated: bool = False
     predicate: str = ""
+    # Set when the evidence came from the harness's environment sweep rather than from
+    # the environment the agent first chose. Never inferred: if this is present, the
+    # exploit needed a scale the agent did not pick, and the record says so.
+    sweep: dict[str, Any] | None = None
 
 
 @dataclass
@@ -470,6 +474,7 @@ class AgentOutcome:
                     "passed": p.passed,
                     "adjudicated": p.adjudicated,
                     "predicate": p.predicate,
+                    "sweep": p.sweep,
                     "output_tail": p.output[-1200:],
                     "solidity": p.solidity,
                 }
@@ -729,9 +734,24 @@ class ToolDispatcher:
                 f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}. This is "
                 "admissible evidence. Call submit_finding citing this name.\n\n"
             )
+        elif predicate in ("eth_profit", "token_profit"):
+            # An exploit that compiles, runs and extracts nothing is usually the right
+            # mechanism at the wrong magnitude. The environment it failed in was never
+            # the agent's to choose -- the endowment, the clock and the number of rounds
+            # are the harness's -- so before charging the failure to the hypothesis, the
+            # harness re-runs the agent's own attack across those three axes. One compile,
+            # no gateway requests, and the knobs move for the honest baseline too, so a
+            # sweep can only surface an asymmetry that was already present.
+            swept = self._sweep(raw_name, args, predicate, hypothesis, mode)
+            if swept is not None:
+                return swept
+            head = _EXPLOIT_FAILED_HEAD.format(name=name, predicate=predicate)
+            if repeated:
+                head += _REPEATED_HYPOTHESIS
+            return head + _tail(run.combined)
         else:
             head = (
-                f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}. The "
+                f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r} (fallback). The "
                 "attacker gained nothing, or the state you named did not move. Either "
                 "the attack is wrong, or the contract genuinely resists it. Look at the "
                 "revert reason.\n"
@@ -757,6 +777,65 @@ class ToolDispatcher:
                     "function or a different invariant, or call conclude_safe.\n\n"
                 )
         return head + _tail(run.combined), False
+
+    def _sweep(
+        self,
+        raw_name: str,
+        args: dict[str, Any],
+        predicate: str,
+        hypothesis: str,
+        mode: str,
+    ) -> tuple[str, bool] | None:
+        """Retry the agent's attack across endowment, repetition and elapsed time.
+
+        Returns a tool result if some variant satisfied the predicate, otherwise None so
+        the caller reports the original failure. Recorded as its own PoC with the winning
+        variant named, so a reader can always see that the evidence came from a swept
+        environment rather than the one the agent first chose.
+        """
+        try:
+            solidity, grid = self.ws.compose_sweep(
+                deploy_code=str(args.get("deploy_code") or ""),
+                attacker_code=str(args.get("attacker_code") or ""),
+                predicate=predicate,
+                token_expr=str(args.get("token_expr") or ""),
+                attack_body=str(args.get("attack_body") or ""),
+                honest_body=str(args.get("honest_body") or ""),
+                mode=mode,
+                extra_imports=[str(x) for x in (args.get("imports") or [])],
+            )
+        except ValueError:
+            return None
+
+        name = self.ws.write_poc(f"{raw_name}Sweep", solidity)
+        if not self.ws.build().ok:
+            return None
+        run = self.ws.run_poc(name)
+        winners = self.ws.passing_sweep_variants(run.combined)
+        if not winners:
+            return None
+
+        endow, repeats, warp = grid[winners[0]]
+        record = PocRecord(
+            name, hypothesis, solidity, True, True, run.combined,
+            adjudicated=True, predicate=predicate,
+        )
+        record.sweep = {"variant": winners[0], "endowment_wei": endow,
+                        "repetitions": repeats, "warp_seconds": warp,
+                        "variants_passed": winners, "variants_tried": len(grid)}
+        self._poc_by_name[name] = record
+        self.outcome.pocs.append(record)
+        return (
+            f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}.\n\n"
+            "Your attack was right in mechanism and wrong in scale. It extracted nothing "
+            "in the default environment, so the harness re-ran it -- unchanged -- across "
+            "twelve environments, with the same endowment, the same number of rounds and "
+            f"the same elapsed time given to the honest baseline. It succeeded in "
+            f"{len(winners)} of {len(grid)}: the first was an endowment of {endow} wei, "
+            f"{repeats} repetition(s), {warp}s elapsed.\n\n"
+            "This is admissible evidence. Call submit_finding citing this name, and say "
+            "in attack_path what scale the attack needs to be worth running.\n\n"
+        ) + _tail(run.combined), False
 
     # -- terminal tools ------------------------------------------------------
 
@@ -846,6 +925,29 @@ class ToolDispatcher:
         self.outcome.verdict = "safe"
         self.outcome.stop_reason = "conclude_safe"
         return "Safe verdict recorded. Audit complete.", True
+
+
+_EXPLOIT_FAILED_HEAD = (
+    "EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}, in the default "
+    "environment or in any of the twelve the harness then swept -- larger endowments, "
+    "up to thirty-two repetitions, and a week of elapsed time, each also granted to the "
+    "honest baseline. So this is not a question of scale: the attacker gained nothing "
+    "the honest path did not.\n"
+    "  'ArbiterNoGain(honestGain, attackGain)' -- the two numbers are what an honest "
+    "user extracted and what your attack extracted, in wei or token units. Read them. "
+    "If attackGain is 0 your attack extracted nothing and the hypothesis is wrong. If "
+    "attackGain is large but honestGain is as large or larger, the attack works and your "
+    "honest_body is too generous: it must be the MINIMAL intended use, not a maximal "
+    "one. If they are equal, you reproduced the happy path.\n"
+    "  anything else -- the target reverted, so a guard stopped you.\n"
+    "A guard stopping you is evidence of safety, not a failure on your part.\n\n"
+)
+
+_REPEATED_HYPOTHESIS = (
+    "NOTE: you have already tested this exact hypothesis and it failed. Repeating it "
+    "will not change the result. Attack a different function or a different invariant, "
+    "or call conclude_safe.\n\n"
+)
 
 
 def _tail(text: str) -> str:
