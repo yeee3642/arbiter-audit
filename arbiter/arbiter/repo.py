@@ -461,12 +461,15 @@ def _guess_root(target: Path) -> Path:
     """Walk up to the nearest directory that looks like a project root."""
     markers = ("foundry.toml", "hardhat.config.js", "hardhat.config.ts", "package.json",
                "remappings.txt", ".git")
+    # INNERMOST match, not outermost. Walking to the outermost one climbed out of the
+    # repository entirely: on a dataset laid out as <dataset>/repos/<repo>, the guess
+    # landed on the dataset root, and a dump that vendored "the repository" copied all
+    # 338 of them -- 325 MB for a seven-file project.
     cur = target.parent
-    best = cur
     for _ in range(8):
         if any((cur / m).exists() for m in markers):
-            best = cur
+            return cur
         if cur.parent == cur:
             break
         cur = cur.parent
-    return best
+    return target.parent

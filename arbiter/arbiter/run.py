@@ -165,6 +165,17 @@ def run_arbiter(
                     context = probe.prepare_context()
                 finally:
                     probe.cleanup()
+                # Enough to rebuild the compilation environment outside this process.
+                # Without it a dumped exploit imports paths that only existed inside a
+                # scratch workspace, which is evidence nobody else can replay.
+                context["plan"] = {
+                    "repo_root": plan.repo_root.as_posix(),
+                    "target": plan.target.as_posix(),
+                    "target_import": plan.target_import,
+                    "pragma": plan.test_pragma,
+                    "chosen_src": plan.chosen_src,
+                    "remappings": list(plan.remappings),
+                }
             except Exception as exc:  # noqa: BLE001
                 context = {"ok": False, "mode": "error",
                            "error": f"{type(exc).__name__}: {exc}"[:200]}

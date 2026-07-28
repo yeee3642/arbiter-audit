@@ -343,9 +343,12 @@ def main() -> int:
 
         man = dump_run(args.results, args.out)
         print(f"wrote {man['exploits_written']} runnable exploit project(s) to {args.out}")
+        print(f"{man['exploits_reproduced']} of them re-ran green outside the harness")
         print(f"{man['samples_without_admissible_exploit']} sample(s) had no admissible exploit")
         for e in man["exploits"][:25]:
-            print(f"  {e['sample_id'][:44]:46s} {e['predicate']:16s} {e['title'][:60]}")
+            mark = "reproduced" if e.get("reproduces") else "DID NOT RUN"
+            print(f"  [{mark:11s}] {e['sample_id'][:38]:40s} {e['predicate']:14s} "
+                  f"{e['title'][:52]}")
         if man["exploits"]:
             print()
             print(f"reproduce any of them:  cd {man['exploits'][0]['path']} && forge test -vvv")
