@@ -532,9 +532,16 @@ class ToolDispatcher:
         if handler is None:
             return f"error: no such tool {name!r}", False
         try:
-            return handler(arguments)
+            result = handler(arguments)
         except Exception as exc:  # noqa: BLE001 - a tool crash must not kill the run
             return f"error: tool {name} raised {type(exc).__name__}: {exc}", False
+        # A handler that returns a bare string unpacks into characters at the call site
+        # and takes the whole audit down with a ValueError. That cost one sample and two
+        # attempts before it was noticed, so the shape is normalised here rather than
+        # trusted at each of the dozen return statements.
+        if isinstance(result, tuple) and len(result) == 2:
+            return result
+        return str(result), False
 
     # -- read-only tools, zero cost -----------------------------------------
 
@@ -748,7 +755,7 @@ class ToolDispatcher:
             head = _EXPLOIT_FAILED_HEAD.format(name=name, predicate=predicate)
             if repeated:
                 head += _REPEATED_HYPOTHESIS
-            return head + _tail(run.combined)
+            return head + _tail(run.combined), False
         else:
             head = (
                 f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r} (fallback). The "
