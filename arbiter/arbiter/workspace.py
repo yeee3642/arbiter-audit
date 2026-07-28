@@ -19,6 +19,7 @@ record, and a sample whose harness never compiled is reported as unproven, not a
 from __future__ import annotations
 
 import re
+import secrets
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -320,6 +321,7 @@ class Workspace:
         """
         if mode not in ("contract", "eoa"):
             raise ValueError(f"unknown mode {mode!r}")
+        _eoa = draw_identity()
         _reject_halting(deploy_code, "deploy_code")
         _reject_halting(attack_body, "attack_body")
         _reject_halting(honest_body, "honest_body")
@@ -431,7 +433,7 @@ class Workspace:
             # contain an `Attacker`, but a realistic scenario usually needs helper
             # contracts declared -- a mock ERC20 to be the stolen asset, for instance --
             # and there is nowhere else to put them.
-            setup = _EOA_SETUP.format(funding_wei=int(funding_wei))
+            setup = _EOA_SETUP.format(funding_wei=int(funding_wei), eoa_addr=_eoa)
 
         # Named imports do not re-export, so a token or interface the target imported
         # that way is not in scope here. The agent asks for what it needs by the same
@@ -494,6 +496,8 @@ class Workspace:
         Both trials run inside one test on a state snapshot, so setup happens once and
         the two worlds are identical up to the attack.
         """
+        _eoa = draw_identity()
+        _victim = draw_identity()
         if not victim_enter.strip() or not victim_exit.strip():
             raise ValueError(
                 "victim_loss needs victim_enter and victim_exit: what an ordinary user "
@@ -528,7 +532,7 @@ class Workspace:
         setup = (
             _ATTACKER_SETUP.format(funding_wei=int(funding_wei))
             if mode == "contract"
-            else _EOA_SETUP.format(funding_wei=int(funding_wei))
+            else _EOA_SETUP.format(funding_wei=int(funding_wei), eoa_addr=_eoa)
         )
         action = (
             _CONTRACT_ATTACK
@@ -542,6 +546,7 @@ class Workspace:
         _state_decls, _hoisted = hoist_declarations(deploy_code)
         _hoisted = _indent(_hoisted, 8)
         return _VICTIM_TEMPLATE.format(
+            victim_addr=_victim,
             pragma=self.pragma,
             target_import=self.target_import,
             extra_imports=("\n" + extras if extras else ""),
@@ -599,6 +604,7 @@ class Workspace:
             raise ValueError("the sweep needs honest_body; both sides get the same knobs")
 
         grid = variants or DEFAULT_SWEEP
+        _eoa = draw_identity()
         attacker_expr = "address(atk)" if mode == "contract" else "eoa"
         if predicate == "eth_profit":
             m_ctrl, m_atk = "ctrl.balance", f"{attacker_expr}.balance"
@@ -615,7 +621,7 @@ class Workspace:
                 setup = _SWEEP_ATTACKER_SETUP.format(endow=endow)
                 action = "            atk.attack();"
             else:
-                setup = _SWEEP_EOA_SETUP.format(endow=endow)
+                setup = _SWEEP_EOA_SETUP.format(endow=endow, eoa_addr=_eoa)
                 action = _indent(attack_body, 12)
             trials.append(
                 _SWEEP_TRIAL.format(
@@ -1053,8 +1059,7 @@ interface _ArbiterToken {{ function balanceOf(address) external view returns (ui
 
 contract TestArbiterVictim is Harness {{
     bytes32 internal constant ARB_COMPLETED = keccak256("arbiter.predicate.reached");
-    address internal constant arbVictim =
-        address(uint160(uint256(keccak256("arbiter.victim"))));
+    address internal constant arbVictim = address(uint160({victim_addr}));
 
 {state_decls}
     Attacker internal atk;
@@ -1216,7 +1221,7 @@ _SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={wa
 _SWEEP_ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
         vm.deal(address(atk), {endow});"""
 
-_SWEEP_EOA_SETUP = """        address eoa = address(uint160(uint256(keccak256("arbiter.attacker"))));
+_SWEEP_EOA_SETUP = """        address eoa = address(uint160({eoa_addr}));
         vm.deal(eoa, {endow});"""
 
 
@@ -1238,6 +1243,24 @@ _HALTING_RE = re.compile(r"\b(selfdestruct|suicide)\s*\(")
 # misses it -- measured, that is exactly what slipped through.
 #
 # These names belong to nothing but the cheatcode interface, so any receiver counts.
+def draw_identity() -> str:
+    """A Solidity literal for an address that setup could not have named.
+
+    Confirmed by execution rather than argument: with the attacker fixed at
+    `keccak256("arbiter.attacker")`, setup can compute that address and hand it a role --
+    `vm.store(target, slot 0, attacker)`, or a plain `transferOwnership(attacker)` -- and
+    the attack is then an ordinary call that no lint on the attack can object to. Both
+    paths were open and both were accepted. Banning cheatcodes in the attack had moved
+    the boundary, not closed it.
+
+    Drawing the identity at compose time closes it. The agent writes its setup before
+    this value exists, so setup can neither contain the literal nor derive it. The "0x00"
+    prefix makes the literal 42 hex digits, which stops solc demanding an EIP-55 checksum
+    the harness has no keccak to compute.
+    """
+    return "0x00" + secrets.token_bytes(20).hex()
+
+
 _CHEATS_UNAMBIGUOUS = (
     "prank|startPrank|stopPrank|etch|mockCall|mockCallRevert|setNonce|"
     "startBroadcast|resetNonce"
@@ -1365,7 +1388,7 @@ _ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
 # impossible -- V2 of the evaluation set is exactly that, and no contract-based harness
 # could ever prove it. vm.startPrank with two arguments sets msg.sender AND tx.origin,
 # so the calls arrive exactly as they would from a real externally owned account.
-_EOA_SETUP = """        address eoa = address(uint160(uint256(keccak256("arbiter.attacker"))));
+_EOA_SETUP = """        address eoa = address(uint160({eoa_addr}));
         vm.deal(eoa, {funding_wei});"""
 
 _PROFIT_CONTRACT_BODY = """        uint256 pre = {measure_pre};
