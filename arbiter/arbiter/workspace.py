@@ -1078,10 +1078,19 @@ import "./Vm.sol";
 
 interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
 
+/// How an attacker finds out who the victim is. A real attacker can read the chain, so
+/// withholding the victim's address would make whole classes of attack inexpressible --
+/// but that address is drawn per run precisely so SETUP cannot name it. Both hold at once
+/// if the address is discoverable at RUN time and unknowable at WRITE time: your Attacker
+/// asks its own deployer for it.
+interface _ArbiterHarness {{ function arbiterVictim() external view returns (address); }}
+
 {error_decl}
 {attacker_code}
 
 contract TestArbiterVictim is Harness {{
+    function arbiterVictim() external pure returns (address) {{ return arbVictim; }}
+
     bytes32 internal constant ARB_COMPLETED = keccak256("arbiter.predicate.reached");
     address internal constant arbVictim = address(uint160({victim_addr}));
 

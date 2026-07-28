@@ -174,6 +174,11 @@ def dump_run(results_path: Path, out_dir: Path, include_failed: bool = False) ->
                 FOUNDRY_TOML.format(
                     src=src_setting,
                     solc=f'solc = "{solc}"' if solc else "auto_detect_solc = true",
+                    # The IR pipeline unconditionally, because a dumped project is read
+                    # once and must build, not be fast: the harness only reaches for it
+                    # after a "stack too deep", and a reader has no way to know whether
+                    # this exploit was one of those.
+                    via_ir="true",
                 ),
                 encoding="utf-8",
             )

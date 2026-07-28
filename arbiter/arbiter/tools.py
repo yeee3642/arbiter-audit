@@ -224,7 +224,12 @@ def tool_schemas(
                             "description": (
                                 "For victim_loss. What an ordinary user does to take a "
                                 "position, e.g. 'target.deposit{value: 2 ether}();'. Run "
-                                "by a harness-owned account, in BOTH trials."
+                                "by a harness-owned account, in BOTH trials. That "
+                                "account's address is drawn per run and CANNOT be "
+                                "hardcoded; if your attack needs to name the victim, "
+                                "have your Attacker read it at run time with "
+                                "_ArbiterHarness(msg.sender).arbiterVictim() in its "
+                                "constructor -- msg.sender there is the harness."
                             ),
                         },
                         "victim_exit": {
