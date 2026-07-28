@@ -54,6 +54,11 @@ fs_permissions = []
 # exploitable. Agents that need to act as a plain account use mode='eoa'.
 _CONTRACT_ATTACK = "        atk.attack();"
 
+# The pranked block an EOA-mode attack runs inside; its body is the attack.
+_EOA_PRANK_RE = re.compile(
+    r"vm\.startPrank\(eoa, eoa\);(.*?)vm\.stopPrank\(\);", re.DOTALL
+)
+
 
 class BuildUnavailable(RuntimeError):
     """forge is not installed or not on PATH."""
@@ -828,6 +833,30 @@ class Workspace:
             "error": attempts[-1]["error"] if attempts else "",
             "failed_modes": attempts,
         }
+
+    @staticmethod
+    def neuter(solidity: str) -> tuple[str, bool]:
+        """Remove the attack, leaving setup, baseline and predicate exactly as they were.
+
+        The audit of this project's own accepted proofs found two that still passed with
+        the attack deleted -- the predicate had been satisfied by something else entirely,
+        and nothing at the time could tell. Returns (text, whether the attack was found),
+        because a proof that cannot be neutered cannot be checked and should say so rather
+        than quietly count as verified.
+        """
+        if _CONTRACT_ATTACK.strip() in solidity:
+            return solidity.replace(
+                _CONTRACT_ATTACK.strip(), "/* attack removed by the harness */"
+            ), True
+        match = _EOA_PRANK_RE.search(solidity)
+        if match and match.group(1).strip():
+            return (
+                solidity[: match.start(1)]
+                + "\n/* attack removed by the harness */\n"
+                + solidity[match.end(1):],
+                True,
+            )
+        return solidity, False
 
     @staticmethod
     def passing_sweep_variants(output: str) -> list[int]:

@@ -762,6 +762,10 @@ class ToolDispatcher:
 
         run = self.ws.run_poc(name)
         passed = _test_passed(run)
+        caused = ""
+        if passed:
+            survives, caused = self._negation_holds(name, solidity)
+            passed = survives
         record = PocRecord(
             name, hypothesis, solidity, True, passed, run.combined,
             adjudicated=True, predicate=predicate,
@@ -769,9 +773,15 @@ class ToolDispatcher:
         self._poc_by_name[name] = record
         self.outcome.pocs.append(record)
 
+        if caused:
+            return (
+                f"EXPLOIT {name!r} satisfied {predicate!r}, but it is REFUSED: {caused}",
+                False,
+            )
         if passed:
             head = (
-                f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}. This is "
+                f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}, and fails "
+                "when the attack is removed, so the attack is what caused it. This is "
                 "admissible evidence. Call submit_finding citing this name.\n\n"
             )
         elif predicate in ("eth_profit", "token_profit"):
@@ -851,10 +861,19 @@ class ToolDispatcher:
             )
         run = self.ws.run_poc(name)
         passed = _test_passed(run)
+        caused = ""
+        if passed:
+            survives, caused = self._negation_holds(name, solidity)
+            passed = survives
         record = PocRecord(name, hypothesis, solidity, True, passed, run.combined,
                            adjudicated=True, predicate=predicate)
         self._poc_by_name[name] = record
         self.outcome.pocs.append(record)
+        if caused:
+            return (
+                f"EXPLOIT {name!r} satisfied {predicate!r}, but it is REFUSED: {caused}",
+                False,
+            )
         if passed:
             return (
                 f"EXPLOIT {name!r} PASSED the harness predicate {predicate!r}. The victim "
@@ -879,6 +898,35 @@ class ToolDispatcher:
         if repeated:
             head += _REPEATED_HYPOTHESIS
         return head + _tail(run.combined), False
+
+    def _negation_holds(self, name: str, solidity: str) -> tuple[bool, str]:
+        """Does the predicate still hold with the attack deleted?
+
+        The decisive check, and the cheapest one: a real exploit must FAIL when the attack
+        is taken out. If it passes anyway, whatever satisfied the predicate was not the
+        attack -- ether forced in during setup, a transaction that halted early, profit
+        drawn from scenery the agent built. Auditing this project's own accepted proofs
+        found two of that shape, and nothing at the time could see them.
+
+        Returns (the proof survives, an explanation when it does not). One compile and one
+        run, no gateway request.
+        """
+        neutered, found = self.ws.neuter(solidity)
+        if not found:
+            return True, ""
+        probe = self.ws.write_poc(f"{name}Negated", neutered)
+        if not self.ws.build().ok:
+            return True, ""      # cannot check; do not punish the agent for that
+        still = _test_passed(self.ws.run_poc(probe))
+        self.ws.write_poc(name, solidity)   # restore, so the proof is what is on disk
+        if not still:
+            return True, ""
+        return False, (
+            "the predicate is ALSO satisfied when your attack is deleted, so it was not "
+            "your attack that satisfied it. Something in the setup did -- ether forced "
+            "into the target, a contract you funded, a transaction that ended early. "
+            "Rebuild the scenario so that removing the attack removes the effect."
+        )
 
     def _sweep(
         self,
