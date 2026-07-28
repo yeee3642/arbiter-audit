@@ -508,3 +508,50 @@ discovery — it traded 5 true positives for 4 false-positive removals, and the 
 noise. The claim that Bastet's discarded per-detector signal is recoverable is
 **unsupported by this experiment**, and the 73% figure should be read as what it always
 was: an upper bound on a channel, not evidence the channel carries.
+
+---
+
+# Three interventions, one pattern: adding information lowers recall
+
+Every change aimed at raising recall lowered it, and raised precision instead. Measured
+on the same 40 TUNE samples, same model, same harness:
+
+| configuration | TP | TN | FP | FN | precision | recall | F1 | MCC |
+|---|---|---|---|---|---|---|---|---|
+| **baseline, attempts=3, minimal prompt** | **9** | 16 | 4 | 11 | 0.692 | **0.450** | **0.5455** | +0.267 |
+| + ruled-out hypotheses carried forward | 4 | 16 | 4 | 16 | 0.500 | 0.200 | 0.2857 | 0.000 |
+| + cascade proposals from Bastet's hits | 6 | 19 | 1 | 14 | 0.857 | 0.300 | 0.4444 | **+0.329** |
+| + numeric gradient feedback + attack skeletons | 6 | 18 | 2 | 14 | 0.750 | 0.300 | 0.4286 | +0.250 |
+
+Three independent interventions — a ban list, an external hypothesis queue, and richer
+failure feedback plus worked attack shapes — all moved recall down by 0.15 to 0.25 and
+moved precision up. None was designed to do that. The baseline with the shortest prompt
+is still the best configuration on F1 and second-best on MCC.
+
+## What this says about the bottleneck
+
+The working hypothesis for four rounds was that recall is limited by *knowledge*: the
+agent does not form the right hypothesis, so supply it. That hypothesis is now refuted
+three separate ways. Supplying the class (cascade) did not help. Supplying the exploit
+shape (skeletons) did not help. Telling it exactly how far short its attack fell
+(gradient) did not help.
+
+What every intervention has in common is that it adds context, and what every result has
+in common is that the agent claims less. The consistent reading is that recall is limited
+by the *cost of clearing the proof bar within a turn budget*, not by knowing what to
+attack. More material to read means fewer turns spent building and iterating on an
+exploit, and an agent that has not built a working exploit correctly concludes safe. The
+execution gate is doing exactly what it was designed to do; the agent is simply running
+out of budget before it gets there.
+
+That reframes the remaining work. It is not a prompting problem. Either the turn budget
+has to grow — max_turns is 16, and 3 attempts at 16 is already 48 requests against
+Bastet's 53 — or the exploit-construction loop has to become cheaper per hypothesis
+tested. Both are engineering, and neither is a bigger prompt.
+
+## What the project stands behind
+
+`--attempts 3`, minimal prompt, no proposals, no ruled-out list. F1 0.5455, MCC +0.267.
+It loses F1 to a tuned Bastet's 0.6897 and that is stated in the headline table. The
+cascade's MCC of +0.329 is higher but its CI on tuning data barely clears zero and its
+F1 is worse; it is recorded as a lead for round 2, not adopted.
