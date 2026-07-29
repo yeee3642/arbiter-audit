@@ -5,6 +5,12 @@
 # artefact whose filename matched nothing in .gitignore. Filename rules cannot
 # see inside a value, so this inspects staged *content*.
 #
+# The rules used to live in a sibling project. When that project was removed the
+# hook kept running and printed "credential scan SKIPPED" -- it had been written
+# to fail open, so deleting an unrelated directory silently disarmed the only
+# thing standing between a gateway key and a public repository. The scanner is
+# inlined here now, and it fails closed: if it cannot run, the commit stops.
+#
 # Two severities, because shape-based secret detection has a high false-positive
 # rate on smart-contract source (init-code hashes and TYPEHASHes are 64 hex):
 #
@@ -18,6 +24,10 @@ set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 python_bin="${PYTHON:-python}"
 command -v "$python_bin" >/dev/null 2>&1 || python_bin=python3
+if ! command -v "$python_bin" >/dev/null 2>&1; then
+    echo "pre-commit: no python, so staged content cannot be scanned. Refusing." >&2
+    exit 1
+fi
 
 staged="$(git diff --cached --name-only --diff-filter=ACM)"
 [ -z "$staged" ] && exit 0
@@ -30,17 +40,50 @@ if [ -n "$blocked_paths" ]; then
     exit 1
 fi
 
-PYTHONPATH="$repo_root/bastet-cc${PYTHONPATH:+:$PYTHONPATH}" \
 "$python_bin" - "$repo_root" <<'PY'
-import subprocess, sys
+import re
+import subprocess
+import sys
 from pathlib import Path
 
-try:
-    from bastet_cc.redact import scan
-except ImportError:                       # package not importable: fail open, loudly
-    print("pre-commit: bastet_cc.redact not importable, credential scan SKIPPED",
-          file=sys.stderr)
-    sys.exit(0)
+# Keywords that make an adjacent high-entropy value a credential rather than
+# data. `token` is deliberately absent -- it is a Solidity noun, and requiring
+# `api_token`/`auth_token` keeps the ERC-20 vocabulary out of scope.
+_CRED_KEY = (r"(?:api[_-]?key|apikey|api[_-]?token|auth[_-]?token|access[_-]?token|"
+             r"secret[_-]?key|client[_-]?secret|private[_-]?key|password|passwd|"
+             r"authorization|bearer[_-]?token)")
+
+# Each blocking rule requires a credential keyword next to the value. A shape-only
+# sweep was tried and is actively harmful on this corpus: it flagged the UniswapV2
+# init-code hash quoted inside a detector, and the published splits_sha256. In an
+# EVM repository, 64-hex constants are domain vocabulary.
+_BLOCKING = (
+    # `api_key: <value>` / `"api_key"="<value>"` -- the gateway 429 shape.
+    ("api_key", re.compile(
+        rf"(?i)(\b{_CRED_KEY}\b['\"]?\s*[:=]\s*['\"]?)([A-Za-z0-9_\-]{{16,}})")),
+    # `api_key <value>` with only whitespace between, as in prose error text.
+    ("api_key", re.compile(rf"(?i)(\b{_CRED_KEY}\b\s+)([A-Za-z0-9]{{32,}})\b")),
+    # Provider-prefixed tokens: the prefix *is* the context, no keyword needed.
+    ("token", re.compile(
+        r"\b(?:sk|pk|rk|ghp|gho|ghs|ghu|xox[baprs])[-_][A-Za-z0-9_\-]{16,}\b")),
+    ("bearer", re.compile(r"(?i)\bBearer\s+[A-Za-z0-9_\-.=]{20,}")),
+)
+_ADVISORY = (("hex64", re.compile(r"\b[0-9a-f]{64}\b")),)
+
+
+def scan(text):
+    """Credential-shaped substrings as (label, sample, blocking)."""
+    hits = []
+    for name, pat in _BLOCKING:
+        for m in pat.finditer(text):
+            value = (m.group(2) if name == "api_key" and (m.lastindex or 0) >= 2
+                     else m.group(0))
+            hits.append((name, value[:24] + ("..." if len(value) > 24 else ""), True))
+    for name, pat in _ADVISORY:
+        for m in pat.finditer(text):
+            hits.append((name, m.group(0)[:24] + "...", False))
+    return hits
+
 
 root = Path(sys.argv[1])
 files = subprocess.run(["git", "diff", "--cached", "--name-only",
@@ -79,7 +122,7 @@ if blocking:
           file=sys.stderr)
     for rel, name, sample in blocking:
         print(f"  {rel}: {name} = {sample}", file=sys.stderr)
-    print("\nRun `python bastet-cc/scripts/scrub_artifacts.py --write`, or"
-          " `git commit --no-verify` if this is a false positive.", file=sys.stderr)
+    print("\nReplace the value with a placeholder, or `git commit --no-verify` if"
+          " you have looked at it and it is a false positive.", file=sys.stderr)
     sys.exit(1)
 PY
