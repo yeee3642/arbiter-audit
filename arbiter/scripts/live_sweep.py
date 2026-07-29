@@ -32,6 +32,21 @@ from arbiter.live_replay import (  # noqa: E402
 ETHER = 10**18
 
 
+def _amt(wei: int) -> str:
+    """Enough precision not to hide a rounding attack.
+
+    Three decimals of ether was tried and reported a dust drain out of a hundred-ether
+    pool as `100.900 -> 100.900`, which reads as nothing happening. An attack that takes
+    a millionth of an ether is still an attack, and the display should not be the thing
+    that decides otherwise.
+    """
+    if wei == 0:
+        return "0"
+    if wei < 10**12:
+        return f"{wei}wei"
+    return f"{wei / ETHER:.6f}".rstrip("0").rstrip(".")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dump", type=Path, help="directory written by `arbiter dump`")
@@ -49,8 +64,8 @@ def main() -> int:
 
     results = []
     port = args.port
-    print(f"{'sample':<52} {'clean':>9} {'attacked':>9} {'gain':>9}  verdict")
-    print("-" * 100)
+    print(f"{'sample':<48} {'shortfall':>14} {'gain':>14}  verdict")
+    print("-" * 104)
 
     for proj in projects:
         sample = proj.name
@@ -58,7 +73,7 @@ def main() -> int:
         pocs = list((proj / "test").glob("*.t.sol"))
         if not target.is_file() or not pocs:
             results.append({"sample_id": sample, "error": "incomplete dump"})
-            print(f"{sample[:52]:<52} {'':>9} {'':>9} {'':>9}  incomplete dump")
+            print(f"{sample[:48]:<48} {'':>14} {'':>14}  incomplete dump")
             continue
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -84,21 +99,19 @@ def main() -> int:
         results.append(rec)
 
         if "error" in rec:
-            print(f"{sample[:52]:<52} {'':>9} {'':>9} {'':>9}  {rec['error'][:34]}")
+            print(f"{sample[:48]:<48} {'':>14} {'':>14}  {rec['error'][:38]}")
         elif rec.get("template") == "exploit":
             print(
-                f"{sample[:52]:<52} "
-                f"{'privileged' if rec.get('privileged') else 'not privd':>9} "
-                f"{'moved' if rec['after_honest'] != rec['after_attack'] else 'same':>9} "
-                f"{'':>9}  "
+                f"{sample[:48]:<48} "
+                f"{('privileged' if rec.get('privileged') else 'not privileged'):>14} "
+                f"{('state moved' if rec['after_honest'] != rec['after_attack'] else 'unmoved'):>14}  "
                 f"{'STATE SEIZED ON A CHAIN' if rec['proven'] else 'not proven live'}"
             )
         else:
             print(
-                f"{sample[:52]:<52} "
-                f"{rec['recovered_clean'] / ETHER:>9.3f} "
-                f"{rec['recovered_attacked'] / ETHER:>9.3f} "
-                f"{rec['attacker_gain'] / ETHER:>9.3f}  "
+                f"{sample[:48]:<48} "
+                f"{_amt(rec['shortfall']):>14} "
+                f"{_amt(rec['attacker_gain']):>14}  "
                 f"{'DRAINED ON A CHAIN' if rec['proven'] else 'not proven live'}"
             )
 

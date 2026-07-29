@@ -159,6 +159,27 @@ def _state_declarations(test_body: str) -> str:
     return "\n".join(out)
 
 
+VALUE_RE = re.compile(r"\{\s*value\s*:\s*(\d+)\s*(ether|gwei|wei)?\s*\}")
+_UNITS = {"ether": 10**18, "gwei": 10**9, "wei": 1, None: 1, "": 1}
+
+
+def _required_endowment(*fragments: str) -> int:
+    """How much the world has to start with for its own setup to succeed.
+
+    A fixed ten ether was tried and is wrong: a scenario whose setup seeds the contract
+    with a hundred reverts in its constructor, and the failure surfaces as an
+    unexplained deploy error rather than as "not enough money". Read what the fragments
+    actually spend, double it for headroom, and stay inside what an anvil account is
+    born with.
+    """
+    spend = sum(
+        int(m.group(1)) * _UNITS.get(m.group(2), 1)
+        for frag in fragments
+        for m in VALUE_RE.finditer(frag)
+    )
+    return max(10 * 10**18, min(2 * spend, 900 * 10**18))
+
+
 @dataclass
 class Replay:
     """Everything needed to rebuild one exploit as transactions."""
@@ -326,13 +347,13 @@ ETHER = 10**18
 
 def run_world(chain: LiveChain, proj: Path, with_attack: bool,
               endow_wei: int = 10 * ETHER, setup_wait: int = 0,
-              enter_wait: int = 0) -> dict[str, Any]:
+              enter_wait: int = 0, world_endow: int = 0) -> dict[str, Any]:
     """One world on one chain. Returns what the victim got back and what the attacker took."""
     victim, attacker = chain.accounts[1], chain.accounts[2]
     steps: list[Step] = []
 
     world, tx = chain.deploy(proj, "src/Live.sol:ArbWorld", victim.key,
-                             value_wei=endow_wei)
+                             value_wei=world_endow or endow_wei)
     steps.append(Step(what="deploy ArbWorld (setup)", actor=victim.address, tx=tx))
     target = chain.call(world, "targetAddr()(address)").strip()
 
@@ -387,7 +408,9 @@ def replay(rep: Replay, root: Path, port: int) -> dict[str, Any]:
         try:
             worlds.append(run_world(chain, proj, with_attack,
                                     setup_wait=rep.setup_wait,
-                                    enter_wait=rep.enter_wait))
+                                    enter_wait=rep.enter_wait,
+                                    world_endow=_required_endowment(
+                                        rep.setup_body, rep.enter_body)))
         except Exception as exc:  # noqa: BLE001 -- one sample must not stop the sweep
             out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
             return out
