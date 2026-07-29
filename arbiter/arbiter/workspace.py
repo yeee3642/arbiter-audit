@@ -564,6 +564,11 @@ class Workspace:
         )
         _state_decls, _hoisted = hoist_declarations(deploy_code)
         _hoisted = _indent(_hoisted, 8)
+        # The victim's handle on their own position has to outlive arbEnter.
+        _victim_decls, victim_enter, victim_exit = hoist_victim_locals(
+            victim_enter, victim_exit)
+        if _victim_decls:
+            _state_decls = _state_decls + "\n" + _victim_decls
         env = VICTIM_ENVIRONMENTS
         return _VICTIM_TEMPLATE.format(
             n_env=len(env),
@@ -1103,6 +1108,61 @@ DECL_RE = re.compile(
     r"^[ \t]*([A-Za-z_]\w*(?:\[\])?)[ \t]+(?:payable[ \t]+)?([A-Za-z_]\w*)[ \t]*=",
     re.MULTILINE,
 )
+
+
+VICTIM_DECL_RE = re.compile(
+    r"^([ \t]*)([A-Za-z_]\w*(?:\[\])?)[ \t]+"
+    r"(?:(?:memory|storage|calldata)[ \t]+)?"
+    r"([A-Za-z_]\w*)[ \t]*=",
+    re.MULTILINE,
+)
+
+
+def hoist_victim_locals(enter: str, exit_: str) -> tuple[str, str, str]:
+    """Lift the victim's entry locals to storage so their exit can still see them.
+
+    Measured, not anticipated. `arbEnter` and `arbExit` are separate external calls --
+    they have to be, so that a victim whose withdrawal REVERTS is a result rather than
+    an abort -- and a local declared in one is gone by the other. Any position
+    identified by a handle the contract hands back was therefore inexpressible:
+
+        enter:  uint256 shares = target.deposit{value: 1 ether}();
+        exit:   target.redeem(shares);            // Undeclared identifier
+
+    Nine of the benchmark's thirty-five reference exploits died exactly there. Every one
+    of them looked like a modelling limit of the predicate and was a frame-scoping bug
+    in the harness.
+
+    Two details the first version got wrong, both found by the remaining failures. The
+    name is renamed everywhere it appears and not only where it is declared -- a
+    fragment that declares `MockPool p` and uses `p` on the next line broke otherwise.
+    And the data location is dropped on the way up, because `uint256[] memory` is a
+    local type while a state variable has to be `uint256[]`.
+
+    Returns (state declarations, rewritten entry, rewritten exit).
+    """
+    seen: dict[str, str] = {}
+    for _, type_name, var in VICTIM_DECL_RE.findall(enter):
+        if type_name in ("return", "if", "for", "while", "else", "emit") or var in seen:
+            continue
+        seen[var] = type_name
+    if not seen:
+        return "", enter, exit_
+
+    # Prefixed so a victim's local can never collide with one the setup hoisted.
+    decls = "\n".join(f"    {t} internal arbv_{v};" for v, t in seen.items())
+    body = VICTIM_DECL_RE.sub(lambda m: f"{m.group(1)}{m.group(3)} =", enter)
+    names = list(seen)
+    return decls, rename_victim_locals(body, names), rename_victim_locals(exit_, names)
+
+
+def rename_victim_locals(fragment: str, names: list[str]) -> str:
+    """Point the exit at the hoisted names."""
+    out = fragment
+    for name in names:
+        out = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])",
+                     f"arbv_{name}", out)
+    return out
 
 
 def hoist_declarations(deploy_code: str) -> tuple[str, str]:
