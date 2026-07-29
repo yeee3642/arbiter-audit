@@ -25,8 +25,10 @@ from arbiter.live_replay import (  # noqa: E402
     Untranslatable,
     parse_poc,
     parse_poc_exploit,
+    parse_poc_other,
     replay,
     replay_exploit,
+    replay_other,
 )
 
 ETHER = 10**18
@@ -88,8 +90,16 @@ def main() -> int:
                 try:
                     xrep = parse_poc_exploit(pocs[0], target, sample)
                     rec = replay_exploit(xrep, Path(tmp), port)
-                except Untranslatable as exc2:
-                    rec = {"sample_id": sample, "error": f"untranslatable: {exc2}"}
+                except Untranslatable:
+                    try:
+                        orep = parse_poc_other(pocs[0], target, sample)
+                        rec = replay_other(orep, Path(tmp), port)
+                    except Untranslatable as exc3:
+                        rec = {"sample_id": sample,
+                               "error": f"untranslatable: {exc3}"}
+                    except Exception as exc3:  # noqa: BLE001
+                        rec = {"sample_id": sample,
+                               "error": f"{type(exc3).__name__}: {exc3}"}
                 except Exception as exc2:  # noqa: BLE001
                     rec = {"sample_id": sample,
                            "error": f"{type(exc2).__name__}: {exc2}"}
@@ -100,6 +110,20 @@ def main() -> int:
 
         if "error" in rec:
             print(f"{sample[:48]:<48} {'':>14} {'':>14}  {rec['error'][:38]}")
+        elif rec.get("template") == "liveness":
+            print(
+                f"{sample[:48]:<48} "
+                f"{('worked' if rec.get('worked_before') else 'already broken'):>14} "
+                f"{('now broken' if not rec.get('worked_after') else 'still works'):>14}  "
+                f"{'AVAILABILITY BROKEN ON A CHAIN' if rec['proven'] else 'not proven live'}"
+            )
+        elif rec.get("template") == "token":
+            print(
+                f"{sample[:48]:<48} "
+                f"{_amt(rec.get('attack_gain', 0)):>14} "
+                f"{('drained' if rec.get('drained') else 'no drain'):>14}  "
+                f"{'TOKENS TAKEN ON A CHAIN' if rec['proven'] else 'not proven live'}"
+            )
         elif rec.get("template") == "exploit":
             print(
                 f"{sample[:48]:<48} "
