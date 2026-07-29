@@ -21,7 +21,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from arbiter.live_replay import Untranslatable, parse_poc, replay  # noqa: E402
+from arbiter.live_replay import (  # noqa: E402
+    Untranslatable,
+    parse_poc,
+    parse_poc_exploit,
+    replay,
+    replay_exploit,
+)
 
 ETHER = 10**18
 
@@ -56,11 +62,22 @@ def main() -> int:
             continue
 
         with tempfile.TemporaryDirectory() as tmp:
+            # Two templates, tried in order. The victim one is composed from
+            # arbSetup/arbEnter/arbExit; the other keeps everything inside arbiterRun
+            # and measures a getter instead of a victim. Neither is a fallback for the
+            # other -- a proof is written against exactly one of them.
             try:
                 rep = parse_poc(pocs[0], target, sample)
                 rec = replay(rep, Path(tmp), port)
-            except Untranslatable as exc:
-                rec = {"sample_id": sample, "error": f"untranslatable: {exc}"}
+            except Untranslatable:
+                try:
+                    xrep = parse_poc_exploit(pocs[0], target, sample)
+                    rec = replay_exploit(xrep, Path(tmp), port)
+                except Untranslatable as exc2:
+                    rec = {"sample_id": sample, "error": f"untranslatable: {exc2}"}
+                except Exception as exc2:  # noqa: BLE001
+                    rec = {"sample_id": sample,
+                           "error": f"{type(exc2).__name__}: {exc2}"}
             except Exception as exc:  # noqa: BLE001
                 rec = {"sample_id": sample, "error": f"{type(exc).__name__}: {exc}"}
         port += 2
@@ -68,6 +85,14 @@ def main() -> int:
 
         if "error" in rec:
             print(f"{sample[:52]:<52} {'':>9} {'':>9} {'':>9}  {rec['error'][:34]}")
+        elif rec.get("template") == "exploit":
+            print(
+                f"{sample[:52]:<52} "
+                f"{'privileged' if rec.get('privileged') else 'not privd':>9} "
+                f"{'moved' if rec['after_honest'] != rec['after_attack'] else 'same':>9} "
+                f"{'':>9}  "
+                f"{'STATE SEIZED ON A CHAIN' if rec['proven'] else 'not proven live'}"
+            )
         else:
             print(
                 f"{sample[:52]:<52} "

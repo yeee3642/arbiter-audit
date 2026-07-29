@@ -378,3 +378,226 @@ def replay(rep: Replay, root: Path, port: int) -> dict[str, Any]:
         "worlds": worlds,
     })
     return out
+
+
+# ---------------------------------------------------------------------------
+# The other template. state_change, liveness_broken and token_profit are not
+# composed from arbSetup/arbEnter/arbExit -- everything lives inside arbiterRun,
+# and the control is not a victim who takes a position but an ordinary user who
+# runs the happy path and must NOT be able to move the state in question.
+#
+# Translating it needs one more account. The harness pranks `ctrl`; a chain has
+# no pranks, so `ctrl` becomes a third key and the happy path becomes a
+# transaction that key signs.
+# ---------------------------------------------------------------------------
+
+GETTER_RE = re.compile(r'staticcall\(\s*abi\.encodeWithSignature\(\s*"([^"]+)"')
+CTRL_BLOCK_RE = re.compile(
+    r"vm\.startPrank\(ctrl,\s*ctrl\);(.*?)vm\.stopPrank\(\);", re.DOTALL
+)
+ATTACKER_DEPLOY_RE = re.compile(r"^\s*Attacker\s+atk\s*=\s*new\s+Attacker", re.MULTILINE)
+
+
+@dataclass
+class ReplayExploit:
+    """A proof written against the exploit template rather than the victim one."""
+
+    sample_id: str
+    pragma: str
+    target_source: str
+    agent_decls: str
+    state_decls: str
+    setup_body: str
+    honest_body: str
+    getter_sig: str
+    target_type: str
+    ctor_payable: bool = True
+
+
+def parse_poc_exploit(poc_path: Path, target_path: Path,
+                      sample_id: str) -> ReplayExploit:
+    from .workspace import hoist_declarations
+
+    text = poc_path.read_text(encoding="utf-8")
+    pragma = (PRAGMA_RE.search(text).group(1).strip()
+              if PRAGMA_RE.search(text) else ">=0.8.0")
+    agent_decls = _agent_declarations(text)
+
+    m = re.search(r"\bcontract\s+TestArbiterExploit\b", text)
+    if not m:
+        raise Untranslatable("not the exploit template")
+    body, _ = _balanced_block(text, m.end())
+    run = _function_body(body, "arbiterRun")
+
+    # Setup is everything the agent deployed before the harness built the attacker.
+    am = ATTACKER_DEPLOY_RE.search(run)
+    if not am:
+        raise Untranslatable("no Attacker deployment to split setup at")
+    setup_src = run[: am.start()]
+    try:
+        state_decls, hoisted = hoist_declarations(setup_src)
+    except ValueError as exc:
+        raise Untranslatable(str(exc)[:120]) from exc
+
+    gm = GETTER_RE.search(run)
+    if not gm:
+        raise Untranslatable("no observed getter to read")
+
+    cm = CTRL_BLOCK_RE.search(run)
+    honest = cm.group(1) if cm else ""
+
+    tm = TARGET_DECL_RE.search(state_decls)
+    if not tm:
+        raise Untranslatable("no `target` declaration in setup")
+
+    return ReplayExploit(
+        sample_id=sample_id,
+        pragma=pragma,
+        target_source=target_path.read_text(encoding="utf-8"),
+        agent_decls=agent_decls,
+        state_decls=state_decls,
+        setup_body=hoisted,
+        honest_body=honest,
+        getter_sig=gm.group(1),
+        target_type=tm.group(1),
+        ctor_payable=bool(
+            re.search(r"constructor\s*\([^)]*\)\s*[^{]*payable", agent_decls)
+        ),
+    )
+
+
+_LIVE_EXPLOIT_SOL = """// SPDX-License-Identifier: Apache-2.0
+pragma solidity {pragma};
+
+import "./Target.sol";
+
+interface _ArbiterHarness {{ function arbiterVictim() external view returns (address); }}
+interface _ArbiterToken {{ function balanceOf(address) external view returns (uint256); }}
+
+{agent_decls}
+
+contract ArbWorld {{
+{state_decls}
+    address public owner;
+    constructor() payable {{ owner = msg.sender;
+{setup_body}
+    }}
+    function targetAddr() external view returns (address) {{ return address(target); }}
+    receive() external payable {{}}
+}}
+
+/// An ordinary user running the happy path, deployed and driven by its own account.
+/// The harness pranked this actor; a chain cannot, so it holds a key like anyone else.
+/// If the state under test moves for THIS account too, it was never privileged.
+contract HonestUser {{
+{state_decls}
+    constructor(address t) payable {{ target = {target_type}(payable(t)); }}
+    function act() external payable {{
+{honest_body}
+    }}
+    receive() external payable {{}}
+}}
+
+contract AttackerFactory {{
+    address public victim;
+    address public atk;
+    address public owner;
+    constructor(address v) payable {{ victim = v; owner = msg.sender; }}
+    function arbiterVictim() external view returns (address) {{ return victim; }}
+    function build(address t) external payable {{
+{build_body}
+    }}
+    function run() external {{
+        (bool ok, ) = atk.call(abi.encodeWithSignature("attack()"));
+        require(ok, "attack reverted");
+    }}
+    receive() external payable {{}}
+}}
+"""
+
+
+def build_exploit_project(root: Path, rep: ReplayExploit) -> Path:
+    proj = root / "live"
+    (proj / "src").mkdir(parents=True, exist_ok=True)
+    (proj / "foundry.toml").write_text(
+        '[profile.default]\nsrc = "src"\nout = "out"\nlibs = []\n'
+        "auto_detect_solc = true\nvia_ir = true\n",
+        encoding="utf-8",
+    )
+    (proj / "src" / "Target.sol").write_text(rep.target_source, encoding="utf-8")
+    (proj / "src" / "Live.sol").write_text(
+        _LIVE_EXPLOIT_SOL.format(
+            pragma=rep.pragma,
+            agent_decls=rep.agent_decls,
+            state_decls=rep.state_decls,
+            setup_body=rep.setup_body,
+            honest_body=rep.honest_body,
+            target_type=rep.target_type,
+            build_body=_build_body(rep.ctor_payable),
+        ),
+        encoding="utf-8",
+    )
+    return proj
+
+
+def _build_body(ctor_payable: bool) -> str:
+    if ctor_payable:
+        return "        atk = address(new Attacker{value: msg.value}(t));"
+    return "\n".join([
+        "        atk = address(new Attacker(t));",
+        '        (bool funded, ) = atk.call{value: msg.value}("");',
+        "        funded;",
+    ])
+
+
+def replay_exploit(rep: ReplayExploit, root: Path, port: int) -> dict[str, Any]:
+    """Read the privileged state three times: at rest, after honest use, after the attack."""
+    proj = build_exploit_project(root, rep)
+    out: dict[str, Any] = {"sample_id": rep.sample_id, "template": "exploit"}
+    chain = LiveChain(port=port)
+    try:
+        chain.start()
+    except ChainUnavailable as exc:
+        out["error"] = str(exc)
+        return out
+    try:
+        deployer, honest, attacker = (
+            chain.accounts[0], chain.accounts[3], chain.accounts[2]
+        )
+        world, _ = chain.deploy(proj, "src/Live.sol:ArbWorld", deployer.key,
+                                value_wei=10 * ETHER)
+        target = chain.call(world, "targetAddr()(address)").strip()
+        v0 = chain.call(target, rep.getter_sig)
+
+        # The control. An ordinary account runs the happy path with its own key.
+        hu, _ = chain.deploy(proj, "src/Live.sol:HonestUser", honest.key,
+                             ctor=[target], value_wei=10 * ETHER)
+        honest_step = chain.send(honest.key, hu, "act()", value_wei=2 * ETHER)
+        v1 = chain.call(target, rep.getter_sig)
+
+        factory, _ = chain.deploy(proj, "src/Live.sol:AttackerFactory", attacker.key,
+                                  ctor=[hu])
+        chain.send(attacker.key, factory, "build(address)", [target],
+                   value_wei=10 * ETHER)
+        attack_step = chain.send(attacker.key, factory, "run()")
+        v2 = chain.call(target, rep.getter_sig)
+
+        out.update({
+            "target": target,
+            "getter": rep.getter_sig,
+            "at_rest": v0,
+            "after_honest": v1,
+            "after_attack": v2,
+            "honest_ok": honest_step.ok,
+            "attack_ok": attack_step.ok,
+            # Privileged means an ordinary account cannot move it. Both halves are
+            # required: unchanged by honest use, changed by the attack.
+            "privileged": v0 == v1,
+            "proven": bool(attack_step.ok and v0 == v1 and v1 != v2),
+        })
+        return out
+    except Exception as exc:  # noqa: BLE001 -- one sample must not stop the sweep
+        out["error"] = f"{type(exc).__name__}: {str(exc)[:250]}"
+        return out
+    finally:
+        chain.stop()
