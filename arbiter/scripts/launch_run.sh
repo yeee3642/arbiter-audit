@@ -9,7 +9,7 @@ RUN_ID="$1"; EVALSET="$2"; TURNS="$3"; ATTEMPTS="$4"; CONC="$5"; RPM="$6"
 export PATH="$HOME/.foundry/bin:$PATH"
 : "${AIS3_API_KEY:?set AIS3_API_KEY before launching}"
 
-cd "$HOME/rig/arbiter" || exit 1
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 LOG="$HOME/${RUN_ID}.log"
 
 setsid python3 cli.py run \

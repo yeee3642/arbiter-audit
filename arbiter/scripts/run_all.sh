@@ -16,8 +16,7 @@ QUICK=""
 [ "${2:-}" = "--quick" ] && QUICK=1
 
 export PATH="$HOME/.foundry/bin:$PATH"
-cd "$HOME/rig/arbiter" || exit 1
-
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
 RESULTS="$HOME/${RUN_ID}-report.txt"
 : > "$RESULTS"
 

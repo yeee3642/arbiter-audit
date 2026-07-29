@@ -12,8 +12,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arbiter.repo import plan_for  # noqa: E402
 from arbiter.workspace import Workspace  # noqa: E402
 

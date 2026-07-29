@@ -19,8 +19,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arbiter.repo import SKIP_DIRS, plan_for  # noqa: E402
 from arbiter.triage import triage_all  # noqa: E402
 from arbiter.workspace import Workspace  # noqa: E402

@@ -21,11 +21,10 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arbiter.workspace import Workspace  # noqa: E402
 
-RIG = Path(os.path.expanduser("~/rig/arbiter"))
+RIG = Path(__file__).resolve().parent.parent
 WS = Path("/tmp/recheck")
 
 

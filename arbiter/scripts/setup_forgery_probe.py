@@ -27,8 +27,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arbiter.workspace import Workspace  # noqa: E402
 
 WS = Path("/tmp/setup-forgery")

@@ -31,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-RIG = Path("/home/ubuntu/rig/arbiter")
+RIG = Path(__file__).resolve().parent.parent
 WS = Path("/tmp/inv-probe")
 
 FOUNDRY_TOML = """[profile.default]

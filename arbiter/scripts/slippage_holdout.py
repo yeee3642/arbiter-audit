@@ -28,8 +28,7 @@ import statistics
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from arbiter.citation import repo_declarations, scan_slippage  # noqa: E402
 from arbiter.repo import SKIP_DIRS  # noqa: E402
 from arbiter.triage import triage_all  # noqa: E402
