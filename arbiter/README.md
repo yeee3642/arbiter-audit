@@ -279,6 +279,13 @@ evalsets/
 ```bash
 export AIS3_API_KEY=...
 
+# One inexpensive request verifies the configured endpoint, key, and model.
+python3 scripts/api_smoke.py
+
+# End-to-end: the model must write an exploit that compiles and passes on a real EVM.
+python3 cli.py audit examples/StakingVault.sol --run-id local-demo \
+  --attempts 1 --max-turns 14 --concurrency 1 --rpm 10 --all-files
+
 # Arm A
 python cli.py bastet --evalset evalsets/v3_authored.json \
   --prompts ../bastet-run/prompts --model ais3/nemotron-3-ultra-550b --run-id h2h-bastet

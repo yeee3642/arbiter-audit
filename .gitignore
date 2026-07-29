@@ -29,3 +29,7 @@ __pycache__/
 **/runs/**/llm_calls.jsonl
 **/runs/**/results.jsonl
 **/runs/**/tasks.jsonl
+
+# Foundry build artefacts from running the probes and the local demo in-tree.
+arbiter/cache/
+arbiter/out/

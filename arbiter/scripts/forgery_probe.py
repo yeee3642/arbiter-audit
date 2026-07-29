@@ -28,11 +28,10 @@ Pure CPU. No gateway requests.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from arbiter.workspace import Workspace  # noqa: E402
 

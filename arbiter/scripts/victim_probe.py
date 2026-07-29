@@ -24,16 +24,15 @@ Pure CPU. No gateway requests.
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
+RIG = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RIG))
 
 from arbiter.workspace import Workspace  # noqa: E402
 
-RIG = Path(os.path.expanduser("~/rig/arbiter"))
 WS = Path("/tmp/victim-probe")
 
 ATTACKER = """

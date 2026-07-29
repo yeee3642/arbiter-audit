@@ -15,16 +15,15 @@ Pure CPU. No gateway requests.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser("~/rig/arbiter"))
+RIG = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RIG))
 
 from arbiter.latebinding import compose_late_bound, lint_deploy_code  # noqa: E402
 from arbiter.workspace import Workspace  # noqa: E402
 
-RIG = Path(os.path.expanduser("~/rig/arbiter"))
 WS = Path("/tmp/lb-probe")
 TRIALS = 3
 
