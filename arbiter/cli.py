@@ -97,6 +97,16 @@ def main() -> int:
     dp.add_argument("--evalset", type=Path, default=None,
                     help="optional: supplies contract sources for older runs")
 
+    pv = sub.add_parser(
+        "prove",
+        help="walk every dumped exploit up the evidence ladder: harness, standalone, chain",
+    )
+    pv.add_argument("--dump", type=Path, required=True,
+                    help="directory written by `arbiter dump`")
+    pv.add_argument("--port", type=int, default=9400)
+    pv.add_argument("--only", default="", help="substring filter on the sample id")
+    pv.add_argument("--json", type=Path, default=None)
+
     ev = sub.add_parser(
         "eval", help="score a run in Bastet's own output format, for side-by-side reading"
     )
@@ -405,6 +415,25 @@ def main() -> int:
         if man["exploits"]:
             print()
             print(f"reproduce any of them:  cd {man['exploits'][0]['path']} && forge test -vvv")
+        return 0
+
+    if args.cmd == "prove":
+        import shutil as _shutil
+
+        # Rung three needs a chain. Without one the command would quietly report that
+        # nothing reached it, which reads as a result rather than as a missing tool.
+        if _shutil.which("anvil") is None:
+            print("anvil is not on PATH, so no finding can be tested on a chain. "
+                  "Refusing to report a ladder whose top rung was never run.")
+            return 2
+        from arbiter.prove import prove_dump, render
+
+        report = prove_dump(args.dump, port=args.port, only=args.only)
+        print(render(report))
+        if args.json:
+            args.json.write_text(json.dumps(report, indent=1), encoding="utf-8")
+            print()
+            print(f"full transcripts: {args.json}")
         return 0
 
     if args.cmd == "eval":
