@@ -49,6 +49,16 @@ def _amt(wei: int) -> str:
     return f"{wei / ETHER:.6f}".rstrip("0").rstrip(".")
 
 
+def _why(rec: dict) -> str:
+    """Why a live replay said no. A bare refusal is the least useful thing to print."""
+    took = rec.get("extracted_from_contract", 0)
+    if took and not rec.get("shortfall"):
+        return f"took {_amt(took)} but this user was still paid"
+    if not took:
+        return "nothing left the contract"
+    return "gain did not cover the shortfall"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dump", type=Path, help="directory written by `arbiter dump`")
@@ -136,7 +146,7 @@ def main() -> int:
                 f"{sample[:48]:<48} "
                 f"{_amt(rec['shortfall']):>14} "
                 f"{_amt(rec['attacker_gain']):>14}  "
-                f"{'DRAINED ON A CHAIN' if rec['proven'] else 'not proven live'}"
+                f"{'DRAINED ON A CHAIN' if rec['proven'] else _why(rec)}"
             )
 
     proven = [r for r in results if r.get("proven")]

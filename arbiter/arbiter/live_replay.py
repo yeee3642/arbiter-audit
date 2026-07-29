@@ -159,25 +159,30 @@ def _state_declarations(test_body: str) -> str:
     return "\n".join(out)
 
 
-VALUE_RE = re.compile(r"\{\s*value\s*:\s*(\d+)\s*(ether|gwei|wei)?\s*\}")
-_UNITS = {"ether": 10**18, "gwei": 10**9, "wei": 1, None: 1, "": 1}
+# Every denominated amount, not just the ones written as a call option. Matching only
+# `{value: N ether}` was tried and misses `.send(10 ether)` and `.transfer(...)` -- and
+# `send` does not revert on failure, so a setup that hands the target everything the
+# world had left the world broke, the constructor "succeeded", and the victim's entry
+# reverted with no reason string in both worlds. The finding was then reported as not
+# proven live, which is the worst kind of wrong answer: a real refusal in shape, an
+# accounting mistake in fact.
+VALUE_RE = re.compile(r"(\d+)\s*(ether|gwei|wei)\b")
+_UNITS = {"ether": 10**18, "gwei": 10**9, "wei": 1}
 
 
 def _required_endowment(*fragments: str) -> int:
-    """How much the world has to start with for its own setup to succeed.
+    """How much the world has to start with for its own setup and entry to succeed.
 
-    A fixed ten ether was tried and is wrong: a scenario whose setup seeds the contract
-    with a hundred reverts in its constructor, and the failure surfaces as an
-    unexplained deploy error rather than as "not enough money". Read what the fragments
-    actually spend, double it for headroom, and stay inside what an anvil account is
-    born with.
+    Deliberately generous: the surplus never leaves the world, so over-funding costs
+    nothing measurable -- `recovered` is a delta -- while under-funding breaks the
+    scenario silently.
     """
     spend = sum(
-        int(m.group(1)) * _UNITS.get(m.group(2), 1)
+        int(m.group(1)) * _UNITS[m.group(2)]
         for frag in fragments
         for m in VALUE_RE.finditer(frag)
     )
-    return max(10 * 10**18, min(2 * spend, 900 * 10**18))
+    return max(10 * 10**18, min(3 * spend, 900 * 10**18))
 
 
 def _attacker_ctor_payable(text: str) -> bool:
@@ -376,6 +381,7 @@ def run_world(chain: LiveChain, proj: Path, with_attack: bool,
     if enter_wait:
         chain.advance(enter_wait)
     mid = chain.balance(world)
+    tgt_pre = chain.balance(target)
 
     atk_gain = 0
     if with_attack:
@@ -400,6 +406,11 @@ def run_world(chain: LiveChain, proj: Path, with_attack: bool,
         "with_attack": with_attack,
         "target": target,
         "recovered": recovered,
+        # Recorded whether or not the predicate is satisfied. A bare "not proven" hides
+        # the difference between an attack that did nothing and one that emptied real
+        # value out of the contract while the particular user being modelled happened to
+        # still get paid -- and those call for opposite next steps.
+        "target_drained": max(0, tgt_pre - chain.balance(target)),
         "attacker_gain": atk_gain,
         "exit_ok": exit_step.ok,
         "steps": [vars(s) for s in steps],
@@ -432,11 +443,13 @@ def replay(rep: Replay, root: Path, port: int) -> dict[str, Any]:
 
     clean, attacked = worlds
     shortfall = max(0, clean["recovered"] - attacked["recovered"])
+    drained = attacked.get("target_drained", 0) - clean.get("target_drained", 0)
     out.update({
         "recovered_clean": clean["recovered"],
         "recovered_attacked": attacked["recovered"],
         "attacker_gain": attacked["attacker_gain"],
         "shortfall": shortfall,
+        "extracted_from_contract": max(0, drained),
         # The same predicate the harness uses, computed from balances a node reported:
         # the victim got less back because the attack happened, and the attacker is
         # holding at least what the victim lost.
