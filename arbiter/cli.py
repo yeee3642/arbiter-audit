@@ -41,6 +41,15 @@ def _root_for(f: Path, roots: list[Path]) -> Path:
     return f.resolve().parent
 
 
+# Subcommands that produce evidence by executing it. Without a compiler they cannot
+# find anything, and every non-vulnerable outcome maps to "safe" downstream -- so the
+# run would print CLEAR for every contract. Measured: forge off PATH, one contract with
+# a reproduced reentrancy, 0.01s, zero requests, "0/1 reported vulnerable, each backed
+# by an executed exploit". Refusing to start is the only honest behaviour.
+_NEEDS_FORGE = {"run", "audit", "broadside", "cascade", "dump", "bench",
+                "reconstruct", "prove"}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="arbiter")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -175,6 +184,19 @@ def main() -> int:
     c.add_argument("--out", type=Path)
 
     args = ap.parse_args()
+
+    if args.cmd in _NEEDS_FORGE:
+        import shutil as _shutil
+
+        if _shutil.which("forge") is None:
+            print(
+                "forge is not on PATH. ARBITER produces evidence by executing it, so "
+                "without a compiler this run could only ever report every contract as "
+                "safe -- a clean answer nothing measured. Refusing to start. "
+                "Install foundry (https://getfoundry.sh) or add it to PATH.",
+                file=sys.stderr,
+            )
+            return 2
 
     if args.cmd == "run":
         summary = run_arbiter(

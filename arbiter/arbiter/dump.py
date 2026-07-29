@@ -169,7 +169,13 @@ def dump_run(results_path: Path, out_dir: Path, include_failed: bool = False) ->
             # The compiler is pinned to whatever the original run resolved, so the dump
             # reproduces under the same solc rather than whichever one is newest on the
             # reader's machine.
-            solc = plan.get("solc") or ""
+            # Read off the context, not the plan. `run.py` writes solc at the top level
+            # of `context` and the plan dict never carried the key, so this silently
+            # resolved to "" for every dump ever taken: twelve of twelve projects were
+            # written with auto_detect_solc, compiling contracts pinned to an old pragma
+            # with whichever compiler is newest on the reader's machine. They happened
+            # to build, which is luck rather than design.
+            solc = (row.get("context") or {}).get("solc") or plan.get("solc") or ""
             (proj / "foundry.toml").write_text(
                 FOUNDRY_TOML.format(
                     src=src_setting,

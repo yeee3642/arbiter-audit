@@ -24,7 +24,7 @@ from .agent import audit, outcome_to_label
 from .gateway import Gateway, RateLimiter
 from .proposals import load_hits, proposal_block, rarity
 from .repo import plan_for
-from .workspace import Workspace
+from .workspace import BuildUnavailable, Workspace
 
 
 def load_evalset(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -225,6 +225,17 @@ def run_arbiter(
                     proposals=proposal_block(hits.get(item['id'], []), rare) if hits else "",
                     predicates=predicates,
                 )
+            except BuildUnavailable as exc:
+                # Kept out of the generic handler on purpose. Every non-vulnerable
+                # outcome maps to "safe" downstream, so a missing compiler used to be
+                # reported as CLEAR: measured on a real contract with forge off PATH,
+                # the audit printed "0/1 reported vulnerable, each backed by an executed
+                # exploit" after 0.01s and zero requests. That is an unmeasured clean
+                # answer, which is the one thing this project exists to stop producing.
+                from .tools import AgentOutcome
+
+                outcome = AgentOutcome(stop_reason="toolchain_unavailable")
+                error = f"toolchain_unavailable: {exc}"
             except Exception as exc:  # noqa: BLE001
                 from .tools import AgentOutcome
 

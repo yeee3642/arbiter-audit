@@ -533,23 +533,30 @@ class Workspace:
 
         if token_expr.strip():
             measure_victim = f"_ArbiterToken({token_expr.strip()}).balanceOf(arbVictim)"
-            attacker_expr = "address(atk)" if mode == "contract" else "eoa"
-            measure_atk = f"_ArbiterToken({token_expr.strip()}).balanceOf({attacker_expr})"
+            _tok = f"_ArbiterToken({token_expr.strip()})"
+            measure_atk = (
+                f"{_tok}.balanceOf(address(atk)) + {_tok}.balanceOf(arbAtkEoa)"
+                if mode == "contract" else f"{_tok}.balanceOf(arbEoa)"
+            )
         else:
             measure_victim = "arbVictim.balance"
             measure_atk = (
-                "address(atk).balance" if mode == "contract" else "eoa.balance"
+                "address(atk).balance + arbAtkEoa.balance"
+                if mode == "contract" else "arbEoa.balance"
             )
 
+        # Victim-mode variants: they assign the contract-level `atk` and prank the
+        # contract-level `arbEoa`, because deployment and attack are now separate
+        # functions and a local would not survive between them.
         setup = (
-            _ATTACKER_SETUP.format(funding_wei=int(funding_wei))
+            _VICTIM_ATTACKER_SETUP.format(funding_wei=int(funding_wei))
             if mode == "contract"
-            else _EOA_SETUP.format(funding_wei=int(funding_wei), eoa_addr=_eoa)
+            else _VICTIM_EOA_SETUP.format(funding_wei=int(funding_wei))
         )
         action = (
             _CONTRACT_ATTACK
             if mode == "contract"
-            else _EOA_ACTION.format(attack_body=_indent(attack_body, 8))
+            else _VICTIM_EOA_ACTION.format(attack_body=_indent(attack_body, 8))
         )
         extras = "\n".join(
             f'import "{spec.strip()}";'
@@ -573,12 +580,26 @@ class Workspace:
                 for i, e in enumerate(env)
             ),
             victim_addr=_victim,
+            eoa_addr=_eoa,
             pragma=self.pragma,
             target_import=self.target_import,
             extra_imports=("\n" + extras if extras else ""),
             error_decl=(_VICTIM_ERROR if self.custom_errors else ""),
             attacker_code=attacker_code.strip(),
             state_decls=_state_decls,
+            # Only in contract mode, and it is worth saying why this line existed at
+            # all. It was emitted unconditionally while `compose_victim_loss` only
+            # requires an Attacker contract when mode == "contract" -- so every EOA-mode
+            # composition named a type nothing declared and died at solc with
+            # "Identifier not found or not unique". victim_loss is the only strict
+            # predicate, which made the whole EOA quadrant unreachable: the one route to
+            # a contract guarded by require(msg.sender == tx.origin), and the shape an
+            # agent reaches for first when the attack needs no contract at all.
+            #
+            # It is dead weight in contract mode too -- _ATTACKER_SETUP declares a local
+            # `Attacker atk` inside arbAttack() that shadows it -- but removing it there
+            # as well is a separate change with its own probe.
+            attacker_decl=("    Attacker internal atk;" if mode == "contract" else ""),
             deploy_code=_hoisted,
             victim_enter=_indent(victim_enter, 8),
             victim_exit=_indent(victim_exit, 8),
@@ -1140,7 +1161,13 @@ contract TestArbiterVictim is Harness {{
     address internal constant arbVictim = address(uint160({victim_addr}));
 
 {state_decls}
-    Attacker internal atk;
+{attacker_decl}
+    // The attacker's two identities, at contract level so they outlive arbDeploy.
+    // Both are measured, because profit parked in the EOA rather than in the contract
+    // is still profit and used to read as zero.
+    address internal constant arbAtkEoa =
+        address(uint160(uint256(keccak256("arbiter.attacker"))));
+    address internal constant arbEoa = address(uint160({eoa_addr}));
 
     function testArbiterVictimLoss() public {{
         require(
@@ -1167,12 +1194,24 @@ contract TestArbiterVictim is Harness {{
         vm.stopPrank();
     }}
 
-    function arbAttack() external returns (uint256) {{
+    /// The attacker is built ONCE per trial, not once per round.
+    ///
+    /// It used to live at the top of arbAttack, which the round loop calls `rounds`
+    /// times -- so at rounds=8 the attacker was redeployed and re-funded eight times
+    /// and nothing it accumulated survived into the next round. Two consequences, and
+    /// the second is the serious one. Per-round rounding bias, which is the only reason
+    /// the eight-round environment exists, was structurally unprovable. And each
+    /// round's contribution was floored at zero before being summed, so an attack that
+    /// gained one ether and lost one ether each round reported four ether of profit
+    /// against a true net of zero -- while `gain` is the left-hand side of the
+    /// conservation check that makes victim_loss mean *the attacker is holding what the
+    /// victim lost*. That is a constructible false positive, not a missed finding.
+    function arbDeploy() external {{
 {setup}
-        uint256 atkPre = {measure_atk};
+    }}
+
+    function arbAttack() external {{
 {attack_action}
-        uint256 atkPost = {measure_atk};
-        return atkPost > atkPre ? atkPost - atkPre : 0;
     }}
 
     /// One world. `withAttack` is the only thing that differs between the two runs of
@@ -1189,13 +1228,34 @@ contract TestArbiterVictim is Harness {{
 
         attackRan = true;
         if (withAttack) {{
+            // A fresh attacker per round, and a SIGNED delta per round.
+            //
+            // Both halves are load-bearing and they were confused with each other. The
+            // fresh identity is not a bug: an attacker really can deploy a second
+            // contract, and against a contract that keys state by address -- a queue
+            // nonce, a claim marker -- repeating from a new address is the attack.
+            // Removing it was measured to cost a real finding: the reentrancy the
+            // gateway had just proven stopped reproducing, because rounds two onward
+            // reverted on the first attacker's own spent nonce.
+            //
+            // The bug was the flooring. Each round's contribution used to be clamped at
+            // zero before being summed, so an attacker that took one ether and gave one
+            // back reported four ether of profit over eight rounds against a true net of
+            // nothing -- and `gain` is the left-hand side of the conservation check. A
+            // signed sum keeps repetition and prices it honestly: a round that loses
+            // money now subtracts.
+            int256 net;
             for (uint256 r = 0; r < rounds; r++) {{
-                (bool ok, bytes memory data) =
+                this.arbDeploy();
+                // After the funding, so a handout can never be counted as profit.
+                int256 pre = int256({measure_atk});
+                (bool ok, ) =
                     address(this).call(abi.encodeWithSignature("arbAttack()"));
                 if (r == 0) {{ attackRan = ok; }}
-                if (ok && data.length >= 32) {{ gain += abi.decode(data, (uint256)); }}
                 if (!ok) {{ break; }}
+                net += int256({measure_atk}) - pre;
             }}
+            gain = net > 0 ? uint256(net) : 0;
         }}
 
         // A victim who cannot get out AT ALL has recovered nothing. That is the harm,
@@ -1349,6 +1409,16 @@ _SWEEP_TRIAL = """    /// endowment={endow} wei, repetitions={repeats}, warp={wa
         return ARB_COMPLETED;
     }}
 """
+
+_VICTIM_ATTACKER_SETUP = """        atk = new Attacker(address(target));
+        vm.deal(address(atk), {funding_wei});
+        vm.deal(arbAtkEoa, {funding_wei});"""
+
+_VICTIM_EOA_SETUP = """        vm.deal(arbEoa, {funding_wei});"""
+
+_VICTIM_EOA_ACTION = """        vm.startPrank(arbEoa, arbEoa);
+{attack_body}
+        vm.stopPrank();"""
 
 _SWEEP_ATTACKER_SETUP = """        Attacker atk = new Attacker(address(target));
         vm.deal(address(atk), {endow});"""
