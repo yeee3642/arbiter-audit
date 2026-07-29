@@ -104,11 +104,29 @@ def _agent_declarations(text: str) -> str:
     return "\n\n".join(out)
 
 
+WARP_RE = re.compile(r"vm\.warp\(\s*block\.timestamp\s*\+\s*(\d+)\s*\)")
+ROLL_RE = re.compile(r"vm\.roll\(\s*block\.number\s*\+\s*(\d+)\s*\)")
+
+
 def _strip_pranks(body: str) -> str:
     """Remove the harness's impersonation. What is left is what the account itself did."""
     body = re.sub(r"^\s*vm\.(startPrank|stopPrank|prank)\s*\([^;]*\);\s*$", "",
                   body, flags=re.MULTILINE)
     return body
+
+
+def _take_waits(body: str) -> tuple[str, int, int]:
+    """Pull the clock changes out of a fragment; return the fragment and how long to wait.
+
+    A `vm.warp` is not an impersonation, so deleting it would change what the scenario
+    means. It is the scenario saying "and then some time passed", which a chain can do
+    for real -- so it is lifted out here and replayed against the node instead.
+    """
+    seconds = sum(int(m) for m in WARP_RE.findall(body))
+    blocks = sum(int(m) for m in ROLL_RE.findall(body))
+    body = re.sub(r"^\s*vm\.(warp|roll)\s*\([^;]*\);\s*$", "", body,
+                  flags=re.MULTILINE)
+    return body, seconds, blocks
 
 
 _DECL_RE = re.compile(
@@ -155,6 +173,8 @@ class Replay:
     exit_body: str
     target_type: str
     ctor_payable: bool = True
+    setup_wait: int = 0
+    enter_wait: int = 0
     notes: list[str] = field(default_factory=list)
 
 
@@ -175,15 +195,22 @@ def parse_poc(poc_path: Path, target_path: Path, sample_id: str) -> Replay:
     if not tm:
         raise Untranslatable("no `target` state declaration to bind the world to")
 
+    setup_body, setup_wait, _ = _take_waits(
+        _strip_pranks(_function_body(test_body, "arbSetup")))
+    enter_body, enter_wait, _ = _take_waits(
+        _strip_pranks(_function_body(test_body, "arbEnter")))
+
     return Replay(
         sample_id=sample_id,
         pragma=pragma,
         target_source=target_path.read_text(encoding="utf-8"),
         attacker_contract=attacker,
         state_decls=state_decls,
-        setup_body=_strip_pranks(_function_body(test_body, "arbSetup")),
-        enter_body=_strip_pranks(_function_body(test_body, "arbEnter")),
+        setup_body=setup_body,
+        enter_body=enter_body,
         exit_body=_strip_pranks(_function_body(test_body, "arbExit")),
+        setup_wait=setup_wait,
+        enter_wait=enter_wait,
         target_type=tm.group(1),
         # Not every Attacker takes ether in its constructor, and `new X{value: ...}`
         # against a non-payable one does not compile. Seven of twelve replays died on
@@ -298,7 +325,8 @@ ETHER = 10**18
 
 
 def run_world(chain: LiveChain, proj: Path, with_attack: bool,
-              endow_wei: int = 10 * ETHER) -> dict[str, Any]:
+              endow_wei: int = 10 * ETHER, setup_wait: int = 0,
+              enter_wait: int = 0) -> dict[str, Any]:
     """One world on one chain. Returns what the victim got back and what the attacker took."""
     victim, attacker = chain.accounts[1], chain.accounts[2]
     steps: list[Step] = []
@@ -308,7 +336,11 @@ def run_world(chain: LiveChain, proj: Path, with_attack: bool,
     steps.append(Step(what="deploy ArbWorld (setup)", actor=victim.address, tx=tx))
     target = chain.call(world, "targetAddr()(address)").strip()
 
+    if setup_wait:
+        chain.advance(setup_wait)
     steps.append(chain.send(victim.key, world, "enter()"))
+    if enter_wait:
+        chain.advance(enter_wait)
     mid = chain.balance(world)
 
     atk_gain = 0
@@ -353,7 +385,9 @@ def replay(rep: Replay, root: Path, port: int) -> dict[str, Any]:
             out["error"] = str(exc)
             return out
         try:
-            worlds.append(run_world(chain, proj, with_attack))
+            worlds.append(run_world(chain, proj, with_attack,
+                                    setup_wait=rep.setup_wait,
+                                    enter_wait=rep.enter_wait))
         except Exception as exc:  # noqa: BLE001 -- one sample must not stop the sweep
             out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
             return out

@@ -171,6 +171,19 @@ class LiveChain:
     def call(self, to: str, sig: str, *args: str) -> str:
         return self._cast("call", to, sig, *args)
 
+    def advance(self, seconds: int, blocks: int = 1) -> None:
+        """Move the clock forward.
+
+        Time passing is not a cheat -- it is the one thing a chain does on its own, and
+        no account controls it. A scenario that said `vm.warp` was not forging anything;
+        it was waiting. So the wait is translated rather than refused, and it is applied
+        to every world identically so it can reveal an asymmetry but never create one.
+        """
+        if seconds > 0:
+            self._cast("rpc", "evm_increaseTime", str(seconds))
+        for _ in range(max(1, blocks)):
+            self._cast("rpc", "evm_mine")
+
     # -- writing -----------------------------------------------------------------------
 
     def deploy(self, project: Path, contract: str, key: str,
@@ -185,16 +198,16 @@ class LiveChain:
         proc = subprocess.run(  # noqa: S603
             cmd, cwd=project, capture_output=True, text=True, timeout=300
         )
-        # `forge create --json` pretty-prints, so the object spans several lines. Parse
-        # the whole of stdout first and only fall back to per-line for other versions.
-        out = (proc.stdout or "").strip()
-        for blob in (out, *reversed(out.splitlines())):
-            try:
-                data = json.loads(blob)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict) and "deployedTo" in data:
-                return data["deployedTo"], data.get("transactionHash", "")
+        # `forge create --json` pretty-prints across several lines AND shares stdout
+        # with the linter, so neither parsing the whole buffer nor parsing it line by
+        # line finds the object -- a contract that built cleanly was reported as a
+        # deploy failure because a lint warning sat next to the receipt. Read the two
+        # fields directly instead of trying to reconstitute the document around them.
+        out = (proc.stdout or "") + (proc.stderr or "")
+        addr = re.search(r'"deployedTo"\s*:\s*"(0x[0-9a-fA-F]{40})"', out)
+        if addr:
+            tx = re.search(r'"transactionHash"\s*:\s*"(0x[0-9a-fA-F]{64})"', out)
+            return addr.group(1), (tx.group(1) if tx else "")
         raise RuntimeError(
             f"deploy of {contract} failed: "
             f"{((proc.stderr or '') + (proc.stdout or '')).strip()[-400:]}"
