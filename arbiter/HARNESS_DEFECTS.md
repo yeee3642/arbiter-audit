@@ -15,22 +15,39 @@ passed while proving nothing.
                          before   after
 declared collision         solc     ok      D5
 comment/string intact      solc     ok      D5, and the rename must not reach either
-assertions resolve         solc     ok      D7
+assertions resolve         solc     ok      D6
 memory decl in deploy      solc     ok      D2, deploy_code half
+tuple decl survives        solc     ok      D7
 storage decl               (silent) refused D8
 reference-only cast          ok     ok      must not be renamed
 nested struct                ok     ok      not file scope, so not a clash
 Attacker                     ok     ok      never renamed, the setup writes it verbatim
+tuple with bytes             ok     ok      mixed decl/assign is illegal: leave it alone
                           -----   -----
-                            3/8     8/8
+                           4/10   10/10
 ```
 
 D1, D2 (victim half) and D3 were fixed earlier and have their own probes. D4 is still
 open and is deliberately not fixed here; see its entry for why it cannot ship alone.
 
-Two cases were added after the disk on the measurement box filled, and are verified at
-the text level only (`scripts/_tuple_check.py`, 7/7) -- solc has not seen them:
-the tuple hoist of D7 and the reference-typed tuple it must leave alone.
+## What it did to the ceiling: nothing, and that is the result
+
+```
+                 before   after
+expressible           8       8
+unharmed             13      13
+uncredited            3       3
+no_victim            10      11
+no_build              1       0
+```
+
+The bound is still 0.229. The one sample that could not build now fails as `no_victim`,
+which means the category is empty: **of the twenty-seven reference exploits this predicate
+cannot express, not one is our own tooling any more.** All twenty-seven are the predicate
+being deliberately stricter than "the attacker profited".
+
+That is worth more than a higher number would have been. Before this, the honest reading
+of the ceiling had a footnote -- one of the failures was ours. It no longer does.
 
 The distinction that matters: a recall defect costs findings, a soundness defect ships
 false positives. D3 is the second kind, which is why it outranks everything except the

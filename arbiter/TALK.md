@@ -132,11 +132,11 @@ The 35 reference exploits, under the predicate we are graded with:
   unharmed        13    the attacker really takes value -- up to 9 ether -- and the
                         modelled user is still paid in full
   uncredited       3    the user loses and nobody holds it: griefing has no beneficiary
-  no_victim       10    no depositor round trip exists: signature replay has no depositor
-  no_build         1    ours
+  no_victim       11    no depositor round trip exists: signature replay has no depositor
+  no_build         0    was 1, and that one was ours
 ```
 
-> Our recall is bounded by **0.229**, not by 1.000. And twenty-six of those twenty-seven
+> Our recall is bounded by **0.229**, not by 1.000. And all twenty-seven of those
 > are the predicate being deliberately stricter than "the attacker profited" — not a bug.
 >
 > Nobody asked us to measure this. It is the number that makes our recall interpretable,
