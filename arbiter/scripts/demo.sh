@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
 # The demo, as one command, so recording it is: start the screen recorder, run this.
 #
-# Everything here is deterministic and offline. Nothing calls the gateway, so nothing in
-# it can fail on stage for a reason outside the room -- which matters, because the one
-# part that DOES call the gateway finds the bug in roughly one run of three, and a live
-# audit is therefore the one thing not to put in front of a judge.
+# Every act except one is deterministic and offline, so it cannot fail for a reason
+# outside the room.
+#
+# The exception is `--live`, a real audit against the gateway, and whether to include it
+# turns entirely on whether you can retry. It finds the bug in roughly one run of three,
+# so on stage that is a two-in-three chance of standing in front of an audience with
+# nothing. In a RECORDING it does not matter at all, because a recording can be made
+# again and a stage cannot. Record with it; present without it.
 #
 #   scripts/demo.sh              pause between acts, for narrating
 #   scripts/demo.sh --auto       fixed pauses, for an unattended recording
-#   scripts/demo.sh --dump DIR   use a specific `arbiter dump` directory in act 3
+#   scripts/demo.sh --dump DIR   use a specific `arbiter dump` directory in act 4
+#   scripts/demo.sh --live       include the real audit (act 2). Needs AIS3_API_KEY.
 set -u
 
 AUTO=""
+LIVE=""
 DUMP="$HOME/exploits-casc2"
 while [ $# -gt 0 ]; do
     case "$1" in
         --auto) AUTO=1; shift ;;
+        --live) LIVE=1; shift ;;
         --dump) DUMP="$2"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -37,8 +44,17 @@ act() {
     echo
 }
 
+# A beat, and it has to EMIT while it waits. The recording is made with idle compression
+# on, so that the minute the gateway spends thinking does not sit in the video as a minute
+# of nothing. A pause that emits nothing is indistinguishable from that dead air and would
+# be compressed away with it -- and these beats are the room to narrate in.
 pause() {
-    if [ -n "$AUTO" ]; then sleep "${1:-6}"; else
+    if [ -n "$AUTO" ]; then
+        local n="${1:-6}"
+        printf '%s  ' "$D"
+        while [ "$n" -gt 0 ]; do printf '.'; sleep 1; n=$((n - 1)); done
+        printf '%s\n' "$R"
+    else
         printf '\n%s  [enter]%s ' "$D" "$R"; read -r _ || true
     fi
 }
@@ -92,12 +108,27 @@ TXT
 pause 16
 
 # ---------------------------------------------------------------------------------
-act "2.  A real attack, on a real chain" \
+if [ -n "$LIVE" ]; then
+    act "2.  A real audit, against the live gateway" \
+        "One contract, raw source, no hints. The model has to write an attack that runs."
+    show python3 cli.py audit examples/StakingVault.sol --run-id "demolive$$" \
+        --attempts 1 --max-turns 16 --concurrency 1 --rpm 20 --all-files | tail -13
+    cat <<'TXT'
+
+  The line that matters is `proof: ... (executed, predicate satisfied)`. The model did not
+  report a vulnerability -- it is not allowed to. It wrote an attack, and this harness
+  compiled it and ran it against a condition the model never saw.
+TXT
+    pause 14
+fi
+
+# ---------------------------------------------------------------------------------
+act "3.  The same claim, on a real chain" \
     "anvil. Real keys, real gas, and no cheatcode exists over JSON-RPC."
 show python3 scripts/live_attack.py --port 8599 | tail -14
 pause 14
 
-act "2b. The same attack, one line moved" \
+act "3b. The same attack, one line moved" \
     "nonce written BEFORE the transfer instead of after. Nothing else changes."
 show python3 scripts/live_attack.py --port 8600 --patched | tail -12
 cat <<'TXT'
@@ -109,7 +140,7 @@ pause 14
 
 # ---------------------------------------------------------------------------------
 if [ -d "$DUMP" ]; then
-    act "3.  The evidence ladder" \
+    act "4.  The evidence ladder" \
         "Each finding walked from the harness, to a standalone project, to a chain."
     show python3 cli.py prove --dump "$DUMP" | tail -20
     cat <<'TXT'
@@ -119,12 +150,12 @@ if [ -d "$DUMP" ]; then
 TXT
     pause 16
 else
-    act "3.  The evidence ladder -- SKIPPED" \
+    act "4.  The evidence ladder -- SKIPPED" \
         "No dump directory at $DUMP. Run: cli.py dump --results <run> --out <dir>"
 fi
 
 # ---------------------------------------------------------------------------------
-act "4.  What the baseline produces" \
+act "5.  What the baseline produces" \
     "Its 53 detectors on the same 40 samples, scored per detector."
 ADJ=$(show python3 scripts/adjudicability.py --jobs runs/h2h-bastet.jobs.jsonl) || exit 1
 echo "$ADJ" | head -12
@@ -132,7 +163,7 @@ echo "$ADJ" | tail -17
 pause 16
 
 # ---------------------------------------------------------------------------------
-act "5.  Our own ceiling" \
+act "6.  Our own ceiling" \
     "The 35 reference exploits, composed under the predicate WE are graded with."
 show python3 scripts/ceiling_probe.py --workers 8 | tail -12
 cat <<'TXT'
