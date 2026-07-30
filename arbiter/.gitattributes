@@ -1,0 +1,5 @@
+# Shell scripts are executed on Linux boxes and copied there directly, so a CRLF
+# checkout on Windows turns the shebang into `bash` and nothing runs. A tooling
+# round-trip introduced exactly that and the demo died with exit 127.
+*.sh text eol=lf
+*.py text eol=lf
