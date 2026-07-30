@@ -3,10 +3,23 @@
 Twelve minutes of talking, three of questions. The structure follows one rule: **lead
 with what does not move.**
 
-Two numbers moved this week. The confusion matrix came back worse on a re-run
-(MCC 0.303 → 0.118) and a second run is in flight to say whether that is a regression
-or variance, which with `--repeats 1` cannot currently be told apart. So the matrix is
-not the spine of this talk. Four other results are stable, checkable live, and stronger:
+The confusion matrix is not the spine of this talk, and now there is a measurement
+saying why. Three runs, same config, same 70 samples:
+
+```
+run             TP  TN  FP  FN    prec     rec      f1     mcc
+fixed1           7  31   4  28   0.636   0.200   0.304   0.118
+fixed2          13  30   5  22   0.722   0.371   0.491   0.261
+casc2-strict    10  33   2  25   0.833   0.286   0.426   0.303
+                          mean  0.731   0.286   0.407   0.227
+                         range  .64-.83 .20-.37 .30-.49 .12-.30
+```
+
+MCC swings by a factor of two and a half between identical runs. The dip after this
+week's fixes was a low draw, not a regression -- but nobody could have said so from one
+run, which is the point. Quote the range, never a single figure.
+
+Four other results are stable, checkable live, and stronger:
 
 | stable | what it is |
 |---|---|
@@ -133,11 +146,11 @@ The 35 reference exploits, under the predicate we are graded with:
 
 Give the matrix, once, with the honesty that makes it credible:
 
-> Precision runs 0.64 to 0.83 across runs and recall 0.20 to 0.29, and I will not quote
-> you a single figure, because the same contract yields a proof in roughly one run of
-> three and we have not yet measured the spread. That is our largest open item and it is
-> a protocol failure, not a modelling one — our own scoring code says every headline
-> should be a mean over repeats, and it has been run with repeats of one.
+> Across three identical runs precision is 0.64 to 0.83, recall 0.20 to 0.37, MCC 0.12
+> to 0.30. I am not going to quote you one figure, because the spread is a factor of two
+> and a half and I only know that because we ran it three times. Our own scoring code has
+> always said every headline should be a mean over repeats; it had been run with repeats
+> of one, and the first thing measuring that produced was a number I did not want.
 >
 > What is stable is per class: of thirty-five vulnerability classes we discriminate
 > **eight** — flag the bug and stay quiet on the fix — against **zero**.
@@ -178,9 +191,9 @@ Give the matrix, once, with the honesty that makes it credible:
 > yet been run on the same 70 samples the per-class table uses.**
 
 **"Did you re-run after the fixes?"**
-> Yes, and it came back worse — MCC 0.303 to 0.118. A second identical run is in flight
-> to tell regression from variance. I would rather show you a number that moved than one
-> I had stopped checking.
+> Three times. It came back worse once (MCC 0.118), better once (0.261), against 0.303
+> before. It was variance, and I could not have told you that from one run. The spread
+> itself is now the number I report.
 
 **"Why is the demo not a live audit?"**
 > It can be, and the recording contains one — three requests, twelve cents, a reentrancy
