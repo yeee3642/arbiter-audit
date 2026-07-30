@@ -54,7 +54,7 @@ def _why(rec: dict) -> str:
     took = rec.get("extracted_from_contract", 0)
     if took and not rec.get("shortfall"):
         return f"took {_amt(took)} but this user was still paid"
-    if not took:
+    if not took and not rec.get("target_held_rose"):
         return "nothing left the contract"
     return "gain did not cover the shortfall"
 

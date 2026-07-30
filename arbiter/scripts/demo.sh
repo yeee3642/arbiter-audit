@@ -66,7 +66,7 @@ cat <<'TXT'
 
   Everything after this point is that sentence being checked.
 TXT
-pause 8
+pause 16
 
 # ---------------------------------------------------------------------------------
 act "1.  The gates check themselves" \
@@ -80,7 +80,7 @@ cat <<'TXT'
   Each probe asserts in BOTH directions: the thing it must refuse is refused, AND the
   thing it must not refuse still passes. A gate that only ever says no is not a gate.
 TXT
-pause 8
+pause 16
 
 act "1b. One of them in full" "forgery_probe: what the attack may and may not do"
 show python3 scripts/forgery_probe.py | tail -9
@@ -89,13 +89,13 @@ cat <<'TXT'
   The last two lines are the point. Cheatcodes are refused in the ATTACK and allowed in
   SETUP, because setup has to build a world before anything can happen in it.
 TXT
-pause 8
+pause 16
 
 # ---------------------------------------------------------------------------------
 act "2.  A real attack, on a real chain" \
     "anvil. Real keys, real gas, and no cheatcode exists over JSON-RPC."
 show python3 scripts/live_attack.py --port 8599 | tail -14
-pause 10
+pause 14
 
 act "2b. The same attack, one line moved" \
     "nonce written BEFORE the transfer instead of after. Nothing else changes."
@@ -105,7 +105,7 @@ cat <<'TXT'
   Identical attacker contract, identical accounts, identical amounts. An exploit that
   drained both would never have been about the defect.
 TXT
-pause 10
+pause 14
 
 # ---------------------------------------------------------------------------------
 if [ -d "$DUMP" ]; then
@@ -117,7 +117,7 @@ if [ -d "$DUMP" ]; then
   The rungs are not redundant, and the asymmetry is the whole design: rung 1 is the only
   one that searches. Rung 3 cannot find anything at all -- it can only refuse.
 TXT
-    pause 12
+    pause 16
 else
     act "3.  The evidence ladder -- SKIPPED" \
         "No dump directory at $DUMP. Run: cli.py dump --results <run> --out <dir>"
@@ -129,7 +129,7 @@ act "4.  What the baseline produces" \
 ADJ=$(show python3 scripts/adjudicability.py --jobs runs/h2h-bastet.jobs.jsonl) || exit 1
 echo "$ADJ" | head -12
 echo "$ADJ" | tail -17
-pause 12
+pause 16
 
 # ---------------------------------------------------------------------------------
 act "5.  Our own ceiling" \

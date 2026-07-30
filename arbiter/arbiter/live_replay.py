@@ -411,6 +411,8 @@ def run_world(chain: LiveChain, proj: Path, with_attack: bool,
         # value out of the contract while the particular user being modelled happened to
         # still get paid -- and those call for opposite next steps.
         "target_drained": max(0, tgt_pre - chain.balance(target)),
+        "target_held_end": chain.balance(target),
+        "target_held_mid": tgt_pre,
         "attacker_gain": atk_gain,
         "exit_ok": exit_step.ok,
         "steps": [vars(s) for s in steps],
@@ -444,19 +446,34 @@ def replay(rep: Replay, root: Path, port: int) -> dict[str, Any]:
     clean, attacked = worlds
     shortfall = max(0, clean["recovered"] - attacked["recovered"])
     drained = attacked.get("target_drained", 0) - clean.get("target_drained", 0)
+    target_held_rose = attacked.get("target_held_end", 0) > attacked.get("target_held_mid", 0)
     out.update({
         "recovered_clean": clean["recovered"],
         "recovered_attacked": attacked["recovered"],
         "attacker_gain": attacked["attacker_gain"],
         "shortfall": shortfall,
         "extracted_from_contract": max(0, drained),
+        "target_held_rose": target_held_rose,
         # The same predicate the harness uses, computed from balances a node reported:
         # the victim got less back because the attack happened, and the attacker is
         # holding at least what the victim lost.
+        # The drain invariant, which this predicate was missing. The synthetic harness
+        # has always required that value leave the contract under audit; the live path
+        # measured it, recorded it as a diagnostic, and then did not use it -- so an
+        # attack could satisfy the conservation clause entirely inside scenery the setup
+        # built. Caught by a patched half reaching a real chain with
+        # shortfall 10 ether, attacker_gain 10 ether, extracted_from_contract 0: the
+        # victim really was robbed, and the contract being audited never lost a wei.
+        #
+        # `target_held_rose` is the same exception the synthetic harness carries. A
+        # stale-oracle attack deposits overvalued collateral and borrows against it, so
+        # the target ends up holding MORE while the victim is robbed; requiring a fall
+        # would refuse that whole class.
         "proven": bool(
             clean["recovered"] > 0
             and shortfall > 0
             and attacked["attacker_gain"] >= shortfall
+            and (max(0, drained) > 0 or target_held_rose)
         ),
         "worlds": worlds,
     })
