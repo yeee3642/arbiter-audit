@@ -4,6 +4,34 @@ Every entry below is a way the harness fails an attack that was not wrong. They 
 found by reading `workspace.py` against the error census in
 `runs/casc2-broad.scorecard.txt`, and the first two were then reproduced.
 
+## Status
+
+`scripts/collide_probe.py` is the record. It runs the same cases against the harness
+before and after, and it BUILDS every one of them, because every case here composed
+cleanly before the repair and then died at solc -- a composition-only check would have
+passed while proving nothing.
+
+```
+                         before   after
+declared collision         solc     ok      D5
+comment/string intact      solc     ok      D5, and the rename must not reach either
+assertions resolve         solc     ok      D7
+memory decl in deploy      solc     ok      D2, deploy_code half
+storage decl               (silent) refused D8
+reference-only cast          ok     ok      must not be renamed
+nested struct                ok     ok      not file scope, so not a clash
+Attacker                     ok     ok      never renamed, the setup writes it verbatim
+                          -----   -----
+                            3/8     8/8
+```
+
+D1, D2 (victim half) and D3 were fixed earlier and have their own probes. D4 is still
+open and is deliberately not fixed here; see its entry for why it cannot ship alone.
+
+Two cases were added after the disk on the measurement box filled, and are verified at
+the text level only (`scripts/_tuple_check.py`, 7/7) -- solc has not seen them:
+the tuple hoist of D7 and the reference-typed tuple it must leave alone.
+
 The distinction that matters: a recall defect costs findings, a soundness defect ships
 false positives. D3 is the second kind, which is why it outranks everything except the
 three-line fix above it.
@@ -116,6 +144,59 @@ Fix: rename mechanically rather than refuse. Collect the target's top-level name
 rewrite colliding declarations in the agent's fragment to `Name_arb`. Interfaces are
 structural, so renaming changes nothing about what the cast means. A refusal costs a
 turn; a rename costs nothing.
+
+## D6 -- the assertion family does not exist  (REPRODUCED, FIXED)
+
+`Harness` declared `assertTrue(bool, string)` and nothing else. An agent reaching for
+forge-std out of habit -- `assertEq`, `assertGt`, one-argument `assertTrue` -- got
+
+```
+Error (7576): Undeclared identifier. Did you mean "assert"?
+```
+
+54 in the census, second only to the unqualified `Undeclared identifier` row.
+
+Two details decided the fix. The shims live at **file scope**, not in `Harness`, because a
+contract member shadows the whole overload set: a `Harness` declaring
+`assertTrue(bool,string)` makes `assertTrue(cond)` fail to resolve from inside it, and an
+`Attacker`, which inherits nothing, could reach neither. And they **revert** rather than
+no-op, because the agent wrote them as control flow. Neither direction can manufacture a
+finding: the verdict is computed from balances the EVM reported and no assertion the agent
+writes is consulted anywhere in it.
+
+`int256` overloads are deliberately absent. With them, `assertEq(1, 2)` matches both
+`uint256` and `int256` and fails with "No unique declaration found" -- one compile error
+traded for another.
+
+## D7 -- a name declared inside a tuple is invisible to hoisting  (REPRODUCED, FIXED)
+
+`VICTIM_DECL_RE` and `DECL_RE` both matched `Type name =` at the start of a line, so
+
+```solidity
+(bool okWithdraw, ) = address(target).call(abi.encodeWithSelector(...));
+require(okWithdraw, "withdraw failed");
+```
+
+left `okWithdraw` a local. Every stage of the trial is a separate external call, so the
+`require` one stage later came back as `Undeclared identifier` at a line in a file the
+agent never wrote. This is not an exotic shape -- it is how Solidity sends ether -- and it
+is the whole reason `proxy_implementation_slot_unguarded_upgrade` was the one `no_build`
+in the ceiling measurement.
+
+All-or-nothing per statement: mixed tuple declaration and assignment has been illegal
+since 0.5.0, so `(arbv_ok, bytes memory ret) = ...` will not compile. A tuple with a
+reference-typed component is left exactly as written, which is the old behaviour and
+cannot regress.
+
+## D8 -- a `storage` pointer was hoisted into a deep copy  (FIXED, by refusing)
+
+Dropping the data location off `memory` on the way up is a copy from memory into storage,
+which is what the assignment already meant. Dropping it off `storage` is a deep copy of
+whatever the pointer aimed at: silently different semantics when the struct is copyable,
+and a compile error the agent cannot map back to its own text when it holds a mapping.
+
+So it is refused at composition with the offending line quoted. A refusal costs one turn;
+a compile error inside generated code costs the rest of the audit.
 
 ## Before any of this: measure the ceiling
 

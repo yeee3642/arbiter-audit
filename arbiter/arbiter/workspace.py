@@ -109,6 +109,11 @@ class Workspace:
         self.plan = plan
         self.build_ok: bool | None = None
         self.pocs: dict[str, str] = {}
+        # Names the last composition had to rename off the target's. Recorded rather than
+        # silent: a rename is a rewrite of the agent's text, and a rewrite nobody can see
+        # is the same class of thing as a harness that fails at a line the agent did not
+        # write. Empty is the normal case.
+        self.renamed: list[str] = []
         self._via_ir = False
         self._toml_args: tuple[str, str] = ("src", "")
         # Where a PoC reaches the contract under audit, and what syntax the harness may
@@ -328,6 +333,16 @@ class Workspace:
         attacker_code = strip_preamble(attacker_code)
         attack_body = strip_preamble(attack_body)
         honest_body = strip_preamble(honest_body)
+        _frags, self.renamed = deconflict(self.source, {
+            "deploy_code": deploy_code,
+            "attacker_code": attacker_code,
+            "attack_body": attack_body,
+            "honest_body": honest_body,
+        })
+        deploy_code = _frags["deploy_code"]
+        attacker_code = _frags["attacker_code"]
+        attack_body = _frags["attack_body"]
+        honest_body = _frags["honest_body"]
         _reject_halting(deploy_code, "deploy_code")
         _reject_halting(attack_body, "attack_body")
         _reject_halting(honest_body, "honest_body")
@@ -509,6 +524,22 @@ class Workspace:
         attack_body = strip_preamble(attack_body)
         victim_enter = strip_preamble(victim_enter)
         victim_exit = strip_preamble(victim_exit)
+        # The target is imported unnamed, so its top-level symbols are already in scope.
+        # In repo mode this sees the contract under audit and not its import closure, so a
+        # collision with a dependency's IERC20 still gets through -- partial, and better
+        # than the eighty-two failures it removes outright.
+        _frags, self.renamed = deconflict(self.source, {
+            "deploy_code": deploy_code,
+            "attacker_code": attacker_code,
+            "attack_body": attack_body,
+            "victim_enter": victim_enter,
+            "victim_exit": victim_exit,
+        })
+        deploy_code = _frags["deploy_code"]
+        attacker_code = _frags["attacker_code"]
+        attack_body = _frags["attack_body"]
+        victim_enter = _frags["victim_enter"]
+        victim_exit = _frags["victim_exit"]
         if not victim_enter.strip() or not victim_exit.strip():
             raise ValueError(
                 "victim_loss needs victim_enter and victim_exit: what an ordinary user "
@@ -654,6 +685,17 @@ class Workspace:
             raise ValueError("token_profit needs token_expr")
         if not honest_body.strip():
             raise ValueError("the sweep needs honest_body; both sides get the same knobs")
+
+        _frags, self.renamed = deconflict(self.source, {
+            "deploy_code": deploy_code,
+            "attacker_code": attacker_code,
+            "attack_body": attack_body,
+            "honest_body": honest_body,
+        })
+        deploy_code = _frags["deploy_code"]
+        attacker_code = _frags["attacker_code"]
+        attack_body = _frags["attack_body"]
+        honest_body = _frags["honest_body"]
 
         grid = variants or DEFAULT_SWEEP
         _eoa = draw_identity()
@@ -1026,16 +1068,52 @@ interface Vm {
 // decision belongs, rather than by an accident of scope.
 Vm constant vm_ = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-/// Inherit this in a PoC to get `vm` and `assertTrue`.
+// The assertion family, at FILE scope. These decide nothing: the verdict is computed by
+// the harness from balances the EVM reported, and no assertion an agent writes is
+// consulted anywhere in it. They exist because an agent reaching for forge-std out of
+// habit lost the whole attempt to `Undeclared identifier. Did you mean "assert"?` -- 54
+// of those in one census, every one a recall loss with nothing wrong with the attack.
+//
+// They revert rather than no-op deliberately. The agent wrote them as control flow, and
+// continuing silently past a failed check would run the rest of the attack in a state it
+// did not intend. Reverting cannot manufacture a finding in either direction, because a
+// reverted attack is measured as an attack that did nothing.
+//
+// File scope rather than a member of `Harness`, because a contract member shadows the
+// whole overload set: a Harness declaring assertTrue(bool,string) makes assertTrue(cond)
+// fail to resolve from inside it, and an Attacker -- which inherits nothing -- could not
+// reach either. One set at file scope resolves identically everywhere.
+//
+// int256 overloads are deliberately absent: `assertEq(1, 2)` would then match both
+// uint256 and int256 and fail with "No unique declaration found", trading one compile
+// error for another.
+function assertTrue(bool c) pure { require(c, "assertTrue"); }
+function assertTrue(bool c, string memory why) pure { require(c, why); }
+function assertFalse(bool c) pure { require(!c, "assertFalse"); }
+function assertFalse(bool c, string memory why) pure { require(!c, why); }
+function assertEq(uint256 a, uint256 b) pure { require(a == b, "assertEq"); }
+function assertEq(uint256 a, uint256 b, string memory why) pure { require(a == b, why); }
+function assertEq(address a, address b) pure { require(a == b, "assertEq"); }
+function assertEq(address a, address b, string memory why) pure { require(a == b, why); }
+function assertEq(bool a, bool b) pure { require(a == b, "assertEq"); }
+function assertEq(bytes32 a, bytes32 b) pure { require(a == b, "assertEq"); }
+function assertGt(uint256 a, uint256 b) pure { require(a > b, "assertGt"); }
+function assertGt(uint256 a, uint256 b, string memory why) pure { require(a > b, why); }
+function assertGe(uint256 a, uint256 b) pure { require(a >= b, "assertGe"); }
+function assertLt(uint256 a, uint256 b) pure { require(a < b, "assertLt"); }
+function assertLt(uint256 a, uint256 b, string memory why) pure { require(a < b, why); }
+function assertLe(uint256 a, uint256 b) pure { require(a <= b, "assertLe"); }
+function assertApproxEqAbs(uint256 a, uint256 b, uint256 d) pure {
+    require(a > b ? a - b <= d : b - a <= d, "assertApproxEqAbs");
+}
+
+/// Inherit this in a PoC to get `vm`. The assertion family above is at file scope and
+/// needs no inheritance at all.
 /// The exploit template below is written by the harness, never by the auditor.
 /// forge runs `test*` functions on contracts whose name starts with `Test`;
 /// a function that reverts is a failing test, one that returns is a passing test.
 contract Harness {
     Vm internal constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-
-    function assertTrue(bool cond, string memory why) internal pure {
-        require(cond, why);
-    }
 
     /// Render a uint so the harness can tell the auditor HOW MUCH it fell short by.
     /// A bare "you did not profit" is a dead end; "you gained 1000000000000000000,
@@ -1104,18 +1182,108 @@ _VICTIM_FAIL_REQUIRE = """        uint256 shortfall = recoveredA > recoveredB ? 
             )));
         }"""
 
+# Both of these now capture the data location, and both drop it on the way up, because a
+# state variable is written `uint256[]` where a local is `uint256[] memory`. The victim
+# path learned that first; deploy_code was left behind and kept failing the same way --
+# `address[] memory users = new address[](2);` matched nothing here, stayed a local inside
+# arbSetup(), and every later reference to `users` came back as an Undeclared identifier
+# at a line number in a file the agent never wrote.
 DECL_RE = re.compile(
-    r"^[ \t]*([A-Za-z_]\w*(?:\[\])?)[ \t]+(?:payable[ \t]+)?([A-Za-z_]\w*)[ \t]*=",
+    r"^[ \t]*([A-Za-z_]\w*(?:\[\])?)[ \t]+"
+    r"(?:(memory|storage|calldata)[ \t]+)?"
+    r"(?:payable[ \t]+)?"
+    r"([A-Za-z_]\w*)[ \t]*=",
     re.MULTILINE,
 )
 
 
 VICTIM_DECL_RE = re.compile(
     r"^([ \t]*)([A-Za-z_]\w*(?:\[\])?)[ \t]+"
-    r"(?:(?:memory|storage|calldata)[ \t]+)?"
+    r"(?:(memory|storage|calldata)[ \t]+)?"
     r"([A-Za-z_]\w*)[ \t]*=",
     re.MULTILINE,
 )
+
+
+# A tuple's LHS holds no nested parentheses, so this stops at the first `)` and the call
+# on the right-hand side -- `address(t).call{value: v}(...)` -- is never touched.
+TUPLE_DECL_RE = re.compile(r"^([ \t]*)\(([^()=;\n]*)\)[ \t]*=(?!=)", re.MULTILINE)
+
+# Elementary value types only. A state variable of one of these can be assigned from a
+# tuple with no data location anywhere in sight; `bytes`, `string` and every array cannot.
+_VALUE_TYPE_RE = re.compile(
+    r"^(?:bool|address|address\s+payable"
+    r"|u?int(?:8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144"
+    r"|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?"
+    r"|bytes(?:[1-9]|1\d|2\d|3[0-2]))$"
+)
+
+
+def hoist_tuple_locals(fragment: str) -> tuple[dict[str, str], str]:
+    """Lift `(bool ok, ) = address(t).call{value: v}("")` so a later stage can read `ok`.
+
+    That line is not an exotic shape. It is how Solidity sends ether, so it turns up in
+    any victim whose exit is a low-level call -- and `VICTIM_DECL_RE` only ever matched
+    `Type name =` at the start of a line, so every name declared inside a tuple stayed a
+    local. The `require(ok, "...")` one stage later then came back as an Undeclared
+    identifier pointing into a file the agent never wrote. One of the benchmark's own
+    thirty-five reference exploits is unbuildable for exactly this and nothing else.
+
+    All-or-nothing per statement, because Solidity dropped mixed tuple declaration and
+    assignment in 0.5.0: `(arbv_ok, bytes memory ret) = ...` does not compile. A tuple
+    with a reference-typed component is therefore left exactly as it was, which is
+    today's behaviour and cannot regress anything.
+
+    Returns (name -> type for what was lifted, the rewritten fragment).
+    """
+    seen: dict[str, str] = {}
+
+    def rewrite(m: re.Match[str]) -> str:
+        indent, inside = m.group(1), m.group(2)
+        parts = [p.strip() for p in inside.split(",")]
+        names: list[str] = []
+        found: dict[str, str] = {}
+        for part in parts:
+            if not part:
+                names.append("")
+                continue
+            bits = part.split()
+            if len(bits) < 2:
+                return m.group(0)          # already a plain assignment; nothing to lift
+            type_name, var = " ".join(bits[:-1]), bits[-1]
+            if not _VALUE_TYPE_RE.match(type_name):
+                return m.group(0)          # a data location in the tuple: leave it alone
+            found[var] = "address" if type_name.startswith("address") else type_name
+            names.append(var)
+        if not found:
+            return m.group(0)
+        seen.update(found)
+        return f"{indent}({', '.join(names)}) ="
+
+    return seen, TUPLE_DECL_RE.sub(rewrite, fragment)
+
+
+def _reject_storage_hoist(location: str, line: str, field: str) -> None:
+    """A `storage` local cannot be lifted, and pretending otherwise is worse than a refusal.
+
+    Dropping the location off `memory` is a copy from memory into storage, which is what
+    the assignment already meant. Dropping it off `storage` is a DEEP COPY of whatever the
+    pointer aimed at -- silently different semantics when the struct is copyable, and a
+    compile error the agent cannot map back to its own text when it holds a mapping.
+
+    So refuse at composition and quote the line. A refusal costs one turn; a compile error
+    in generated code costs the rest of the audit.
+    """
+    if location != "storage":
+        return
+    raise ValueError(
+        f"{field} declares a storage pointer that the harness would have to lift to a "
+        f"state variable, and lifting it would deep-copy what it points at:\n"
+        f"    {line.strip()}\n"
+        "Every stage of the trial is a separate call, so locals do not survive between "
+        "them. Read through the handle instead of holding a pointer to it -- keep the key "
+        "or the index in a local, and index again where you need it."
+    )
 
 
 def hoist_victim_locals(enter: str, exit_: str) -> tuple[str, str, str]:
@@ -1141,17 +1309,19 @@ def hoist_victim_locals(enter: str, exit_: str) -> tuple[str, str, str]:
 
     Returns (state declarations, rewritten entry, rewritten exit).
     """
-    seen: dict[str, str] = {}
-    for _, type_name, var in VICTIM_DECL_RE.findall(enter):
+    seen, enter = hoist_tuple_locals(enter)
+    for m in VICTIM_DECL_RE.finditer(enter):
+        _, type_name, location, var = m.groups()
         if type_name in ("return", "if", "for", "while", "else", "emit") or var in seen:
             continue
+        _reject_storage_hoist(location or "", m.group(0), "victim_enter")
         seen[var] = type_name
     if not seen:
         return "", enter, exit_
 
     # Prefixed so a victim's local can never collide with one the setup hoisted.
     decls = "\n".join(f"    {t} internal arbv_{v};" for v, t in seen.items())
-    body = VICTIM_DECL_RE.sub(lambda m: f"{m.group(1)}{m.group(3)} =", enter)
+    body = VICTIM_DECL_RE.sub(lambda m: f"{m.group(1)}{m.group(4)} =", enter)
     names = list(seen)
     return decls, rename_victim_locals(body, names), rename_victim_locals(exit_, names)
 
@@ -1165,6 +1335,104 @@ def rename_victim_locals(fragment: str, names: list[str]) -> str:
     return out
 
 
+_NONCODE_RE = re.compile(
+    r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", re.S)
+
+# Order matters: `abstract contract` has to be tried before `contract`.
+_DECLARER_RE = re.compile(
+    r"[{}]|\b(?:abstract\s+)?(?:contract|interface|library|struct|enum)\s+[A-Za-z_]\w*"
+    r"|\bfunction\s+[A-Za-z_]\w*")
+
+# Never renamed, whatever the target declares. `_VICTIM_ATTACKER_SETUP` writes
+# `new Attacker(...)` verbatim, so renaming the agent's Attacker would compose a file
+# that instantiates a type nothing declares -- the exact defect D1 was.
+_NEVER_RENAME = frozenset({"Attacker"})
+
+# Declared by the harness itself in Vm.sol. An agent that writes its own `assertEq` or
+# its own `Vm` collides with these the same way it collides with the target's symbols,
+# and the same rename fixes it.
+HARNESS_RESERVED = frozenset({
+    "Vm", "vm_", "Harness",
+    "assertTrue", "assertFalse", "assertEq", "assertGt", "assertGe",
+    "assertLt", "assertLe", "assertApproxEqAbs",
+})
+
+
+def _blank_noncode(src: str) -> str:
+    """Comments and string literals replaced by spaces, with every offset preserved.
+
+    Offsets have to survive so a match found in the blanked copy can be spliced out of the
+    original. Newlines are kept so a line number still means what it says.
+    """
+    return _NONCODE_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), src)
+
+
+def top_level_names(src: str) -> set[str]:
+    """Every name the source declares at FILE scope.
+
+    Depth-aware on purpose. A `struct Position` inside a contract is not in file scope, so
+    an agent declaring its own `Position` is not colliding with it, and renaming against it
+    would be a rename nobody asked for.
+    """
+    code = _blank_noncode(src)
+    names: set[str] = set()
+    depth = 0
+    for m in _DECLARER_RE.finditer(code):
+        tok = m.group(0)
+        if tok == "{":
+            depth += 1
+        elif tok == "}":
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            names.add(tok.split()[-1])
+    return names
+
+
+def _rename_symbols(src: str, names: list[str]) -> str:
+    """Rename whole identifiers, and not the ones inside comments or string literals."""
+    if not names:
+        return src
+    code = _blank_noncode(src)
+    pat = re.compile(
+        r"(?<![A-Za-z0-9_$])(" + "|".join(re.escape(n) for n in names) + r")(?![A-Za-z0-9_$])")
+    out: list[str] = []
+    last = 0
+    for m in pat.finditer(code):
+        out.append(src[last:m.start()])
+        out.append(m.group(1) + "_arb")
+        last = m.end()
+    out.append(src[last:])
+    return "".join(out)
+
+
+def deconflict(target_source: str, fragments: dict[str, str]) -> tuple[dict[str, str], list[str]]:
+    """Rename the agent's own top-level declarations where they collide with the target's.
+
+    `import "../src/Target.sol"` is unnamed, so every top-level declaration in the target
+    is in scope. Nine of the thirty-five vulnerable samples declare `IERC20` themselves.
+    An agent that writes one to cast with got `Identifier already declared` -- 41 in one
+    census -- and an agent that skipped it and cast against the target's own got
+    `Explicit type conversion from "contract IERC20"`, 41 more across two rows. Eighty-two
+    compile failures, none of them about the attack.
+
+    Renaming, not refusing, and the reason is that renaming is free: an interface is
+    structural, so `IERC20_arb` and `IERC20` describe the same calls and a cast through
+    either means the same thing. A refusal would cost a turn to say so.
+
+    Only names the agent DECLARES are renamed. A fragment that merely references the
+    target's `IERC20` is left alone, which is what makes this safe -- the rename moves an
+    agent's reference onto the agent's own declaration, where it already pointed.
+
+    Returns (rewritten fragments, the names that were renamed).
+    """
+    reserved = (top_level_names(target_source) | HARNESS_RESERVED) - _NEVER_RENAME
+    mine = top_level_names("\n\n".join(fragments.values())) - _NEVER_RENAME
+    clash = sorted(mine & reserved)
+    if not clash:
+        return dict(fragments), []
+    return {k: _rename_symbols(v, clash) for k, v in fragments.items()}, clash
+
+
 def hoist_declarations(deploy_code: str) -> tuple[str, str]:
     """Lift the setup's locals to storage so the trial can be run in stages.
 
@@ -1176,10 +1444,12 @@ def hoist_declarations(deploy_code: str) -> tuple[str, str]:
 
     Returns (state variable declarations, rewritten setup).
     """
-    seen: dict[str, str] = {}
-    for type_name, var in DECL_RE.findall(deploy_code):
+    seen, deploy_code = hoist_tuple_locals(deploy_code)
+    for m in DECL_RE.finditer(deploy_code):
+        type_name, location, var = m.groups()
         if type_name in ("return", "if", "for", "while", "uint", "int", "bool") or var in seen:
             continue
+        _reject_storage_hoist(location or "", m.group(0), "deploy_code")
         seen[var] = type_name
     if "target" not in seen:
         raise ValueError(
@@ -1187,7 +1457,7 @@ def hoist_declarations(deploy_code: str) -> tuple[str, str]:
             "'target', for example 'MyVault target = new MyVault{value: 10 ether}();'"
         )
     decls = "\n".join(f"    {t} internal {v};" for v, t in seen.items())
-    body = DECL_RE.sub(lambda m: f"        {m.group(2)} =", deploy_code)
+    body = DECL_RE.sub(lambda m: f"        {m.group(3)} =", deploy_code)
     return decls, body
 
 
