@@ -160,6 +160,52 @@ ordinary user is funded identically, and harm must be counted only in excess of 
 that user causes. Shipping the axis without the control trial should be expected to
 roughly double the false positives.
 
+### The prescribed fix was built, measured, and does not work  (NOT SHIPPED)
+
+Both halves were implemented: a fourth axis on `VICTIM_ENVIRONMENTS`, `arbDeploy(capital)`
+so the attacker's funding is swept rather than baked in, an `arbRival(capital)` trial
+running the victim's own fragments as a harness-owned user funded identically, an
+`arbTrial` with three arms, and a shortfall measured against the rival world rather than
+the empty one. Then it was pointed at `BonusVault` -- a contract with no defect in it,
+which pays a 10% bonus out of a fixed 100-ether reserve while the reserve lasts:
+
+```
+capital 10 ether (today)          refused    withoutAttack=5.5 withRival=5.5 withAttack=5.5
+capital 10,000 ether + the rival  ADMITTED
+```
+
+A false positive on an honest contract, produced by the axis, with the control trial in
+place and working exactly as specified.
+
+Funding is not the reason. The rival IS funded identically, and the harness pranks it, and
+Solidity debits the pranked account -- checked directly: a victim endowed with 1 ether
+cannot run a fragment that deposits 5. What the rival cannot do is **act** at the same
+scale. The only description of ordinary use the harness has is `victim_enter` and
+`victim_exit`, and the amounts in those are literals the agent wrote --
+`deposit{value: 5 ether}`. The attacker writes `deposit{value: address(this).balance}` and
+turns capital into scale; the rival recites a five-ether script whatever it is holding. So
+the rival takes its 0.5 and leaves the reserve, the attacker with a thousand times the
+money takes all of it, and the difference is scored as harm.
+
+So the stated condition is not sufficient. Funding the control identically does not make
+it comparable; it would have to ACT comparably, and nothing in the harness knows what
+ordinary use of an arbitrary contract looks like at ten thousand ether. Scaling the
+literals in the agent's fragment is not a fix either -- the harness would be rewriting the
+victim's behaviour to suit the attacker's budget, which is the same class of thing as D10
+and would make the baseline a function of the attack.
+
+The axis was also measured to buy nothing on the evalset even before the control was
+judged: the ceiling stayed at 8 of 35, with `vault_first_deposit_share_inflation` still
+`unharmed` at "attacker took 0 ether", because the reference exploits hardcode their own
+amounts too. So the change costs 2.25x the EVM work per attempt (six environments times
+three arms, against four times two) for no measured recall and one measured false
+positive. It is reverted.
+
+What survives is `scripts/contention_probe.py`, which holds `BonusVault` and its greedy
+attacker against a real reentrancy drain and asserts that the first is refused and the
+second admitted. It is the thing that fails the moment someone adds a capital axis without
+first solving the asymmetry above.
+
 ## D5 -- the agent's own interfaces collide with the target's
 
 `import "../src/Target.sol"` is unnamed, so every top-level declaration in the target is
