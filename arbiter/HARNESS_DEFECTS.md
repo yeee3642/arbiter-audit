@@ -19,12 +19,19 @@ assertions resolve         solc     ok      D6
 memory decl in deploy      solc     ok      D2, deploy_code half
 tuple decl survives        solc     ok      D7
 storage decl               (silent) refused D8
+vm inside an Attacker      solc     ok      D9
+bool decl in deploy        solc     ok      D10
+uint/int decl in deploy    solc     ok      D10
+else survives              (silent) ok      D10, and a build alone cannot see it
+address payable in enter   solc     ok      D11
+qualified type             solc     ok      D12
 reference-only cast          ok     ok      must not be renamed
 nested struct                ok     ok      not file scope, so not a clash
 Attacker                     ok     ok      never renamed, the setup writes it verbatim
 tuple with bytes             ok     ok      mixed decl/assign is illegal: leave it alone
+member assignment            ok     ok      `c.cap = 7;` is not a declaration
                           -----   -----
-                           4/10   10/10
+                          11/17   17/17
 ```
 
 D1, D2 (victim half) and D3 were fixed earlier and have their own probes. D4 is still
@@ -214,6 +221,85 @@ and a compile error the agent cannot map back to its own text when it holds a ma
 
 So it is refused at composition with the offending line quoted. A refusal costs one turn;
 a compile error inside generated code costs the rest of the audit.
+
+## The regression that was not there  (REFUTED)
+
+`refixed1` carried two `Error (7364): Different number of components on the left hand
+side`, and `_run_census.py` listed that string as a suspect meaning `hoist_tuple_locals`
+had produced a malformed tuple. It had not. Both lines were the agent's, verbatim:
+
+```solidity
+bool success = address(target).call(abi.encodeWithSignature("withdrawWithSession(...)"));
+FlipCasino.Bet memory bet = target.bets(betId);      // a five-component mapping getter
+```
+
+Both came from `run_poc`, which writes the agent's file out unchanged -- the harness never
+rewrites a character of a free-form PoC -- so neither line had been through
+`hoist_tuple_locals` at all. `refixed2` has a third of the same shape, also free-form.
+
+The census was the thing at fault. It scanned every PoC for the suspect strings, including
+the ones the harness does not author, so it could report the harness breaking code the
+harness never touched. It now scans harness-composed PoCs only and counts the free-form
+hits separately. Under that scoping all five suspects read zero on both runs.
+
+## D10 -- a declaration the hoister REFUSED to lift still had its type deleted  (FIXED)
+
+Both hoisters decided what to lift with a keyword list consulted in the scan, and then
+rewrote every match with a `sub` that consulted nothing. Every line the two disagreed
+about was a line the harness broke. The keyword list also had three types on it:
+
+```solidity
+uint256 n = 1;     ->  hoisted, a state variable, fine
+uint    n = 1;     ->  n = 1;            // and nothing declares n
+bool  ok = true;   ->  ok = true;        // nor ok
+```
+
+That is the largest census row -- `Undeclared identifier`, 118 in `refixed1` and 115 in
+`refixed2` -- being fed by the harness, at a line number in a file the agent never wrote,
+for a name the agent had declared perfectly well.
+
+The second half is worse, because it compiles:
+
+```solidity
+if (bal > 100 ether) flag = true;
+else flag = false;         ->  flag = false;      // the `else` is gone
+```
+
+`else` sat in the type slot, the scan skipped it and the rewrite did not, so the keyword
+was deleted and the branch became unconditional. No compiler complains, so no census can
+see it; the harness simply runs code the agent did not send. Its probe case reads the
+composed text rather than only building it, because a build would pass.
+
+Fix: one `_NOT_A_TYPE` set, shared by the scan and the rewrite in both hoisters, holding
+statement keywords only. `uint`, `int` and `bool` came off it -- they are types.
+
+## D11 -- the two hoisting patterns had drifted apart  (FIXED)
+
+`DECL_RE` learned about `payable` and `VICTIM_DECL_RE` never did, so
+
+```solidity
+address payable sink = payable(address(0xBEEF));
+```
+
+was lifted out of `deploy_code` and left a local in `victim_enter`. The same declaration,
+hoisted or not depending on which stage the agent happened to put it in. Fix: the same
+optional `payable` in both.
+
+## D12 -- a contract-qualified type was invisible to both  (FIXED)
+
+Neither pattern admitted a dot, so the ordinary way to read a struct-returning getter --
+
+```solidity
+Vault.Conf memory c = target.conf();
+```
+
+-- matched nothing, stayed a local, and every later stage came back as an undeclared `c`.
+Fix: an optional `.Name` in the type slot of both patterns.
+
+The control matters more than the repair here, because widening a pattern that REWRITES
+text is how a recall fix becomes a corruption. A member write is not a declaration:
+`c.cap = 7;` has nothing where a variable name would be, so it cannot match, and the probe
+asserts it reaches solc verbatim.
 
 ## Before any of this: measure the ceiling
 

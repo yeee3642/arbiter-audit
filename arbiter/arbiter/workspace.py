@@ -1195,8 +1195,16 @@ _VICTIM_FAIL_REQUIRE = """        uint256 shortfall = recoveredA > recoveredB ? 
 # `address[] memory users = new address[](2);` matched nothing here, stayed a local inside
 # arbSetup(), and every later reference to `users` came back as an Undeclared identifier
 # at a line number in a file the agent never wrote.
+#
+# The type slot admits a dot. `Vault.Conf memory c = target.conf();` is the ordinary way
+# to read a struct-returning getter and neither pattern could see it, so the declaration
+# stayed a local and every later stage came back as an Undeclared identifier. A member
+# WRITE is still not a declaration: `c.cap = 7;` has nothing after the dotted name where
+# a variable would be, so it never matches.
+_TYPE = r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?(?:\[\])?"
+
 DECL_RE = re.compile(
-    r"^[ \t]*([A-Za-z_]\w*(?:\[\])?)[ \t]+"
+    rf"^[ \t]*({_TYPE})[ \t]+"
     r"(?:(memory|storage|calldata)[ \t]+)?"
     r"(?:payable[ \t]+)?"
     r"([A-Za-z_]\w*)[ \t]*=",
@@ -1204,12 +1212,35 @@ DECL_RE = re.compile(
 )
 
 
+# The two patterns had drifted apart. `DECL_RE` learned `payable` and this one never did,
+# so `address payable sink = payable(...)` was lifted out of deploy_code and left a local
+# in victim_enter -- the same declaration, hoisted or not depending on which stage the
+# agent happened to put it in.
 VICTIM_DECL_RE = re.compile(
-    r"^([ \t]*)([A-Za-z_]\w*(?:\[\])?)[ \t]+"
+    rf"^([ \t]*)({_TYPE})[ \t]+"
     r"(?:(memory|storage|calldata)[ \t]+)?"
+    r"(?:payable[ \t]+)?"
     r"([A-Za-z_]\w*)[ \t]*=",
     re.MULTILINE,
 )
+
+
+# Tokens that can stand where a type would and are not one. Both hoisters used to consult
+# a list like this when deciding what to LIFT and then rewrite every match regardless, so
+# a line the scan had refused still had its first token deleted. Two ways that showed up:
+#
+#   uint n = 1;          ->  n = 1;              // nothing declares n
+#   else flag = false;   ->  flag = false;       // the branch is now unconditional
+#
+# The first is a compile error at a line the agent did not write. The second is worse --
+# it compiles, and the harness runs code the agent did not send. `uint`, `int` and `bool`
+# used to be on this list, which is why `uint256 n = 1` was hoisted and `uint n = 1` was
+# corrupted; they are types, and a state variable of one of them is perfectly ordinary.
+_NOT_A_TYPE = frozenset({
+    "return", "if", "else", "for", "while", "do", "try", "catch",
+    "emit", "delete", "new", "revert", "throw", "assembly", "unchecked",
+    "break", "continue",
+})
 
 
 # A tuple's LHS holds no nested parentheses, so this stops at the first `)` and the call
@@ -1319,7 +1350,7 @@ def hoist_victim_locals(enter: str, exit_: str) -> tuple[str, str, str]:
     seen, enter = hoist_tuple_locals(enter)
     for m in VICTIM_DECL_RE.finditer(enter):
         _, type_name, location, var = m.groups()
-        if type_name in ("return", "if", "for", "while", "else", "emit") or var in seen:
+        if type_name in _NOT_A_TYPE or var in seen:
             continue
         _reject_storage_hoist(location or "", m.group(0), "victim_enter")
         seen[var] = type_name
@@ -1328,7 +1359,13 @@ def hoist_victim_locals(enter: str, exit_: str) -> tuple[str, str, str]:
 
     # Prefixed so a victim's local can never collide with one the setup hoisted.
     decls = "\n".join(f"    {t} internal arbv_{v};" for v, t in seen.items())
-    body = VICTIM_DECL_RE.sub(lambda m: f"{m.group(1)}{m.group(4)} =", enter)
+    # One decision, consulted twice. The scan above and this rewrite used to disagree,
+    # and every line they disagreed about was a line the harness broke.
+    body = VICTIM_DECL_RE.sub(
+        lambda m: m.group(0) if m.group(2) in _NOT_A_TYPE
+        else f"{m.group(1)}{m.group(4)} =",
+        enter,
+    )
     names = list(seen)
     return decls, rename_victim_locals(body, names), rename_victim_locals(exit_, names)
 
@@ -1454,7 +1491,7 @@ def hoist_declarations(deploy_code: str) -> tuple[str, str]:
     seen, deploy_code = hoist_tuple_locals(deploy_code)
     for m in DECL_RE.finditer(deploy_code):
         type_name, location, var = m.groups()
-        if type_name in ("return", "if", "for", "while", "uint", "int", "bool") or var in seen:
+        if type_name in _NOT_A_TYPE or var in seen:
             continue
         _reject_storage_hoist(location or "", m.group(0), "deploy_code")
         seen[var] = type_name
@@ -1464,7 +1501,13 @@ def hoist_declarations(deploy_code: str) -> tuple[str, str]:
             "'target', for example 'MyVault target = new MyVault{value: 10 ether}();'"
         )
     decls = "\n".join(f"    {t} internal {v};" for v, t in seen.items())
-    body = DECL_RE.sub(lambda m: f"        {m.group(3)} =", deploy_code)
+    # Same decision as the scan. When they disagreed, the type was deleted off a line
+    # nothing then declared, and the agent was shown an Undeclared identifier for a name
+    # it had declared perfectly well.
+    body = DECL_RE.sub(
+        lambda m: m.group(0) if m.group(1) in _NOT_A_TYPE else f"        {m.group(3)} =",
+        deploy_code,
+    )
     return decls, body
 
 

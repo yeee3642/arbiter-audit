@@ -42,6 +42,7 @@ a composition-only check would pass while proving nothing.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -63,7 +64,12 @@ interface IERC20 {
 
 contract Vault {
     struct Position { uint256 amount; }
+    struct Conf { uint256 cap; }
     mapping(address => Position) public positions;
+
+    /// A struct-returning getter, so a fragment can legally write the one shape neither
+    /// hoisting regex could see: a CONTRACT-QUALIFIED type, `Vault.Conf memory c = ...`.
+    function conf() external pure returns (Conf memory) { return Conf(100 ether); }
 
     function deposit() external payable { positions[msg.sender].amount += msg.value; }
 
@@ -221,7 +227,87 @@ contract Attacker {
     }
     receive() external payable {}
 }"""), True, []),
+
+    # D10. `hoist_declarations` decided what to LIFT with a keyword skip list and then
+    # rewrote every match regardless, so a declaration it refused to lift still had its
+    # type deleted. `uint`, `int` and `bool` were on that list -- so `uint256 n = 1` was
+    # hoisted and `uint n = 1` became an assignment to a name nothing declared.
+    ("bool decl in deploy hoisted", case(
+        deploy_code="""        Vault target = new Vault();
+        bool primed = true;""",
+        victim_exit="""        require(primed, "the bool did not survive the stage");
+        target.withdraw();"""), True, []),
+
+    ("uint decl in deploy hoisted", case(
+        deploy_code="""        Vault target = new Vault();
+        uint seats = 2;
+        int drift = -1;""",
+        victim_exit="""        require(seats == 2 && drift == -1, "the ints did not survive");
+        target.withdraw();"""), True, []),
+
+    # The other half of D10, and the one that does NOT announce itself. `else flag = x;`
+    # matched `Type name =` with `else` in the type slot. The scan skipped it and the
+    # rewrite did not, so the `else` was DELETED and the branch became unconditional --
+    # code that still compiles and no longer means what the agent wrote. A build check
+    # cannot see this, so the probe reads the composed text.
+    ("else survives, undeleted", case(
+        victim_enter="""        bool flag = false;
+        if (address(target).balance > 100 ether) flag = true;
+        else flag = false;
+        target.deposit{value: 5 ether}();""",
+        victim_exit="""        require(!flag, "flag did not survive the stage");
+        target.withdraw();"""), True, []),
+
+    # D11. The two hoisting patterns had drifted apart: `DECL_RE` learned about `payable`
+    # and `VICTIM_DECL_RE` never did, so the same declaration was lifted out of deploy_code
+    # and left a local in victim_enter.
+    ("address payable in victim enter", case(
+        victim_enter="""        address payable sink = payable(address(0xBEEF));
+        target.deposit{value: 5 ether}();""",
+        victim_exit="""        require(sink != address(0), "the payable did not survive");
+        target.withdraw();"""), True, []),
+
+    # D12. Neither pattern admitted a dot, so `Vault.Conf memory c = target.conf();` --
+    # the ordinary way to read a struct-returning getter -- was invisible to both.
+    ("qualified type hoisted", case(
+        deploy_code="""        Vault target = new Vault();
+        Vault.Conf memory c = target.conf();""",
+        victim_exit="""        require(c.cap == 100 ether, "the struct did not survive the stage");
+        target.withdraw();"""), True, []),
+
+    # And its control. Admitting a dot must not turn a member ASSIGNMENT into a
+    # declaration: `pos.amount = 1;` is not `Type name =` and has to reach solc verbatim.
+    ("member assignment left alone", case(
+        deploy_code="""        Vault target = new Vault();
+        Vault.Conf memory c = target.conf();
+        c.cap = 7;""",
+        victim_exit="""        require(c.cap == 7, "the member write was lost");
+        target.withdraw();"""), True, []),
 ]
+
+
+# A case whose damage is a SILENT rewrite rather than a compile error needs the composed
+# text read back; a build alone would pass while the meaning had changed underneath.
+def _else_intact(sol: str) -> str:
+    return "" if re.search(r"^\s*else\s+arbv_flag\s*=", sol, re.M) else (
+        "built, but the `else` was deleted from the victim's branch")
+
+
+def _member_write_intact(sol: str) -> str:
+    return "" if re.search(r"^\s*c\.cap\s*=\s*7;", sol, re.M) else (
+        "built, but `c.cap = 7;` was rewritten as if it were a declaration")
+
+
+def _comment_and_string_intact(sol: str) -> str:
+    return "" if ('"IERC20 missing"' in sol and "// IERC20 is named here" in sol) else (
+        "built but the rename reached a comment or a string")
+
+
+TEXT_CHECKS = {
+    "comments and strings intact": _comment_and_string_intact,
+    "else survives, undeleted": _else_intact,
+    "member assignment left alone": _member_write_intact,
+}
 
 
 def main() -> int:
@@ -254,12 +340,12 @@ def main() -> int:
                 if want_renamed is not None and got != want_renamed:
                     ok = False
                     note = f"built, but renamed {got}, expected {want_renamed}"
-                elif label == "comments and strings intact":
-                    intact = ('"IERC20 missing"' in sol
-                              and "// IERC20 is named here" in sol)
-                    ok = ok and intact
-                    note = "built, comment and string verbatim" if intact else (
-                        "built but the rename reached a comment or a string")
+                elif label in TEXT_CHECKS:
+                    # Building is not enough for these: the damage they guard against is a
+                    # silent rewrite that still compiles.
+                    complaint = TEXT_CHECKS[label](sol)
+                    ok = not complaint
+                    note = complaint or "built, and the text survived verbatim"
 
         results.append(ok)
         state = "composed" if composed else "REFUSED "
