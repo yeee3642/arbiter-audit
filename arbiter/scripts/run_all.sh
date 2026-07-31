@@ -33,7 +33,7 @@ say "0. toolchain"
 # says no is not a gate, it is a broken tool.
 # ---------------------------------------------------------------------------
 say "1. integrity gates (zero gateway requests)"
-for probe in forgery victim halt drain sweep; do
+for probe in forgery victim halt drain sweep collide economy contention; do
   printf '  %-10s ' "$probe" | note
   python3 "scripts/${probe}_probe.py" 2>&1 | grep -E "as expected" | note || echo "FAILED" | note
 done
