@@ -42,6 +42,28 @@ _TOOLCHAIN_DOWN = (
     "verdict of 'safe' will be refused while the compiler is missing."
 )
 
+# One signature per refusal, matched against the text the agent is about to receive.
+# Substrings, so rewording an explanation does not silently zero a row -- but a signature
+# that stops matching reads as "this gate never fired", which is exactly the mistake this
+# table exists to prevent, so they are kept short and anchored on the load-bearing phrase.
+REFUSAL_SIGNATURES = {
+    "forgery: attack forges authority": r"which forges",
+    "halt: selfdestruct ends the test": r"calls selfdestruct directly",
+    "victim fragments required": r"needs victim_enter and victim_exit",
+    "target must be named 'target'": r"must declare the contract under audit",
+    "attacker contract required": r"needs attacker_code defining a contract",
+    "storage pointer cannot be lifted": r"declares a storage pointer",
+    "toolchain unavailable": r"TOOLCHAIN UNAVAILABLE",
+    "submission without a passing PoC": r"SUBMISSION REJECTED",
+    "safe before any attempt": r"NOT YET\. You are certifying",
+    "safe with no working toolchain": r"REFUSED, and this audit is over",
+    "run_poc budget exhausted": r"run_poc is now CLOSED",
+    "predicate: no harm": r"ArbiterNoHarm",
+    "predicate: no gain": r"ArbiterNoGain",
+    "exploit did not compile": r"did NOT compile|EXPLOIT .* failed to compile",
+    "exploit ran, extracted nothing": r"compiled but did NOT satisfy",
+}
+
 _TOOLCHAIN_SAFE_REFUSED = (
     "REFUSED, and this audit is over. Every exploit you submitted died before it reached "
     "the compiler, so nothing has been executed against this contract and there is no "
@@ -507,6 +529,12 @@ class AgentOutcome:
     rejected_submissions: list[dict[str, Any]] = field(default_factory=list)
     turns: int = 0
     stop_reason: str = ""
+    # Which gate refused, and how many times. The probes prove each gate refuses what it
+    # must; they say nothing about whether it was ever needed, and a gate that never
+    # fires in a real audit is dead weight carried in the name of soundness. That could
+    # not be answered from the record: `trace` holds what the agent SENT, and every
+    # refusal is text the harness sent back, which was never persisted anywhere.
+    refusals: dict[str, int] = field(default_factory=dict)
 
     @property
     def proven(self) -> bool:
@@ -529,6 +557,7 @@ class AgentOutcome:
             "findings": self.findings,
             "safe_reason": self.safe_reason,
             "rejected_submissions": self.rejected_submissions,
+            "refusals": self.refusals,
             "pocs": [
                 {
                     "name": p.name,
@@ -633,6 +662,12 @@ class ToolDispatcher:
             return f"error: tool {name} raised {type(exc).__name__}: {exc}", False
         if name in ("run_exploit", "run_poc"):
             self._reached_toolchain += 1
+        # Classified here rather than at each refusal site, so the count and the message
+        # cannot drift apart: this reads the text the agent is actually about to receive.
+        text = result[0] if isinstance(result, tuple) and result else str(result)
+        for gate, pat in REFUSAL_SIGNATURES.items():
+            if re.search(pat, text):
+                self.outcome.refusals[gate] = self.outcome.refusals.get(gate, 0) + 1
         # A handler that returns a bare string unpacks into characters at the call site
         # and takes the whole audit down with a ValueError. That cost one sample and two
         # attempts before it was noticed, so the shape is normalised here rather than
