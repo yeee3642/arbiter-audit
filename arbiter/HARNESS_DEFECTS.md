@@ -30,8 +30,12 @@ nested struct                ok     ok      not file scope, so not a clash
 Attacker                     ok     ok      never renamed, the setup writes it verbatim
 tuple with bytes             ok     ok      mixed decl/assign is illegal: leave it alone
 member assignment            ok     ok      `c.cap = 7;` is not a declaration
+victim lookup off vloss    solc  refused   D14
+victim lookup under vloss    ok     ok      the documented use must still build
+plain attacker               ok     ok      no lookup, nothing to refuse
+lookup in a comment          ok     ok      a mention is not a use
                           -----   -----
-                          11/17   17/17
+                          14/21   21/21
 ```
 
 D1, D2 (victim half) and D3 were fixed earlier and have their own probes. D4 is still
@@ -345,6 +349,71 @@ evidence, and the probe asserts they do.
 declared `shortfall` in the environment loop and again at function scope. Nine lines
 quoting two template lines the agent did not write and cannot change, on every build,
 pass or fail. The loop-local is now `gap`.
+
+## D14 -- the harness taught an idiom one of its templates does not declare  (FIXED)
+
+The tool schema tells the agent to read the victim's address at run time with
+`_ArbiterHarness(msg.sender).arbiterVictim()`, because that address is drawn per run and
+cannot be hardcoded. It says so under `victim_enter`, and only `_VICTIM_TEMPLATE` declares
+the interface. The idiom carries over anyway, and under `eth_profit` or `token_profit` the
+agent is shown `Undeclared identifier` in its own attacker code, for a name the harness
+gave it.
+
+Refused at composition rather than declared, and the reason is soundness. Under a profit
+predicate there is no victim: the only third party is the control account that runs
+`honest_body`. Pointing `arbiterVictim()` at that account would let an attack aimed at the
+honest baseline manufacture the very asymmetry the comparison exists to detect. And an
+interface with nothing behind it compiles and then reverts at run time, which trades a
+cheap failure for the expensive kind.
+
+## Whose fault is the rest of it
+
+`scripts/blame_census.py` attributes every compile error in a run instead of counting the
+strings, because counting was what filed two agent mistakes against the harness. Three
+things decide it: free-form PoCs are the agent's file copied out verbatim so an error in
+one is the agent's by construction; a line in the template is ours and a line in a
+fragment is theirs; and for the undeclared row, a name that survives as an assignment at
+statement start but is typed nowhere is a hoist we lost, while a name nothing ever
+declared is theirs. `scripts/_look.py` prints any composed file around any line, so each
+verdict below can be checked by hand -- and two of them had to be.
+
+Over `refixed2`, 72 errors in harness-composed PoCs (and 133 more in free-form ones):
+
+| | count | |
+|---|---:|---|
+| **HARNESS** the victim-lookup idiom | 8 | D14, refused at composition now |
+| **HARNESS** agent copied a template line back into its fragment | 1 | see below |
+| agent: call-option syntax | 19 | `new C{value: v}(args)`, not `new C(args){value: v}` |
+| agent: cast through the wrong address-payability | 19 | `C(_t)` where `C` has a payable fallback |
+| agent: used a name it never declared | 17 | mostly cross-contract scope confusion |
+| agent: called a member the target does not have | 5 | |
+| agent: the rest | 3 | a stray `#` comment, a mojibake `uint25?`, a `transfer` on a non-payable |
+
+**9 harness, 63 agent.** Eight of the nine are one defect.
+
+The three biggest agent rows are one thing each and none of them is a harness bug:
+
+* **call-option syntax, 19.** `new BountyRegistry(solutionHash){value: 10 ether}`,
+  `new Helper{payable(address(target))}{value: 5 ether}()`, `target.depositFor(victim){value: 5 ether}()`.
+  The agent does not know where Solidity puts call options. It is invented syntax in the
+  agent's own text; the harness composes it verbatim and could not have produced it.
+* **address-payability, 19.** `constructor(address _t) { target = Vault(_t); }` where
+  `Vault` has a payable fallback and Solidity wants `Vault(payable(_t))`. The harness
+  writes `new Attacker(address(target))`, which is what the schema documents, and the cast
+  inside the constructor is entirely the agent's.
+* **names never declared, 17.** Not lost hoists -- checked by hand, and this is where the
+  first version of the attribution was wrong. `address public user1;` is a state variable
+  of the agent's own `Attacker`, and the agent then referenced `user1` from `deploy_code`,
+  which composes into a different contract. Six were filed against the harness until the
+  test learned the word `public`.
+
+The one honourable mention is the ninth harness error, and it is a consequence of D13's
+old renderer rather than of any template. The agent copied
+`address ctrl = address(uint160(uint256(keccak256("arbiter.control"))));` -- a
+harness-internal line -- into its own `deploy_code`, and collided with the harness's own
+declaration of it. It could only have learned that line from the full composed listing
+that used to come back on every compile failure. n=1, so this is an observation and not a
+claim, but the excerpt in D13 stops handing that text out.
 
 ## Before any of this: measure the ceiling
 

@@ -310,6 +310,39 @@ TEXT_CHECKS = {
 }
 
 
+# A composition-time refusal, on the same principle as the storage case above: the harness
+# taught `_ArbiterHarness(msg.sender).arbiterVictim()` and only the victim_loss template
+# declares it, so under any other predicate the agent gets Undeclared identifier in its own
+# attacker code for a name the harness gave it. Eight of the nine harness-caused compile
+# errors left in `refixed2` are this one thing.
+#
+# Both directions again, and the second matters more: refusing is only correct where the
+# name is actually used. Under victim_loss the idiom is the documented way to find the
+# victim and must compose and BUILD, and a mention inside a comment is not a use.
+EXPLOIT_CASES = [
+    ("victim lookup refused off victim_loss", "eth_profit", """contract Attacker {
+    Vault public v;
+    address victim;
+    constructor(address t) payable {
+        v = Vault(payable(t));
+        victim = _ArbiterHarness(msg.sender).arbiterVictim();
+    }
+    function attack() external { v.deposit{value: 1 ether}(); }
+    receive() external payable {}
+}""", False),
+
+    ("plain attacker still composes", "eth_profit", REENTER, True),
+
+    ("the name in a comment is not a use", "eth_profit", """contract Attacker {
+    Vault public v;
+    // _ArbiterHarness(msg.sender).arbiterVictim() is only available under victim_loss.
+    constructor(address t) payable { v = Vault(payable(t)); }
+    function attack() external { v.deposit{value: 1 ether}(); }
+    receive() external payable {}
+}""", True),
+]
+
+
 def main() -> int:
     print("a name the agent declares, against a target that declares it too.\n")
     ws = Workspace(WS, "collide", TARGET)
@@ -350,6 +383,41 @@ def main() -> int:
         results.append(ok)
         state = "composed" if composed else "REFUSED "
         print(f"  [{'OK  ' if ok else 'WRONG'}] {label:31s} {state}  {note}")
+
+    # And the same question asked of the OTHER template, where the victim does not exist.
+    for label, predicate, attacker_code, must_compose in EXPLOIT_CASES:
+        note = ""
+        try:
+            sol = ws.compose_exploit(
+                deploy_code=DEPLOY, attacker_code=attacker_code, predicate=predicate,
+                honest_body=ENTER + "\n" + EXIT, mode="contract")
+            composed = True
+        except ValueError as exc:
+            composed, note = False, str(exc).splitlines()[0][:52]
+
+        ok = composed == must_compose
+        if composed and must_compose:
+            ws.write_poc("CollideExploit", sol)
+            build = ws.build()
+            if not build.ok:
+                ok, note = False, _first_solc_error(build.combined)
+            else:
+                note = "built"
+        results.append(ok)
+        state = "composed" if composed else "REFUSED "
+        print(f"  [{'OK  ' if ok else 'WRONG'}] {label:31s} {state}  {note}")
+
+    # The idiom under the predicate that DOES declare it: composes, and builds.
+    try:
+        sol = ws.compose_victim_loss(**case(attacker_code=EXPLOIT_CASES[0][2]))
+        ws.write_poc("CollideVictim", sol)
+        build = ws.build()
+        ok, note = build.ok, ("built" if build.ok else _first_solc_error(build.combined))
+    except ValueError as exc:
+        ok, note = False, str(exc).splitlines()[0][:52]
+    results.append(ok)
+    print(f"  [{'OK  ' if ok else 'WRONG'}] {'victim lookup works under it':31s} "
+          f"composed  {note}")
 
     ws.cleanup()
     print(f"\n{sum(results)}/{len(results)} as expected")
