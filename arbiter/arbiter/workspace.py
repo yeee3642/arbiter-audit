@@ -1677,8 +1677,12 @@ contract TestArbiterVictim is Harness {{
             if (!ran) {{ continue; }}
             anyRan = true;
 
-            uint256 shortfall = recA > recB ? recA - recB : 0;
-            if (shortfall > 0 && g >= shortfall) {{
+            // Not `shortfall`. The report block below declares one at function scope, so
+            // this used to shadow it and solc said so on EVERY compile of a victim_loss
+            // exploit -- a nine-line warning quoting two template lines the agent did not
+            // write and cannot change, spent out of the six thousand characters it gets.
+            uint256 gap = recA > recB ? recA - recB : 0;
+            if (gap > 0 && g >= gap) {{
                 bestA = recA; bestB = recB; bestGain = g;
                 break;                        // one environment is enough
             }}

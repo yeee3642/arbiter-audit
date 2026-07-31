@@ -555,10 +555,24 @@ class ToolDispatcher:
         self._recon_calls = 0
         self._refused_safe = False
         self._hypotheses: list[str] = []
+        self._legends: set[str] = set()
 
     @property
     def has_tried_exploit(self) -> bool:
         return self._exploit_calls > 0
+
+    def _legend_once(self, key: str, text: str) -> str:
+        """Static prose, said once per audit.
+
+        Nothing is hidden by this: the transcript is never trimmed, so the first copy is
+        still there, a few messages up, in full. What it removes is the agent paying for
+        the same paragraph again on every later failure -- and paying twice, once in the
+        response and then in every subsequent request of the conversation.
+        """
+        if key in self._legends:
+            return ""
+        self._legends.add(key)
+        return text
 
     def dispatch(self, name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
         """Run one tool. Returns (result_text, is_terminal)."""
@@ -767,23 +781,7 @@ class ToolDispatcher:
             )
             self._poc_by_name[name] = record
             self.outcome.pocs.append(record)
-            # Show the composed file, numbered. The agent supplies fragments and the
-            # harness assembles them, so solc's line numbers refer to a file the agent
-            # has never seen -- without this it is debugging blind, and repeated compile
-            # failures were the single largest cause of missed vulnerable samples.
-            listing = "\n".join(
-                f"{i:>3}| {line}" for i, line in enumerate(solidity.splitlines(), 1)
-            )
-            return (
-                "COMPILATION FAILED. Below is the COMPLETE file the harness assembled "
-                "from your fragments -- the compiler's line numbers refer to this, not "
-                "to what you sent. Read the error, find that line here, and call "
-                "run_exploit again with corrected fragments. Do not add a pragma, an "
-                "import, or a success check; the harness owns those lines.\n\n"
-                "----- composed exploit -----\n" + listing[:7000] +
-                "\n----- compiler output -----\n" + _tail(build.combined),
-                False,
-            )
+            return _compile_failure(name, solidity, build.combined), False
 
         run = self.ws.run_poc(name)
         passed = _test_passed(run)
@@ -820,7 +818,8 @@ class ToolDispatcher:
             swept = self._sweep(raw_name, args, predicate, hypothesis, mode)
             if swept is not None:
                 return swept
-            head = _EXPLOIT_FAILED_HEAD.format(name=name, predicate=predicate)
+            head = (_EXPLOIT_FAILED_HEAD.format(name=name, predicate=predicate)
+                    + self._legend_once("nogain", _NOGAIN_LEGEND))
             if repeated:
                 head += _REPEATED_HYPOTHESIS
             return head + _tail(run.combined), False
@@ -874,16 +873,7 @@ class ToolDispatcher:
                                adjudicated=True, predicate=predicate)
             self._poc_by_name[name] = record
             self.outcome.pocs.append(record)
-            listing = "\n".join(
-                f"{i:>3}| {line}" for i, line in enumerate(solidity.splitlines(), 1)
-            )
-            return (
-                "COMPILATION FAILED. Below is the COMPLETE file the harness assembled "
-                "from your fragments -- the compiler's line numbers refer to this.\n\n"
-                "----- composed exploit -----\n" + listing[:7000] +
-                "\n----- compiler output -----\n" + _tail(build.combined),
-                False,
-            )
+            return _compile_failure(name, solidity, build.combined), False
         run = self.ws.run_poc(name)
         passed = _test_passed(run)
         caused = ""
@@ -909,16 +899,7 @@ class ToolDispatcher:
             )
         head = (
             f"EXPLOIT {name!r} compiled but did NOT satisfy {predicate!r}.\n"
-            "  'ArbiterNoHarm(withoutAttack, withAttack, attackerGain)' -- the first two "
-            "numbers are what an ordinary user got back when nobody attacked and when you "
-            "did. If they are EQUAL, your attack cost that user nothing, so whatever it "
-            "extracted was not theirs; taking a donation out of a contract is not a "
-            "vulnerability in it. If attackerGain is 0 the attack extracted nothing.\n"
-            "  'the victim gets nothing back even with no attack' -- victim_enter and "
-            "victim_exit do not work as an ordinary round trip, so no harm can be shown. "
-            "Fix them first.\n"
-            "  'the attack itself reverted' -- a guard stopped you, which is evidence of "
-            "safety.\n\n"
+            + self._legend_once("noharm", _NOHARM_LEGEND)
         )
         if repeated:
             head += _REPEATED_HYPOTHESIS
@@ -1108,6 +1089,13 @@ _EXPLOIT_FAILED_HEAD = (
     "up to thirty-two repetitions, and a week of elapsed time, each also granted to the "
     "honest baseline. So this is not a question of scale: the attacker gained nothing "
     "the honest path did not.\n"
+)
+
+# The two revert legends. Static prose: what each of the harness's own revert reasons
+# means and what to do about it. They used to be appended in full to every failed
+# attempt, and the transcript is never trimmed, so the second copy onward was the agent
+# re-reading text already sitting a few messages above it. Said once per audit.
+_NOGAIN_LEGEND = (
     "  'ArbiterNoGain(honestGain, attackGain)' -- the two numbers are what an honest "
     "user extracted and what your attack extracted, in wei or token units. Read them. "
     "If attackGain is 0 your attack extracted nothing and the hypothesis is wrong. If "
@@ -1124,6 +1112,19 @@ _EXPLOIT_FAILED_HEAD = (
     "A guard stopping you is evidence of safety, not a failure on your part.\n\n"
 )
 
+_NOHARM_LEGEND = (
+    "  'ArbiterNoHarm(withoutAttack, withAttack, attackerGain)' -- the first two "
+    "numbers are what an ordinary user got back when nobody attacked and when you "
+    "did. If they are EQUAL, your attack cost that user nothing, so whatever it "
+    "extracted was not theirs; taking a donation out of a contract is not a "
+    "vulnerability in it. If attackerGain is 0 the attack extracted nothing.\n"
+    "  'the victim gets nothing back even with no attack' -- victim_enter and "
+    "victim_exit do not work as an ordinary round trip, so no harm can be shown. "
+    "Fix them first.\n"
+    "  'the attack itself reverted' -- a guard stopped you, which is evidence of "
+    "safety.\n\n"
+)
+
 _REPEATED_HYPOTHESIS = (
     "NOTE: you have already tested this exact hypothesis and it failed. Repeating it "
     "will not change the result. Attack a different function or a different invariant, "
@@ -1135,6 +1136,72 @@ def _tail(text: str) -> str:
     if len(text) <= MAX_TOOL_OUTPUT:
         return text
     return "... output truncated ...\n" + text[-MAX_TOOL_OUTPUT:]
+
+
+# solc's location line: `  --> test/FooExploitPoc.t.sol:59:9:`
+_SOLC_LOC_RE = re.compile(r"-->\s+(\S+?):(\d+):\d+")
+
+# Lines of context either side of a line the compiler named. Four is enough to see the
+# statement in its block without dragging in the neighbouring function.
+_VIEW_WINDOW = 4
+_VIEW_BUDGET = 7000
+
+
+def _numbered_listing(lines: list[str]) -> str:
+    return "\n".join(f"{i:>3}| {line}" for i, line in enumerate(lines, 1))
+
+
+def _composed_view(solidity: str, compiler_output: str, name: str) -> str:
+    """The composed file at the lines the compiler named, and nothing else.
+
+    The agent sends fragments and the harness assembles a file around them, so solc's line
+    numbers refer to something the agent has never seen -- which is why the whole file used
+    to come back on every compile failure. But the file is roughly two hundred lines and
+    all but a handful are harness template the agent cannot change, so what that bought was
+    up to seven thousand characters of scenery per failed attempt, carried in the
+    transcript for the rest of the audit.
+
+    The mapping is the only thing the listing was ever for, so keep exactly that: every
+    line solc pointed at, at its true number, with enough neighbours to read it.
+
+    When solc names no line in this file at all -- a pre-parse failure, an error inside an
+    import -- there is nothing to centre a window on, so the whole listing comes back as
+    before. Cheaper is not worth being less informative.
+    """
+    lines = solidity.splitlines()
+    hits = sorted({
+        int(m.group(2)) for m in _SOLC_LOC_RE.finditer(compiler_output)
+        if m.group(1).endswith(f"{name}.t.sol") and 1 <= int(m.group(2)) <= len(lines)
+    })
+    if not hits:
+        return _numbered_listing(lines)[:_VIEW_BUDGET]
+
+    keep: set[int] = set()
+    for n in hits:
+        keep.update(range(max(1, n - _VIEW_WINDOW), min(len(lines), n + _VIEW_WINDOW) + 1))
+
+    out: list[str] = []
+    prev = 0
+    for n in sorted(keep):
+        if prev and n != prev + 1:
+            out.append(f"   | ... {n - prev - 1} lines the compiler did not name ...")
+        out.append(f"{n:>3}| {lines[n - 1]}")
+        prev = n
+    return "\n".join(out)[:_VIEW_BUDGET]
+
+
+def _compile_failure(name: str, solidity: str, output: str) -> str:
+    """One renderer for both adjudicated compile-failure paths, which had drifted apart."""
+    return (
+        "COMPILATION FAILED. Below are the lines of the assembled file that the compiler "
+        "named, at ITS line numbers -- the harness composed that file from your "
+        "fragments, so the numbers do not refer to what you sent. Find the fragment each "
+        "line came from, fix it, and call run_exploit again. Do not add a pragma, an "
+        "import, or a success check; the harness owns those lines.\n\n"
+        "----- composed exploit, at the lines that failed -----\n"
+        + _composed_view(solidity, output, name)
+        + "\n----- compiler output -----\n" + _tail(output)
+    )
 
 
 def _test_passed(result: CommandResult) -> bool:

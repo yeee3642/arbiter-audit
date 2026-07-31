@@ -301,6 +301,51 @@ text is how a recall fix becomes a corruption. A member write is not a declarati
 `c.cap = 7;` has nothing where a variable name would be, so it cannot match, and the probe
 asserts it reaches solc verbatim.
 
+## D13 -- the failure message cost more than the failure  (FIXED)
+
+The binding constraint is turns, and the numbers that say so are three runs on the same
+forty samples: removing compile errors put 33 of 40 samples on the ceiling, context per
+request went 15,037 -> 21,441 tokens, recall went 0.450 -> 0.100, and only `max_turns`
+16 -> 26 brought it back. Compile failure is a CHEAP failure -- one turn, one short error.
+"Compiled, ran, extracted nothing" is an expensive one. So the thing to optimise is the
+cost of a failed attempt, and every character returned is paid for twice: once in the
+reply, then again in every later request, because nothing trims the transcript.
+
+Three cuts, measured by `scripts/failure_cost.py` over the failures recorded in
+`runs/refixed2.results.jsonl` (62 compile failures, 472 ran-and-failed, all composed):
+
+| | before | after |
+|---|---:|---:|
+| composed file echoed on a compile failure, median | 7,000 | 1,408 |
+| the same, over the run | 414,698 | 78,025 |
+| ArbiterNoHarm legend, repeated | 271,377 | 0 |
+
+**The listing.** The whole composed file came back on every compile failure, cut at 7000
+characters. The composed files run to a median of 217 lines and 9,961 characters and 90%
+of them are past that cut, so **in 49 of the 62 compile failures the line solc named had
+already been dropped from what came back.** The listing was failing at its one job four
+times in five while being the most expensive thing the harness returns. It is now the
+named lines with four lines of context each, at their true numbers -- 81% smaller and, in
+those 49 cases, the first time the agent could see the line at all.
+
+The fallback is the part that keeps it honest: when the compiler names a line that is not
+in this file -- an error raised inside an import -- there is nothing to centre a window
+on, so the whole listing comes back exactly as before. Cheaper is not worth being less
+informative, and `economy_probe` asserts that branch as well as the cheap one.
+
+**The legends.** `ArbiterNoHarm` and `ArbiterNoGain` each carry a paragraph explaining
+what the numbers mean and what to do about them. It was appended in full to every failed
+attempt. The transcript is never trimmed, so from the second copy onward the agent was
+re-reading text sitting a few messages above it: 437 repeats, 621 characters each. Said
+once per audit now. The NUMBERS still come back every time -- they are the per-attempt
+evidence, and the probe asserts they do.
+
+**The harness's own warning.** Every compile of a victim_loss exploit emitted
+`Warning (2519): This declaration shadows an existing declaration`, because `arbiterRun`
+declared `shortfall` in the environment loop and again at function scope. Nine lines
+quoting two template lines the agent did not write and cannot change, on every build,
+pass or fail. The loop-local is now `gap`.
+
 ## Before any of this: measure the ceiling
 
 `evalsets/test_pairs_v2.json` carries 35 reference exploits, each already shown to pass
