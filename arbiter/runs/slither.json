@@ -1,0 +1,1792 @@
+{
+ "arm": "slither",
+ "evalset": "evalsets/v3_authored.json",
+ "version": "0.11.6",
+ "rows": [
+  {
+   "id": "V_reentrancy_unstake",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_reentrancy_unstake",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_missing_access_control_disburse",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "events-maths",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_missing_access_control_disburse",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_unchecked_call_return_buyback",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_unchecked_call_return_buyback",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_tx_origin_auth_router",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "tx-origin",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_tx_origin_auth_router",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_unbounded_queue_dos",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "uninitialized-local",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "calls-loop",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_unbounded_queue_dos",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "arbitrary-send-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "uninitialized-local",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "calls-loop",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_forced_ether_refund",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_forced_ether_refund",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_approval_double_spend",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_approval_double_spend",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_delegatecall_unchecked_module",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "controlled-delegatecall",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_delegatecall_unchecked_module",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "controlled-delegatecall",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_amm_spot_price_oracle",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-no-eth",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_amm_spot_price_oracle",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-no-eth",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_slippage_check_skipped_branch",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "uninitialized-local",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "calls-loop",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_slippage_check_skipped_branch",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "uninitialized-local",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "calls-loop",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_missing_deadline_signed_order",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "locked-ether",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_missing_deadline_signed_order",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "locked-ether",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_stale_cached_price_liquidation",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_stale_cached_price_liquidation",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "unchecked-transfer",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "divide-before-multiply",
+     "impact": "Medium",
+     "confidence": "Medium"
+    },
+    {
+     "check": "missing-zero-check",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "constable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    },
+    {
+     "check": "immutable-states",
+     "impact": "Optimization",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_first_depositor_share_inflation",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_first_depositor_share_inflation",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_withdraw_rounding_favours_user",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_withdraw_rounding_favours_user",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_fee_on_transfer_credit",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_fee_on_transfer_credit",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_uint128_downcast_reward_debt",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_uint128_downcast_reward_debt",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-eth",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-benign",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_signature_replay_voucher",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_signature_replay_voucher",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_ecrecover_zero_address_session",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_ecrecover_zero_address_session",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_commit_reveal_frontrun",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_commit_reveal_frontrun",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "V_weak_randomness_flip_payout",
+   "label": "vuln",
+   "findings": [
+    {
+     "check": "weak-prng",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  },
+  {
+   "id": "S_weak_randomness_flip_payout",
+   "label": "safe",
+   "findings": [
+    {
+     "check": "weak-prng",
+     "impact": "High",
+     "confidence": "Medium"
+    },
+    {
+     "check": "incorrect-equality",
+     "impact": "Medium",
+     "confidence": "High"
+    },
+    {
+     "check": "reentrancy-events",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "timestamp",
+     "impact": "Low",
+     "confidence": "Medium"
+    },
+    {
+     "check": "solc-version",
+     "impact": "Informational",
+     "confidence": "High"
+    },
+    {
+     "check": "low-level-calls",
+     "impact": "Informational",
+     "confidence": "High"
+    }
+   ],
+   "error": ""
+  }
+ ],
+ "best": {
+  "impact": "Medium",
+  "confidence": "Medium",
+  "tp": 14,
+  "tn": 10,
+  "fp": 10,
+  "fn": 6,
+  "precision": 0.5833333333333334,
+  "recall": 0.7,
+  "specificity": 0.5,
+  "f1": 0.6363636363636365,
+  "mcc": 0.2041241452319315
+ },
+ "findings_total": 298,
+ "findings_executable": 0
+}
