@@ -1066,7 +1066,15 @@ interface Vm {
 // A plain comment, not a doc comment: solc rejects @notice on a file-level variable.
 // Reaching a cheatcode from an attack is still refused by the lint, which is where that
 // decision belongs, rather than by an accident of scope.
-Vm constant vm_ = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+// Named `vm`, and it used to be `vm_`. The underscore was the whole defect: an agent
+// writing an Attacker -- which inherits nothing -- reaches for `vm.warp` the way everyone
+// writing Foundry does, and got `Undeclared identifier. Did you mean "Vm"?`. 42 of those
+// in one 40-sample run, the largest named error class left after the assert repair, and
+// every one of them a turn spent on the harness's spelling rather than on the attack.
+// `Harness` no longer declares its own, so there is exactly one `vm` in scope everywhere
+// and nothing shadows anything. Reaching a cheatcode FROM an attack is still refused by
+// the lint, which is where that decision belongs rather than in an accident of scope.
+Vm constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
 // The assertion family, at FILE scope. These decide nothing: the verdict is computed by
 // the harness from balances the EVM reported, and no assertion an agent writes is
@@ -1113,7 +1121,6 @@ function assertApproxEqAbs(uint256 a, uint256 b, uint256 d) pure {
 /// forge runs `test*` functions on contracts whose name starts with `Test`;
 /// a function that reverts is a failing test, one that returns is a passing test.
 contract Harness {
-    Vm internal constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
     /// Render a uint so the harness can tell the auditor HOW MUCH it fell short by.
     /// A bare "you did not profit" is a dead end; "you gained 1000000000000000000,
@@ -1352,7 +1359,7 @@ _NEVER_RENAME = frozenset({"Attacker"})
 # its own `Vm` collides with these the same way it collides with the target's symbols,
 # and the same rename fixes it.
 HARNESS_RESERVED = frozenset({
-    "Vm", "vm_", "Harness",
+    "Vm", "vm", "Harness",
     "assertTrue", "assertFalse", "assertEq", "assertGt", "assertGe",
     "assertLt", "assertLe", "assertApproxEqAbs",
 })

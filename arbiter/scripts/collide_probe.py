@@ -207,6 +207,20 @@ contract Attacker {
         victim_enter="""        (bool okDep, bytes memory ret) = address(target).call{value: 5 ether}(
             abi.encodeWithSignature("deposit()"));
         require(okDep && ret.length == 0, "deposit failed");"""), True, []),
+
+    # D9. An Attacker inherits nothing, and everyone writing Foundry writes `vm.warp`.
+    # The file-level constant used to be spelt `vm_`, so this came back as
+    # `Undeclared identifier. Did you mean "Vm"?` -- 42 in one 40-sample run, the largest
+    # named class left once the assert family existed.
+    ("vm reaches inside an Attacker", case(attacker_code="""contract Attacker {
+    Vault public v;
+    constructor(address t) payable { v = Vault(payable(t)); }
+    function attack() external {
+        vm.warp(block.timestamp + 1 days);
+        v.deposit{value: 1 ether}();
+    }
+    receive() external payable {}
+}"""), True, []),
 ]
 
 
