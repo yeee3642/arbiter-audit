@@ -29,7 +29,26 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .workspace import CommandResult, Workspace
+from .workspace import BuildUnavailable, CommandResult, Workspace
+
+# What the agent is told when the compiler is missing, and what it is told when it then
+# tries to certify the contract anyway. Kept together because they are one argument: a
+# tool that cannot execute has no grounds to certify anything, and the honest verdict in
+# that state is "I do not know", never "safe".
+_TOOLCHAIN_DOWN = (
+    "TOOLCHAIN UNAVAILABLE: forge is not installed or not on PATH, so this attack was "
+    "never compiled and never run. That is a fault in the environment, not in your "
+    "attack, and it does NOT count as an attempt. Do not conclude anything from it -- a "
+    "verdict of 'safe' will be refused while the compiler is missing."
+)
+
+_TOOLCHAIN_SAFE_REFUSED = (
+    "REFUSED, and this audit is over. Every exploit you submitted died before it reached "
+    "the compiler, so nothing has been executed against this contract and there is no "
+    "evidence either way. Recording 'safe' here would be the exact failure this harness "
+    "exists to prevent: a tool that cannot run answering 'no problem' to everything. The "
+    "verdict is no_verdict."
+)
 
 MAX_TOOL_OUTPUT = 6000
 
@@ -556,6 +575,13 @@ class ToolDispatcher:
         self._refused_safe = False
         self._hypotheses: list[str] = []
         self._legends: set[str] = set()
+        # Attempts that died before the compiler saw them, and attempts that reached it.
+        # `_exploit_calls` cannot answer this: it is incremented on entry, so an audit in
+        # which forge was missing looked exactly like an audit in which three attacks were
+        # tried and failed -- which is how a contract with a live reentrancy was certified
+        # safe once the tool dispatch was driven by a host that caught the exception.
+        self._toolchain_failures = 0
+        self._reached_toolchain = 0
 
     @property
     def has_tried_exploit(self) -> bool:
@@ -591,8 +617,22 @@ class ToolDispatcher:
             return f"error: no such tool {name!r}", False
         try:
             result = handler(arguments)
+        except BuildUnavailable:
+            # Pulled out of the generic handler below, where it had been indistinguishable
+            # from a bad argument. `run.py` refuses to start without forge, and while that
+            # was the only entry point the preflight was enough. It is not a preflight
+            # problem: driven through a host that dispatches these tools itself, three
+            # exploits died here, the agent read "tool unavailable", and a contract with a
+            # live reentrancy was certified SAFE. A missing compiler must reach the
+            # verdict, not be absorbed one layer below it.
+            self._toolchain_failures += 1
+            if name == "run_exploit":
+                self._exploit_calls -= 1
+            return _TOOLCHAIN_DOWN, False
         except Exception as exc:  # noqa: BLE001 - a tool crash must not kill the run
             return f"error: tool {name} raised {type(exc).__name__}: {exc}", False
+        if name in ("run_exploit", "run_poc"):
+            self._reached_toolchain += 1
         # A handler that returns a bare string unpacks into characters at the call site
         # and takes the whole audit down with a ValueError. That cost one sample and two
         # attempts before it was noticed, so the shape is normalised here rather than
@@ -1053,6 +1093,24 @@ class ToolDispatcher:
         # what this architecture exists to replace. Refused once -- not permanently, since
         # forcing a hopeless exploit would be its own kind of theatre -- so that "safe"
         # means "I attacked it and it held" rather than "I read it and nothing jumped out".
+        # Nothing ever reached the compiler, and something tried to. There is no evidence
+        # in either direction, so the verdict is no_verdict and this is terminal -- there
+        # is nothing to be gained by sending the agent back into a loop whose only tool is
+        # broken. Refused permanently rather than once, because unlike the untested-safe
+        # case below there is no version of "try harder" that can fix a missing compiler.
+        if self._toolchain_failures and self._reached_toolchain == 0:
+            self.outcome.safe_reason = {
+                "reason": args.get("reason"),
+                "refused": "toolchain_unavailable",
+                "exploits_that_never_compiled": self._toolchain_failures,
+            }
+            self.outcome.verdict = "no_verdict"
+            self.outcome.stop_reason = "toolchain_unavailable"
+            self.outcome.rejected_submissions.append(
+                {"reason": "conclude_safe with no working toolchain", "submission": args}
+            )
+            return _TOOLCHAIN_SAFE_REFUSED, True
+
         if self._exploit_calls == 0 and not self._refused_safe:
             self._refused_safe = True
             self.outcome.rejected_submissions.append(
