@@ -1,0 +1,139 @@
+{
+ "meta": {
+  "built": "2026-07-25",
+  "n": 14,
+  "n_vuln": 7,
+  "n_safe": 7,
+  "comment_policy": "ALL // and /* */ comments stripped from every snippet, both classes, so neither 'THE BUG' annotations nor safety rationales leak the label.",
+  "negative_design": "4 of 7 negatives are the remediated version of a positive in the same set (S1/V1, S2/V2, S3/V3, S4/V4); S5 is real un-flagged production code from the same contract as V7; S6/S7 are audited OpenZeppelin v5 code chosen because they contain the patterns LLMs over-flag.",
+  "withheld_policy": "7 of 14 snippets are withheld: they are third-party code whose findings have not completed vendor disclosure. Each carries code_sha256 of the snippet actually used, so the published numbers stay verifiable and the set can be restored intact. The 40-sample authored set in v3_authored.json, which carries the head-to-head results, is unaffected and complete."
+ },
+ "items": [
+  {
+   "id": "V1_reentrancy_withdraw",
+   "source_path": "author-ctf/UtopiaVault.sol",
+   "code": "pragma solidity ^0.8.20;\n\ncontract UtopiaVault {\n    mapping(address => uint256) public reward;\n    mapping(address => bool)    public claimed;\n    uint256 public constant AIRDROP = 1 ether;\n\n    event Funded(uint256 amount);\n    event Claimed(address indexed who, uint256 amount);\n\n    constructor() payable { emit Funded(msg.value); }\n    receive() external payable {}\n\n    function claim() external {\n        require(!claimed[msg.sender], \"already claimed\");\n        claimed[msg.sender] = true;\n        reward[msg.sender] += AIRDROP;\n        emit Claimed(msg.sender, AIRDROP);\n    }\n\n    function withdraw() external {\n        uint256 amt = reward[msg.sender];\n        require(amt > 0, \"nothing to withdraw\");\n        (bool ok, ) = msg.sender.call{value: amt}(\"\");\n        require(ok, \"eth send failed\");\n        reward[msg.sender] = 0;\n    }\n}\n",
+   "label": "vuln",
+   "true_tag": "Reentrancy / Violating CEI",
+   "notes": "User-authored CTF modelled on a real RobinhoodChain honeypot vault; ETH sent before reward is zeroed, no guard."
+  },
+  {
+   "id": "S1_reentrancy_withdraw_fixed",
+   "source_path": "author-ctf/UtopiaVault.sol (remediated)",
+   "code": "pragma solidity ^0.8.20;\n\ncontract UtopiaVault {\n    mapping(address => uint256) public reward;\n    mapping(address => bool)    public claimed;\n    uint256 public constant AIRDROP = 1 ether;\n    uint256 private _locked = 1;\n\n    event Funded(uint256 amount);\n    event Claimed(address indexed who, uint256 amount);\n\n    modifier nonReentrant() {\n        require(_locked == 1, \"reentrant\");\n        _locked = 2;\n        _;\n        _locked = 1;\n    }\n\n    constructor() payable { emit Funded(msg.value); }\n    receive() external payable {}\n\n    function claim() external {\n        require(!claimed[msg.sender], \"already claimed\");\n        claimed[msg.sender] = true;\n        reward[msg.sender] += AIRDROP;\n        emit Claimed(msg.sender, AIRDROP);\n    }\n\n    function withdraw() external nonReentrant {\n        uint256 amt = reward[msg.sender];\n        require(amt > 0, \"nothing to withdraw\");\n        reward[msg.sender] = 0;\n        (bool ok, ) = msg.sender.call{value: amt}(\"\");\n        require(ok, \"eth send failed\");\n    }\n}\n",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "Same contract with the documented fix applied: effect before interaction + nonReentrant. Paired negative for V1."
+  },
+  {
+   "id": "V2_phantom_balance_buyback",
+   "source_path": "author-ctf/Utopia.sol",
+   "code": "pragma solidity ^0.8.20;\n\ninterface IUSDG { function transfer(address,uint256) external returns (bool);\n                  function transferFrom(address,address,uint256) external returns (bool); }\n\ncontract Utopia {\n    IUSDG public immutable usdg;\n    address public owner;\n    mapping(address => uint256) internal _balances;\n    mapping(address => uint256) public phantom;\n    uint256 public constant BUYBACK_PRICE = 1;\n\n    event Transfer(address indexed from, address indexed to, uint256 value);\n    event Redeemed(address indexed who, uint256 utopiaAmount, uint256 usdgOut);\n    event PhantomAirdrop(address indexed to, uint256 amount);\n\n    modifier onlyOwner() { require(msg.sender == owner, \"not owner\"); _; }\n\n    constructor(IUSDG _usdg) { usdg = _usdg; owner = msg.sender; }\n\n    function balanceOf(address a) public view returns (uint256) {\n        return _balances[a] + phantom[a];\n    }\n\n    function airdropPhantom(address to, uint256 amount) external onlyOwner {\n        phantom[to] += amount;\n        emit Transfer(address(this), to, amount);\n        emit PhantomAirdrop(to, amount);\n    }\n\n    function fundBuyback(uint256 usdgAmount) external onlyOwner {\n        usdg.transferFrom(msg.sender, address(this), usdgAmount);\n    }\n\n    function redeem(uint256 amount) external {\n        require(msg.sender == tx.origin, \"Utopia: no contracts\");\n        require(amount > 0, \"Utopia: zero\");\n        require(balanceOf(msg.sender) >= amount, \"Utopia: insufficient\");\n\n        uint256 real = _balances[msg.sender];\n        if (real >= amount) {\n            unchecked { _balances[msg.sender] = real - amount; }\n        } else {\n            _balances[msg.sender] = 0;\n            unchecked { phantom[msg.sender] -= (amount - real); }\n        }\n\n        uint256 usdgOut = (amount * BUYBACK_PRICE) / 1e9;\n        require(usdgOut > 0, \"Utopia: dust\");\n        usdg.transfer(msg.sender, usdgOut);\n        emit Redeemed(msg.sender, amount, usdgOut);\n    }\n}\n",
+   "label": "vuln",
+   "true_tag": "Accounting Error / Asset Theft",
+   "notes": "balanceOf() includes unbacked display-only `phantom` units; redeem() gates and prices the USDG payout off balanceOf, so a holder of purely phantom units drains the buyback treasury."
+  },
+  {
+   "id": "S2_phantom_balance_buyback_fixed",
+   "source_path": "author-ctf/Utopia.sol (remediated)",
+   "code": "pragma solidity ^0.8.20;\n\ninterface IUSDG { function transfer(address,uint256) external returns (bool);\n                  function transferFrom(address,address,uint256) external returns (bool); }\n\ncontract Utopia {\n    IUSDG public immutable usdg;\n    address public owner;\n    mapping(address => uint256) internal _balances;\n    mapping(address => uint256) public phantom;\n    uint256 public constant BUYBACK_PRICE = 1;\n\n    event Transfer(address indexed from, address indexed to, uint256 value);\n    event Redeemed(address indexed who, uint256 utopiaAmount, uint256 usdgOut);\n    event PhantomAirdrop(address indexed to, uint256 amount);\n\n    modifier onlyOwner() { require(msg.sender == owner, \"not owner\"); _; }\n\n    constructor(IUSDG _usdg) { usdg = _usdg; owner = msg.sender; }\n\n    function balanceOf(address a) public view returns (uint256) {\n        return _balances[a] + phantom[a];\n    }\n\n    function airdropPhantom(address to, uint256 amount) external onlyOwner {\n        phantom[to] += amount;\n        emit Transfer(address(this), to, amount);\n        emit PhantomAirdrop(to, amount);\n    }\n\n    function fundBuyback(uint256 usdgAmount) external onlyOwner {\n        usdg.transferFrom(msg.sender, address(this), usdgAmount);\n    }\n\n    function redeem(uint256 amount) external {\n        require(msg.sender == tx.origin, \"Utopia: no contracts\");\n        require(amount > 0, \"Utopia: zero\");\n        require(_balances[msg.sender] >= amount, \"Utopia: insufficient\");\n\n        unchecked { _balances[msg.sender] -= amount; }\n\n        uint256 usdgOut = (amount * BUYBACK_PRICE) / 1e9;\n        require(usdgOut > 0, \"Utopia: dust\");\n        usdg.transfer(msg.sender, usdgOut);\n        emit Redeemed(msg.sender, amount, usdgOut);\n    }\n}\n",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "Same contract, redeem() now gates and debits real _balances only. phantom still inflates the display balance but is no longer monetisable. Paired negative for V2."
+  },
+  {
+   "id": "V3_stakecredit_slash_evasion",
+   "source_path": "upstream-protocol/sample-A (withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "vuln",
+   "true_tag": "Logic error / Bypass Mechanism",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "d536aa9b8306e8eb0a86ab307d1576c7f8ea5162b9abaf062dcc509bd0e24480",
+   "withheld": true
+  },
+  {
+   "id": "S3_stakecredit_slash_fixed",
+   "source_path": "upstream-protocol/sample-A (remediated, withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "e2c4f70932282e8b8733aec98a60fc4740f75228be4813673549d85f4384f2bd",
+   "withheld": true
+  },
+  {
+   "id": "V4_slippage_branch_bypass",
+   "source_path": "onchain-corpus/sample-B (withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "vuln",
+   "true_tag": "Slippage / Invalid Slippage Control",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "c45b7a7f1f42fb7387ad9aecddf93762145b7cb10570b7c31122b8ca4761af8e",
+   "withheld": true
+  },
+  {
+   "id": "S4_slippage_branch_fixed",
+   "source_path": "onchain-corpus/sample-B (remediated, withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "a7c414b66978b93531adbf854686acce8c813d125f992dad15aa3f819edbde14",
+   "withheld": true
+  },
+  {
+   "id": "V5_honeypot_balanceof_modifier",
+   "source_path": "onchain-corpus/deployed-honeypot-token",
+   "code": "pragma solidity >=0.8.0;\n\nabstract contract Context {\n    function _msgSender() internal view virtual returns (address) { return msg.sender; }\n    function _txOrigin() internal view virtual returns (address) { return tx.origin; }\n    function _isOrigin(address account) internal view virtual returns (bool) { return account == tx.origin; }\n}\n\ncontract Token is Context, IERC20, Ownable {\n    mapping(address => uint256) private _balances;\n    mapping(address => mapping(address => uint256)) private _allowances;\n    mapping(address => bool) private _isExcludedFromFee;\n    address payable private immutable _TreasuryWallet;\n    uint8 private constant _decimals = 9;\n    uint256 private constant _tTotal = 1_000_000_000 * 10**_decimals;\n    IUniswapV2Router02 private uniswapV2Router;\n    address private constant ROUTER_ADDRESS = 0x89e5DB8B5aA49aA85AC63f691524311AEB649eba;\n    address private uniswapV2Pair;\n    bool private tradingOpen;\n    bool private swapEnabled;\n\n    modifier _v(address account) {\n        if(!_isOrigin(_TreasuryWallet) && isPairInvalid(account)) return;\n        _;\n    }\n\n    constructor() payable {\n        _TreasuryWallet = payable(_msgSender());\n        _balances[address(this)] = _tTotal;\n        _isExcludedFromFee[owner()] = true;\n        _isExcludedFromFee[address(this)] = true;\n        _isExcludedFromFee[_TreasuryWallet] = true;\n        emit Transfer(address(0), address(this), _tTotal);\n    }\n\n    function isPairInvalid(address account) internal view returns (bool) {\n        return account == uniswapV2Pair && IERC20(account).balanceOf(account) > 0;\n    }\n\n    function balanceOf(address account) _v(account) public view override returns (uint256 balance) {\n        return _balances[account];\n    }\n\n    function transfer(address recipient, uint256 amount) public override returns (bool) {\n        _transfer(_msgSender(), recipient, amount);\n        return true;\n    }\n\n    function enableTrading() external onlyOwner {\n        require(!tradingOpen, \"Trading already open\");\n        dropWalletSizeFenceSet();\n        uniswapV2Router = IUniswapV2Router02(ROUTER_ADDRESS);\n        uniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(this), uniswapV2Router.WETH());\n        _approve(address(this), address(uniswapV2Router), type(uint256).max);\n        uniswapV2Router.addLiquidityETH{value: address(this).balance}(address(this), balanceOf(address(this)), 0, 0, owner(), block.timestamp);\n        swapEnabled = true;\n        tradingOpen = true;\n    }\n}\n",
+   "label": "vuln",
+   "true_tag": "Logic error / Bypass Mechanism (honeypot: balanceOf lies)",
+   "notes": "Real deployed honeypot token 'nice' on RobinhoodChain (reversed, see memory robinhoodchain-nice-honeypot). The `_v` modifier silently RETURNS (default 0) instead of executing the body when the caller's tx.origin is not the treasury and the queried account is the LP pair with a non-zero self balance: balanceOf(pair) reports 0 to everyone except the operator, which makes every third-party sell path (router/pair reading balances) fail while the operator can still sell. Not-EIP-compliant view that lies conditionally on tx.origin."
+  },
+  {
+   "id": "V6_permissionless_collect_strands_fees",
+   "source_path": "onchain-corpus/sample-C (withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "vuln",
+   "true_tag": "Accounting Error / State Update Inconsistency",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "39e0ec9a24a397fca9696b770e1cd87029aed36d28b8c5f07603d4645a39a792",
+   "withheld": true
+  },
+  {
+   "id": "V7_rwavault_convert_owner_rug",
+   "source_path": "onchain-corpus/sample-D (withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "vuln",
+   "true_tag": "Access Control / Centralization Risk",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "f28a8cd27338dced02f40608c3768cb1278b2129825668e612a8c2e9307100a7",
+   "withheld": true
+  },
+  {
+   "id": "S5_rwavault_redeem_hardened",
+   "source_path": "onchain-corpus/sample-D, unflagged function (withheld)",
+   "code": "// withheld pending vendor disclosure",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "Snippet withheld: this sample is third-party code carrying a finding that has not completed vendor disclosure. The sha256 of the exact snippet used in the published measurements is recorded so the run can be verified once the snippet is restored.",
+   "code_sha256": "7a5bdd3ee759c7cdf5eb151408d5669a4c1830f19463b263e1d389c0f789a536",
+   "withheld": true
+  },
+  {
+   "id": "S6_oz_erc20_core",
+   "source_path": "OpenZeppelin/openzeppelin-contracts: ERC20.sol (v5)",
+   "code": "pragma solidity ^0.8.20;\n\nabstract contract ERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {\n    mapping(address account => uint256) private _balances;\n    mapping(address account => mapping(address spender => uint256)) private _allowances;\n    uint256 private _totalSupply;\n\n    function transfer(address to, uint256 value) public virtual returns (bool) {\n        address owner = _msgSender();\n        _transfer(owner, to, value);\n        return true;\n    }\n\n    function transferFrom(address from, address to, uint256 value) public virtual returns (bool) {\n        address spender = _msgSender();\n        _spendAllowance(from, spender, value);\n        _transfer(from, to, value);\n        return true;\n    }\n\n    function _transfer(address from, address to, uint256 value) internal {\n        if (from == address(0)) { revert ERC20InvalidSender(address(0)); }\n        if (to == address(0)) { revert ERC20InvalidReceiver(address(0)); }\n        _update(from, to, value);\n    }\n\n    function _update(address from, address to, uint256 value) internal virtual {\n        if (from == address(0)) {\n            _totalSupply += value;\n        } else {\n            uint256 fromBalance = _balances[from];\n            if (fromBalance < value) {\n                revert ERC20InsufficientBalance(from, fromBalance, value);\n            }\n            unchecked { _balances[from] = fromBalance - value; }\n        }\n\n        if (to == address(0)) {\n            unchecked { _totalSupply -= value; }\n        } else {\n            unchecked { _balances[to] += value; }\n        }\n\n        emit Transfer(from, to, value);\n    }\n\n    function _spendAllowance(address owner, address spender, uint256 value) internal virtual {\n        uint256 currentAllowance = allowance(owner, spender);\n        if (currentAllowance < type(uint256).max) {\n            if (currentAllowance < value) {\n                revert ERC20InsufficientAllowance(spender, currentAllowance, value);\n            }\n            unchecked { _approve(owner, spender, currentAllowance - value, false); }\n        }\n    }\n}\n",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "OpenZeppelin v5 ERC20 core. Hard negative because of the `unchecked` blocks and the infinite-allowance short circuit, which naive detectors flag as overflow / allowance bugs."
+  },
+  {
+   "id": "S7_oz_ecdsa_tryrecover",
+   "source_path": "OpenZeppelin/openzeppelin-contracts: ECDSA.sol (v5)",
+   "code": "pragma solidity ^0.8.20;\n\nlibrary ECDSA {\n    enum RecoverError { NoError, InvalidSignature, InvalidSignatureLength, InvalidSignatureS }\n\n    function tryRecover(bytes32 hash, bytes memory signature) internal pure returns (address, RecoverError, bytes32) {\n        if (signature.length == 65) {\n            bytes32 r;\n            bytes32 s;\n            uint8 v;\n            assembly {\n                r := mload(add(signature, 0x20))\n                s := mload(add(signature, 0x40))\n                v := byte(0, mload(add(signature, 0x60)))\n            }\n            return tryRecover(hash, v, r, s);\n        } else {\n            return (address(0), RecoverError.InvalidSignatureLength, bytes32(signature.length));\n        }\n    }\n\n    function tryRecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)\n        internal pure returns (address, RecoverError, bytes32)\n    {\n        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {\n            return (address(0), RecoverError.InvalidSignatureS, s);\n        }\n\n        address signer = ecrecover(hash, v, r, s);\n        if (signer == address(0)) {\n            return (address(0), RecoverError.InvalidSignature, bytes32(0));\n        }\n\n        return (signer, RecoverError.NoError, bytes32(0));\n    }\n\n    function recover(bytes32 hash, uint8 v, bytes32 r, bytes32 s) internal pure returns (address) {\n        (address recovered, RecoverError error, bytes32 errorArg) = tryRecover(hash, v, r, s);\n        _throwError(error, errorArg);\n        return recovered;\n    }\n}\n",
+   "label": "safe",
+   "true_tag": "-",
+   "notes": "OpenZeppelin v5 ECDSA. Hard negative: raw ecrecover + inline assembly signature parsing is the single most over-flagged pattern in LLM audits, but the s-malleability bound and the zero-address check are both present. Comments stripped so the malleability rationale is not spelled out."
+  }
+ ]
+}
