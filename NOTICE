@@ -1,0 +1,52 @@
+Bastet-CC
+Copyright 2026 AIS3 2026 Team 011
+
+This product includes software developed by OneSavie Lab
+(https://github.com/OneSavieLabs/Bastet), Copyright 2025-present OneSavie Lab,
+licensed under the Apache License, Version 2.0.
+
+-------------------------------------------------------------------------------
+Derived material and where it lives
+-------------------------------------------------------------------------------
+
+bastet-cc/detectors/*.md
+    The 56 detection prompts in this directory are OneSavie Lab's work, extracted
+    verbatim from the `chainLlm` nodes of the nine n8n workflow JSON files in
+    upstream Bastet's `n8n_workflow/`. Prompt text is unmodified. The YAML front
+    matter above each prompt (id, name, source_workflow, tags, routing_hints,
+    prompt_chars) is ours and is not part of the upstream work.
+    Extraction is reproducible: bastet-cc/scripts/extract_detectors.py
+
+bastet_cc/evaluate.py :: upstream_sample, upstream_score
+    A deliberate behavioural reimplementation of upstream's
+    cli/commands/evaluate/eval.py, including its defects, so that predictions can
+    be scored under upstream's own rules. Written from the published source, not
+    copied from it. Upstream line numbers are cited in comments to make the
+    correspondence auditable.
+
+bastet_cc/plan.py :: _plan_broadcast
+    A behavioural reimplementation of upstream's cli/commands/scan/scan.py file
+    enumeration, serving as the experimental control arm. Two deviations are
+    documented in the module docstring.
+
+-------------------------------------------------------------------------------
+Not covered by this licence
+-------------------------------------------------------------------------------
+
+Corpus and labels
+    The smart-contract corpus and the labelled findings come from the Bastet
+    Kaggle competition (`onesavie-bastet`, 1 April - 1 July 2026), labelled by
+    DeFiHackLabs. They are NOT redistributed here: the competition's terms for
+    redistributing labelled findings are not stated anywhere we could find, so
+    the CSVs and the extracted repositories stay local. bastet-cc/README.md
+    documents how to fetch them from the original source.
+
+"Tag Definitions.md"
+    The tag taxonomy is OneSavie Lab's, reproduced from their public Notion page
+    (linked at the top of the file) because the synthesis pipeline reads it as
+    input. It is documentation, not code, and is included under the same
+    attribution as the detectors.
+
+bastet-cc/detectors_synth/*.md
+    Ours. Induced from the labelled corpus by bastet_cc/synth/; no upstream
+    prompt text is reused.

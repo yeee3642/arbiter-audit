@@ -1,0 +1,88 @@
+{
+  "shared_repos": [
+    "e5f8a519b24f"
+  ],
+  "repos_only_in_a": [],
+  "repos_only_in_b": [],
+  "comparable": true,
+  "sites": {
+    "both": 24,
+    "only_a": 4,
+    "only_b": 13,
+    "jaccard": 0.5853658536585366
+  },
+  "tags": {
+    "both": [
+      "Access Control",
+      "Arithmetic",
+      "DoS",
+      "ERC721",
+      "Input Validation",
+      "Logic Error",
+      "call / delegatecall"
+    ],
+    "only_a": [
+      "Reentrancy"
+    ],
+    "only_b": [
+      "ERC20"
+    ]
+  },
+  "arm_a": {
+    "run": "d1_routed_dev1",
+    "n_findings": 55,
+    "n_sites": 28,
+    "by_file_class": {
+      "core": 55
+    },
+    "n_unlocalisable": 0,
+    "localisable_share": 1.0,
+    "offtarget_share": 0.0,
+    "redundancy": 1.9642857142857142,
+    "n_detectors": 12,
+    "n_tags": 8,
+    "tags": [
+      "Access Control",
+      "Arithmetic",
+      "DoS",
+      "ERC721",
+      "Input Validation",
+      "Logic Error",
+      "Reentrancy",
+      "call / delegatecall"
+    ],
+    "repos": [
+      "e5f8a519b24f"
+    ],
+    "cost": {}
+  },
+  "arm_b": {
+    "run": "d1_broadcast_dev1",
+    "n_findings": 90,
+    "n_sites": 37,
+    "by_file_class": {
+      "core": 78,
+      "nonprod": 12
+    },
+    "n_unlocalisable": 90,
+    "localisable_share": 0.0,
+    "offtarget_share": 0.13333333333333333,
+    "redundancy": 2.4324324324324325,
+    "n_detectors": 17,
+    "n_tags": 8,
+    "tags": [
+      "Access Control",
+      "Arithmetic",
+      "DoS",
+      "ERC20",
+      "ERC721",
+      "Input Validation",
+      "Logic Error",
+      "call / delegatecall"
+    ],
+    "repos": [
+      "e5f8a519b24f"
+    ],
+    "cost": {}
+  }
+}

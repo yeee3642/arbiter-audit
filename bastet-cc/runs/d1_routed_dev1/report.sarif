@@ -1,0 +1,2168 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Bastet-CC",
+          "informationUri": "https://github.com/ericchen913900/Aislop3",
+          "rules": [
+            {
+              "id": "4naly3er__4naly3er_gas_addplusequal",
+              "name": "4naly3er.4naly3er gas addplusequal",
+              "shortDescription": {
+                "text": "Logic Error"
+              },
+              "fullDescription": {
+                "text": "---\nid: 4naly3er__4naly3er_gas_addplusequal\nname: \"4naly3er-GAS-addPlusEqual\"\nsource_workflow: 4naly3er\nupstream_model: gpt-4o-mini\ntags: [\"Logic error\", \"Arithmetic\", \"Access Control\", \"ERC20\", \"ERC721\", \"Oracle\", \"call / delegatecall\", \"Flashloan\"]\nrouting_hints: []\nprompt_chars: 285\n---\n\n# 4naly3er-GAS-addPlusEqual\n\n## Detection prompt\n\nYou are a smart contract auditor, you should strictly follow the following steps to detect **using `+=` operator ** in the given contract code.\n\n   - use code and regex to find all `+=` operators in the smart contract\n   - If no matches are found, output exactly a empty array ```[]```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n            \"type\": \"string\",\n            \"description\": \"Function name where the vulnerability is found\"\n          },\n          \"description\": {\n            \"type\": \"string\",\n            \"description\": \"Detailed description of the vulnerability\"\n          }\n        },\n        \"required\": [\"function_name\", \"description\"]\n      },\n      \"code_snippet\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        },\n        \"description\": \"Code snippet showing the vulnerability\",\n        \"default\": []\n      },\n      \"recommendation\": {\n        \"type\": \"string\",\n        \"description\": \"Recommendation to fix the vulnerability\"\n      }\n    },\n    \"required\": [\"summary\", \"severity\", \"vulnerability_details\", \"code_snippet\", \"recommendation\"]\n  },\n  \"additionalProperties\": false\n}\n```\n"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "Logic Error"
+                ]
+              }
+            },
+            {
+              "id": "4naly3er__4naly3er_m_blocknumberl",
+              "name": "4naly3er.4naly3er m blocknumberl",
+              "shortDescription": {
+                "text": "Arithmetic"
+              },
+              "fullDescription": {
+                "text": "---\nid: 4naly3er__4naly3er_m_blocknumberl\nname: \"4naly3er-M-blockNumberL\"\nsource_workflow: 4naly3er\nupstream_model: gpt-4o-mini\ntags: [\"Arithmetic\"]\nrouting_hints: [\"address\", \"arbBlockNumber\", \"block.number\", \"vote\"]\nprompt_chars: 3901\n---\n\n# 4naly3er-M-blockNumberL\n\n## Detection prompt\n\nYou are a smart contract auditor, you should strictly follow the following steps to detect the usage of `block.number` in different Layer2 (L2) environments, particularly focusing on the differences between Optimism and Arbitrum, as well as OpenZeppelin's modifications.\n\n### **Detecting `block.number` Issues on Layer 2 (L2) Networks**\n\n`block.number` behaves differently on various Layer 2 (L2) networks. On Optimism, it represents the L2 block number, while on Arbitrum, it refers to the L1 block number. This inconsistency can cause issues, especially when using block numbers for timing, such as in voting mechanisms or governance proposals. \n\nTo avoid these problems:\n- On **Arbitrum**, you need to use `ArbSys(address(100)).arbBlockNumber()`.\n- **OpenZeppelin Contracts** introduced a fix in version 4.9 to avoid using block numbers for timing in their governance system, instead implementing a clock.\n\n#### **Detection Process**\n\n1. **Pattern Detection Using Regex**:\n   - Use code and the following regex to search the contract code for instances of `block.number`:\n     ```js\n     /block\\.number/gi\n     ```\n   - If no matches are found, output exactly: **\"There\u2019s no such issue.\"**\n   - If matches are found, proceed to step 2 for a manual review.\n\n2. **Manual Review**:\n   - If `block.number` is found, determine if the contract is running on an L2 network like Optimism or Arbitrum.\n   - Review whether the contract uses `block.number` for timing or voting, which could lead to inconsistencies due to the differences in L2 block numbers.\n   - Ensure that the correct approach is used based on the network, such as `arbBlockNumber()` for Arbitrum, or implementing a **clock** for L2 as suggested by OpenZeppelin.\n\n#### **Example Issue:**\n\n##### **Example 1: Incorrect Use of `block.number` for Timing on L2**\n\n```solidity\nfunction vote(uint256 proposalId) public {\n    require(block.number >= proposals[proposalId].startBlock, \"Voting hasn't started yet\");\n    require(block.number <= proposals[proposalId].endBlock, \"Voting has ended\");\n    // Vote logic\n}\n```\n\n**Explanation:**\n- This contract uses `block.number` for timing-based logic. However, `block.number` behaves differently on L2 networks like Optimism and Arbitrum. This can lead to inconsistencies across chains, especially if this is used for cross-chain voting or timing-related logic.\n\n##### **Example 2: Correct Use with `arbBlockNumber()` for Arbitrum**\n\n```solidity\nfunction vote(uint256 proposalId) public {\n    require(ArbSys(address(100)).arbBlockNumber() >= proposals[proposalId].startBlock, \"Voting hasn't started yet\");\n    require(ArbSys(address(100)).arbBlockNumber() <= proposals[proposalId].endBlock, \"Voting has ended\");\n    // Vote logic\n}\n```\n\n**Explanation:**\n- On Arbitrum, the correct function `arbBlockNumber()` must be used instead of `block.number`, ensuring consistent timing logic across different Layer 2 environments.\n\n#### **Task to Perform**\n\n1. **Scan through smart contracts** for any usage of `block.number` using the regex.\n2. **Manually verify** if the use of `block.number` is in the context of **timing**, **voting**, or other related operations.\n3. Ensure that contracts either:\n   - Use `arbBlockNumber()` for Arbitrum or another L2-specific solution.\n   - Implement a **clock** for timing in L2 networks, as recommended by OpenZeppelin Contracts version 4.9.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"Vulnerability Details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerabilit"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "Arithmetic"
+                ]
+              }
+            },
+            {
+              "id": "4naly3er__4naly3er_m_centralizationrisk",
+              "name": "4naly3er.4naly3er m centralizationrisk",
+              "shortDescription": {
+                "text": "Access Control"
+              },
+              "fullDescription": {
+                "text": "---\nid: 4naly3er__4naly3er_m_centralizationrisk\nname: \"4naly3er-M-centralizationRisk\"\nsource_workflow: 4naly3er\nupstream_model: gpt-4o-mini\ntags: [\"Access Control\"]\nrouting_hints: [\"address\", \"addresses\", \"isAdmin\", \"msg.sender\", \"onlyAdmins\", \"onlyOwner\", \"onlyRole\", \"payable\", \"quorumReached\", \"roles\", \"transfer\", \"users\", \"withdrawFunds\"]\nprompt_chars: 5745\n---\n\n# 4naly3er-M-centralizationRisk\n\n## Detection prompt\n\nYou are a smart contract auditor, you should strictly follow the following steps to find potential **centralization risks** related to **privileged access control** in smart contracts, these risks arise when there are owners or roles with the authority to perform administrative tasks, potentially allowing malicious updates or fund drainage if the trusted entity is compromised.\n\n### **Detecting Centralization Risk Due to Trusted Owners and Roles**\n\nIn many smart contracts, certain functions are restricted to privileged users (e.g., an owner or admin). This centralization of control can lead to serious risks if the privileged account is compromised or used maliciously. For example, a contract that relies on a single owner to withdraw funds or change critical parameters introduces a centralization risk. It is essential to detect such patterns and ensure that ownership and roles are distributed or safeguarded to prevent malicious behavior.\n\n#### **Detection Process**\n\n1. **Pattern Detection Using Regex**\n\n   - Scan the smart contract code for instances of ownership or role-based access control mechanisms.\n   - The following regex pattern identifies keywords such as `onlyOwner`, `onlyRole()`, `Ownable`, `AccessControl`, and other role-based modifiers:\n     ```js\n     /( onlyOwner )|( onlyRole\\()|( requiresAuth )|(Owned)!?([(, ])|(Ownable)!?([(, ])|(Ownable2Step)!?([(, ])|(AccessControl)!?([(, ])|(AccessControlCrossChain)!?([(, ])|(AccessControlEnumerable)!?([(, ])|(Auth)!?([(, ])|(RolesAuthority)!?([(, ])|(MultiRolesAuthority)!?([(, ])/g\n     ```\n\n2. **Automated Pattern Matching**\n   - write code to run the regex against the smart contract files to detect all instances where ownership or role-based access control mechanisms are used.\n   - **Output**: Collect all occurrences where the regex pattern matches.\n\n3. **Manual Rule-Based Review**\n   - After detecting these keywords, manually review the code to identify **privileged access** to critical functions. Check for functions like `withdrawFunds`, `changeOwner`, or any admin-level actions.\n   - Ensure that the contract does not overly centralize control in the hands of a single address (e.g., the owner) or a small set of roles.\n   - **Look for safeguards**: Check if there are any protections in place such as **multi-signature wallets**, **governance mechanisms**, or **quorum requirements** to distribute control and reduce centralization.\n\n4. **Identify Centralization Risk**\n   - Centralization risk is identified when a contract allows one or a few trusted addresses (e.g., `onlyOwner`) to perform critical actions without safeguards in place to prevent abuse.\n   - **Example Vulnerabilities**:\n     - Single-owner contracts with unrestricted power to withdraw funds or change parameters.\n     - Role-based contracts with highly privileged roles (e.g., admin) and no checks or multi-sig approval.\n\n#### **Example Issue**\n\n##### **Example 1: Centralized Control with `onlyOwner`**\n\n```solidity\ncontract CentralizedControl {\n    address public owner;\n\n    modifier onlyOwner() {\n        require(msg.sender == owner, \"Not the owner\");\n        _;\n    }\n\n    function withdrawFunds(address recipient, uint256 amount) public onlyOwner {\n        payable(recipient).transfer(amount);\n    }\n}\n```\n\n**Explanation**:\n- This contract uses the `onlyOwner` modifier to restrict the `withdrawFunds` function to the owner. The **centralization risk** is that the owner has exclusive control over fund withdrawals, and if this account is compromised, an attacker can drain funds.\n\n##### **Example 2: Improve"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "Access Control"
+                ]
+              }
+            },
+            {
+              "id": "4naly3er__4naly3er_m_nftredefinesmint",
+              "name": "4naly3er.4naly3er m nftredefinesmint",
+              "shortDescription": {
+                "text": "ERC721"
+              },
+              "fullDescription": {
+                "text": "---\nid: 4naly3er__4naly3er_m_nftredefinesmint\nname: \"4naly3er-M-NFTRedefinesMint\"\nsource_workflow: 4naly3er\nupstream_model: gpt-4o-mini\ntags: [\"ERC721\"]\nrouting_hints: [\"address\"]\nprompt_chars: 2105\n---\n\n# 4naly3er-M-NFTRedefinesMint\n\n## Detection prompt\n\nYou are a smart contract auditor, you should strictly follow the following steps to detect **Fee-On-Transfer** Accounting issue in the given contract code.\n\n###  Detecting Fee-On-Transfer Accounting Issues in Smart Contracts\n\nCertain ERC20 tokens implement a fee-on-transfer mechanism, deducting a portion of the transferred amount as a fee. Contracts assuming that the transferred amount equals the requested amount may miscalculate balances, leading to financial losses or incorrect contract logic. To prevent these issues, contracts must:\n\n- Check account balances before and after transfers instead of relying solely on function parameters.\n- Explicitly document that fee-on-transfer tokens are unsupported if they cannot be handled properly.\n\n### Detection Process\n\n1. **Match the AST Detector**\n   - Analyze the smart contract\u2019s AST (Abstract Syntax Tree) to detect:\n     - Calls to `transferFrom` and `safeTransferFrom`.\n     - ERC20 token casts and variable declarations related to transfers.\n     - Cases where `address(this)` is used within these functions.\n   - If no matches are found, output exactly: **\"There\u2019s no such issue.\"**\n   - If a match is found, proceed to manual rule-based detection.\n\n2. **Manual Rule-Based Detection**\n   - Verify whether the contract computes the received amount by checking balance differences before and after transfers.\n   - Identify whether the contract incorrectly assumes the full transfer amount is received without accounting for fees.\n   - Check if the contract explicitly states that fee-on-transfer tokens are unsupported.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"Vulnerability Details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n            \"type\": \"string\",\n            \"description\": \"Function name where the vulnerability is found\"\n          },\n          \"description\": {\n            \"type\": \"string\",\n            \"description\": \"Detailed description of the vulnerability\"\n          }\n        },\n        \"required\": [\"function_name\", \"description\"]\n      },\n      \"code_snippet\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        },\n        \"description\": \"Code snippet showing the vulnerability\",\n        \"default\": []\n      },\n      \"recommendation\": {\n        \"type\": \"string\",\n        \"description\": \"Recommendation to fix the vulnerability\"\n      }\n    },\n    \"required\": [\"summary\", \"severity\", \"vulnerability_details\", \"code_snippet\", \"recommendation\"]\n  },\n  \"additionalProperties\": false\n}\n```\n"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "ERC721"
+                ]
+              }
+            },
+            {
+              "id": "access_control__lack_of_access_control",
+              "name": "access control.lack of access control",
+              "shortDescription": {
+                "text": "Access Control"
+              },
+              "fullDescription": {
+                "text": "---\nid: access_control__lack_of_access_control\nname: \"Lack of access control\"\nsource_workflow: access_control\nupstream_model: gpt-4o-mini\ntags: [\"Access Control\"]\nrouting_hints: [\"address\", \"constructor\", \"msg.sender\", \"onlyOwner\", \"owner\", \"permissions\", \"receive\", \"setOwner\", \"transferOwnership\", \"withdraw\"]\nprompt_chars: 3618\n---\n\n# Lack of access control\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Lack of access control**\nAccess control means \"who can do this\", which is very important in the smart contracts.\nAccess controls on a contract may affect which roles can mint tokens, vote on proposals, freeze transfers, and many other critical functions.\nIt is crucial to correctly implement permission control to prevent unauthorized actors from performing operations.\n\nIn OpenZeppelin, there are two main ways to implement access control: Ownable and Role-Based Access Control.\nOwnable gives control to the contract owner and is suitable for simpler applications, but when multiple roles or permission levels are involved, RBAC provides more granular control, allowing different roles to perform specific functions.\n\n*Ownable\nOpenZeppelin's Ownable.sol provides a basic access control mode. A contract has an owner who has full control over the contract. This pattern typically restricts certain functions to be executed only by the owner of the contract. The Ownable.sol contract provides some basic functionality, such as transferring ownership permissions (transferOwnership()) and checking the current owner (owner()).\n\n*Role-based access Control (RBAC)\nOpenZeppelin's AccessControl.sol provides role-based access control. It allows contracts to assign different roles to different addresses, thereby controlling access to certain functions based on those roles. This model is more flexible, allowing different roles to be set for different functions and more detailed design control of the execution permissions of various functions in the contract.\n\nKey functions or parameters in the contract are not properly subject to permission control, allowing unauthorized users to arbitrarily operate and modify them, resulting in security risks.\n\n### Examples\n\n#### Example\n\nThe contract contains a function that can modify the owner and withdraw funds.\n\n```solidity\npragma solidity ^0.8.0;\n\ncontract example {\n    address public owner;\n    constructor() {\n        owner = msg.sender;\n    }\n\n    function setOwner(address _newOwner) public {\n        owner = _newOwner;\n    }\n    receive() external payable {}\n   function withdraw() public {\n        require(msg.sender == owner, \"Not authorized\");\n        (bool success, ) = owner.call{value: address(this).balance}(\"\");\n        require(success, \"Transfer failed\");\n    }\n}\n```\n\n**Suggestion**\n\nsetOwner() lacks proper access control, and anyone can call this function to change the owner of the contract. An attacker can set his own address as the owner of the contract through setOwner(), thereby bypassing `require(msg.sender == owner)` or `onlyOwner` modifier the check in withdraw(), and then call withdraw() to withdraw all funds in the contract.\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n``"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "Access Control"
+                ]
+              }
+            },
+            {
+              "id": "access_control__lack_of_two_step_process_for_contract_ownership_changes",
+              "name": "access control.lack of two step process for contract ownership changes",
+              "shortDescription": {
+                "text": "Access Control"
+              },
+              "fullDescription": {
+                "text": "---\nid: access_control__lack_of_two_step_process_for_contract_ownership_changes\nname: \"Lack of two-step process for contract ownership changes\"\nsource_workflow: access_control\nupstream_model: gpt-4o-mini\ntags: [\"Access Control\"]\nrouting_hints: [\"address\", \"changeAddress\", \"constructor\", \"msg.sender\", \"onlyCurrentAddress\", \"onlyOwner\", \"owner\", \"permissions\", \"transferOwnership\"]\nprompt_chars: 3669\n---\n\n# Lack of two-step process for contract ownership changes\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Lack of two-step process for contract ownership changes**\nAccess control means \"who can do this\", which is very important in the smart contracts.\nAccess controls on a contract may affect which roles can mint tokens, vote on proposals, freeze transfers, and many other critical functions.\nIt is crucial to correctly implement permission control to prevent unauthorized actors from performing operations.\n\nIn OpenZeppelin, there are two main ways to implement access control: Ownable and Role-Based Access Control.\nOwnable gives control to the contract owner and is suitable for simpler applications, but when multiple roles or permission levels are involved, RBAC provides more granular control, allowing different roles to perform specific functions.\n\n*Ownable\nOpenZeppelin's Ownable.sol provides a basic access control mode. A contract has an owner who has full control over the contract. This pattern typically restricts certain functions to be executed only by the owner of the contract. The Ownable.sol contract provides some basic functionality, such as transferring ownership permissions (transferOwnership()) and checking the current owner (owner()).\n\n*Role-based access Control (RBAC)\nOpenZeppelin's AccessControl.sol provides role-based access control. It allows contracts to assign different roles to different addresses, thereby controlling access to certain functions based on those roles. This model is more flexible, allowing different roles to be set for different functions and more detailed design control of the execution permissions of various functions in the contract.\n\n### Examples\n\n#### Example\n\nThere is a function in the contract that can change the current address.\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract example {\n    address public currentAddress;\n\n    event AddressChanged(address indexed newAddress);\n\n    modifier onlyCurrentAddress() {\n        require(msg.sender == currentAddress, \"Not authorized\");\n        _;\n    }\n\n    constructor(address initialAddress) {\n        currentAddress = initialAddress;\n    }\n\n\n    function changeAddress(address _newAddress) public onlyCurrentAddress {\n        require(_newAddress != address(0), \"Invalid address\");\n        currentAddress = _newAddress;\n        emit AddressChanged(_newAddress);\n    }\n}\n```\n\n**Suggestion**\n\nThe risk of a one-time ownership change is high because any mistakes cannot be recovered from. If an incorrect address is used when changing ownership, such as an address with a lost private key, an incorrect/non-whitelisted address, etc., all operations requiring owner permissions will be unable to be performed.\nCritical functions protected by onlyOwner() will not be usable because correct ownership cannot be verified.\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_sni"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "Access Control"
+                ]
+              }
+            },
+            {
+              "id": "denial_of_service__refund_failed",
+              "name": "denial of service.refund failed",
+              "shortDescription": {
+                "text": "DoS"
+              },
+              "fullDescription": {
+                "text": "---\nid: denial_of_service__refund_failed\nname: \"Refund failed\"\nsource_workflow: denial_of_service\nupstream_model: gpt-4o-mini\ntags: [\"DoS\"]\nrouting_hints: [\"address\", \"safeTransfer\", \"tokens\", \"withdraw\"]\nprompt_chars: 2799\n---\n\n# Refund failed\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Refund failed**\nThis type of vulnerability often occurs when a smart contract attempts to refund funds to a previous user/contract, but the recipient cannot accept the refund, causing the contract's functionality to be permanently blocked.\n\n### Examples\n\n#### Example\n\nThe contract has a withdrawal function that distributes the specified funds proportionally to multiple recipients.\n\n```solidity\nfunction withdraw(uint256 amount, address[] memory recipients) external {\n  require(recipients.length > 0, \"No recipients provided\");\n  require(recipients.length <= 3, \"Too many recipients\");\n\n  uint256 recipientAmount = amount / recipients.length;\n  require(recipientAmount > 0, \"Amount too small to split\");\n\n  for (uint256 i = 0; i < recipients.length; ++i) {\n    require(recipients[i] != address(0), \"Invalid recipient address\");\n    token.safeTransfer(recipients[i], recipientAmount);\n  }\n}\n```\n\n*Special ERC20 tokens\nIt is quite common for tokens to implement blacklists, and some tokens (such as USDC, USDT) have address blacklists controlled by contract-level administrators. If an address is blacklisted, transfers to or from that address will be prohibited.\nA malicious or compromised token owner can trap funds in a contract by adding the contract address to a blacklist.\n\n*ERC777 tokens compatible with ERC20\nERC777 is compatible with ERC20. ERC777 implements tokensReceived through the ERC1820 registry.\nA malicious user could call tokensReceived and reject the token transfer, causing the transaction to fail and leaving the funds stranded.\n\nSince safeTransfer is used in the loop, if a recipient in recipients is blacklisted, or a user using ERC777 as a recipient implements revert in tokensReceived, the withdrawal process will be blocked. Even if other recipients are normal and legal users, they will not be able to receive the money they deserve.\n\n**Suggestion**\n\nn/a\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n            \"type\": \"string\",\n            \"description\": \"Function name where the vulnerability is found\"\n          },\n          \"description\": {\n            \"type\": \"string\",\n            \"description\": \"Detailed description of the vulnerability\"\n          }\n        },\n        \"required\": [\"function_name\", \"description\"]\n      },\n      \"code_snippet\": {\n        \"type\": \"array\",\n     "
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "DoS"
+                ]
+              }
+            },
+            {
+              "id": "owasp2025__sc032025_logic_errors",
+              "name": "owasp2025.sc032025 logic errors",
+              "shortDescription": {
+                "text": "Logic Error"
+              },
+              "fullDescription": {
+                "text": "---\nid: owasp2025__sc032025_logic_errors\nname: \"SC03:2025 - Logic Errors\"\nsource_workflow: owasp2025\nupstream_model: gpt-4o-mini\ntags: [\"Logic error\"]\nrouting_hints: [\"deposit\", \"mapping\", \"mintReward\", \"msg.sender\", \"payable\", \"transfer\", \"withdraw\"]\nprompt_chars: 4642\n---\n\n# SC03:2025 - Logic Errors\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Logic Errors**\nLogic errors, also known as business logic vulnerabilities, are subtle flaws in smart contracts. They occur when the contract\u2019s code does not match its intended behavior. These errors can manifest in various forms, such as faulty math in reward distribution, improper token minting mechanisms, or incorrect calculations in lending and borrowing logic. Such vulnerabilities are elusive, hiding within the contract\u2019s logic and waiting to be discovered.\n\nExamples of Logic Errors:\n*Faulty Reward Distribution: Miscalculations in dividing rewards among stakeholders, leading to unfair allocations.\n*Improper Token Minting: Unchecked or erroneous minting logic that allows infinite or unintended token generation.\n*Lending Pool Imbalances: Incorrect tracking of deposits and withdrawals, causing inconsistencies in pool reserves.\n\n### Examples\n\n#### Incorrect Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Solidity_LogicErrors {\n    mapping(address => uint256) public userBalances;\n    uint256 public totalLendingPool;\n\n    function deposit() public payable {\n        userBalances[msg.sender] += msg.value;\n        totalLendingPool += msg.value;\n    }\n\n    function withdraw(uint256 amount) public {\n        require(userBalances[msg.sender] >= amount, \"Insufficient balance\");\n\n        // Faulty calculation: Incorrectly reducing the user's balance without updating the total lending pool\n        userBalances[msg.sender] -= amount;\n\n        // This should update the total lending pool, but it's omitted here.\n\n        payable(msg.sender).transfer(amount);\n    }\n\n    function mintReward(address to, uint256 rewardAmount) public {\n        // Faulty minting logic: Reward amount not validated\n        userBalances[to] += rewardAmount;\n    }\n}\n```\n\nImpact:\n*Logic errors can cause a smart contract to behave unexpectedly or even become entirely unusable. These errors can lead to:\n**Loss of Funds: Incorrect reward distribution or pool imbalances draining contract funds.\n**Excessive Token Minting: Inflating token supply, undermining trust and value.\n**Operational Failures: Contracts failing to perform their intended functions.\n*These consequences can result in significant financial and operational losses for users and stakeholders.\n\n#### Correct Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Solidity_LogicErrors {\n    mapping(address => uint256) public userBalances;\n    uint256 public totalLendingPool;\n\n    function deposit() public payable {\n        userBalances[msg.sender] += msg.value;\n        totalLendingPool += msg.value;\n    }\n\n    function withdraw(uint256 amount) public {\n        require(userBalances[msg.sender] >= amount, \"Insufficient balance\");\n\n        // Correctly reducing the user's balance and updating the total lending pool\n        userBalances[msg.sender] -= amount;\n        totalLendingPool -= amount;\n\n        payable(msg.sender).transfer(amount);\n    }\n\n    function mintReward(address to, uint256 rewardAmount) public {\n        require(rewardAmount > 0, \"Reward amount must be positive\");\n\n        // Safeguarded minting logic\n        userBalances[to] += rewardAmount;\n    }\n}\n```\n\n\n**Suggestion**\n\n*Always validate your code by writing comprehensive test cases that cover all possible business logic scenarios.\n*Conduct thorough code reviews and audits to identify and fix potential logic errors.\nDocument the intended behavior of each fu"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "Logic Error"
+                ]
+              }
+            },
+            {
+              "id": "owasp2025__sc042025_lack_of_input_validation",
+              "name": "owasp2025.sc042025 lack of input validation",
+              "shortDescription": {
+                "text": "Input Validation"
+              },
+              "fullDescription": {
+                "text": "---\nid: owasp2025__sc042025_lack_of_input_validation\nname: \"SC04:2025 - Lack of Input Validation\"\nsource_workflow: owasp2025\nupstream_model: gpt-4o-mini\ntags: [\"Input Validation\"]\nrouting_hints: [\"address\", \"constructor\", \"mapping\", \"msg.sender\", \"onlyOwner\", \"setBalance\"]\nprompt_chars: 3090\n---\n\n# SC04:2025 - Lack of Input Validation\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Lack of Input Validation**\nInput validation ensures that a smart contract processes only valid and expected data. When contracts fail to validate incoming inputs, they inadvertently expose themselves to security risks such as logic manipulation, unauthorized access, and unexpected behavior.For example, if a contract assumes user inputs are always valid without verification, attackers can exploit this trust to introduce malicious data. This lack of input validation compromises the security and reliability of the smart contract.\n\n### Examples\n\n#### Incorrect Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Solidity_LackOfInputValidation {\n    mapping(address => uint256) public balances;\n\n    function setBalance(address user, uint256 amount) public {\n        // The function allows anyone to set arbitrary balances for any user without validation.\n        balances[user] = amount;\n    }\n}\n```\n\nImpact:\n*Attackers can manipulate inputs to drain funds, steal tokens, or cause other financial harm.\n*Improper inputs can corrupt state variables, leading to unreliable and insecure contract behavior.\n*Attackers may exploit the contract to perform unauthorized transactions or operations, impacting both the user and the broader system.\n\n#### Correct Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract LackOfInputValidation {\n    mapping(address => uint256) public balances;\n    address public owner;\n\n    constructor() {\n        owner = msg.sender;\n    }\n\n    modifier onlyOwner() {\n        require(msg.sender == owner, \"Caller is not authorized\");\n        _;\n    }\n\n    function setBalance(address user, uint256 amount) public onlyOwner {\n        require(user != address(0), \"Invalid address\");\n        balances[user] = amount;\n    }\n}\n```\n\n\n**Suggestion**\n\n*Ensure that inputs conform to the expected type.\n*Validate that inputs fall within acceptable boundaries.\n*Ensure that only authorized entities can invoke specific functions.\n*Validate the structure of inputs, such as address formats or string lengths.\n*Always halt execution and provide clear error messages when inputs fail validation.\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n   "
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "Input Validation"
+                ]
+              }
+            },
+            {
+              "id": "owasp2025__sc052025_reentrancy",
+              "name": "owasp2025.sc052025 reentrancy",
+              "shortDescription": {
+                "text": "Reentrancy"
+              },
+              "fullDescription": {
+                "text": "---\nid: owasp2025__sc052025_reentrancy\nname: \"SC05:2025 - Reentrancy\"\nsource_workflow: owasp2025\nupstream_model: gpt-4o-mini\ntags: [\"Reentrancy\"]\nrouting_hints: [\"deposit\", \"mapping\", \"msg.sender\", \"withdraw\"]\nprompt_chars: 3287\n---\n\n# SC05:2025 - Reentrancy\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Reentrancy**\nA reentrancy attack exploits the vulnerability in smart contracts when a function makes an external call to another contract before updating its own state. This allows the external contract, possibly malicious, to reenter the original function and repeat certain actions, like withdrawals, using the same state. Through such attacks, an attacker can possibly drain all the funds from a contract.\n\n### Examples\n\n#### Incorrect Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Solidity_Reentrancy {\n    mapping(address => uint) public balances;\n\n    function deposit() external payable {\n        balances[msg.sender] += msg.value;\n    }\n\n    function withdraw() external {\n        uint amount = balances[msg.sender];\n        require(amount > 0, \"Insufficient balance\");\n\n        // Vulnerability: Ether is sent before updating the user's balance, allowing reentrancy.\n        (bool success, ) = msg.sender.call{value: amount}(\"\");\n        require(success, \"Transfer failed\");\n\n        // Update balance after sending Ether\n        balances[msg.sender] = 0;\n    }\n}\n```\n\nImpact:\n*The most immediate and impactful consequence is the draining of funds. Attackers exploit vulnerabilities to withdraw more money than they are entitled to, potentially emptying the contract\u2019s balance.\n*An attacker can trigger unauthorized function calls. This can lead to unintended actions being executed within the contract or related systems.\n\n#### Correct Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Solidity_Reentrancy {\n    mapping(address => uint) public balances;\n\n    function deposit() external payable {\n        balances[msg.sender] += msg.value;\n    }\n\n    function withdraw() external {\n        uint amount = balances[msg.sender];\n        require(amount > 0, \"Insufficient balance\");\n\n        // Fix: Update the user's balance before sending Ether\n        balances[msg.sender] = 0;\n\n        // Then send Ether\n        (bool success, ) = msg.sender.call{value: amount}(\"\");\n        require(success, \"Transfer failed\");\n    }\n}\n```\n\n\n**Suggestion**\n\n*Always ensure that every state change happens before calling external contracts, i.e., update balances or code internally before calling external code.\n*Use function modifiers that prevent reentrancy, like Open Zepplin\u2019s Re-entrancy Guard.\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n     "
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "Reentrancy"
+                ]
+              }
+            },
+            {
+              "id": "owasp2025__sc062025_unchecked_external_calls",
+              "name": "owasp2025.sc062025 unchecked external calls",
+              "shortDescription": {
+                "text": "call / delegatecall"
+              },
+              "fullDescription": {
+                "text": "---\nid: owasp2025__sc062025_unchecked_external_calls\nname: \"SC06:2025 - Unchecked External Calls\"\nsource_workflow: owasp2025\nupstream_model: gpt-4o-mini\ntags: [\"call / delegatecall\"]\nrouting_hints: [\"call\", \"constructor\", \"delegatecall\", \"forward\", \"msg.sender\", \"send\", \"succeeds\", \"transfer\"]\nprompt_chars: 2964\n---\n\n# SC06:2025 - Unchecked External Calls\n\n## Detection prompt\n\nYou are a smart contract auditor. After reading the following vulnerability knowledge and understanding correct and incorrect examples, detect the problem in the contract code.\n\n### Vulnerability Knowledge\n\n**Unchecked External Calls**\nUnchecked external calls refer to a security flaw where a contract makes an external call to another contract or address without properly checking the outcome of that call. In Ethereum, when a contract calls another contract, the called contract can fail silently without throwing an exception. If the calling contract doesn\u2019t check the return value, it might incorrectly assume the call was successful, even if it wasn\u2019t. This can lead to inconsistencies in the contract state and vulnerabilities that attackers can exploit.\n\n### Examples\n\n#### Incorrect Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.4.24;\n\ncontract Solidity_UncheckedExternalCall {\n    address public owner;\n\n    constructor() public {\n        owner = msg.sender;\n    }\n\n    function forward(address callee, bytes _data) public {\n        require(callee.delegatecall(_data));\n    }\n}\n```\n\nImpact:\n*Unchecked external calls can result in failed transactions, causing the intended operations to not be completed successfully. This can lead to the loss of funds, as the contract may proceed under the false assumption that the transfer was successful. *Additionally, it can create an incorrect contract state, making the contract vulnerable to further exploits and inconsistencies in its logic.\n\n#### Correct Example\n\n```solidity\n// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0; \n\ncontract Solidity_UncheckedExternalCall {\n    address public owner;\n\n    constructor() {\n        owner = msg.sender;\n    }\n\n    function forward(address callee, bytes memory _data) public {\n        // Ensure that delegatecall succeeds\n        (bool success, ) = callee.delegatecall(_data);\n        require(success, \"Delegatecall failed\");  // Check the return value to handle failure\n    }\n}\n```\n\n\n**Suggestion**\n\n*Whenever possible, use transfer() instead of send(), as transfer() reverts the transaction if the external call fails.\n*Always check the return value of send() or call() functions to ensure proper handling if they return false.\n\n### Task to Perform\nFollow the examples above to examine each contract and check if it contains this issue. If you find any potential issues, record them using the format below.\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n            \"type\": \"string\",\n            \"description\": \"Function name where the vulnerability is found\"\n  "
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "call / delegatecall"
+                ]
+              }
+            },
+            {
+              "id": "owasp2025__sc102025_denial_of_service",
+              "name": "owasp2025.sc102025 denial of service",
+              "shortDescription": {
+                "text": "DoS"
+              },
+              "fullDescription": {
+                "text": "---\nid: owasp2025__sc102025_denial_of_service\nname: \"SC10:2025 - Denial Of Service\"\nsource_workflow: owasp2025\nupstream_model: gpt-4o-mini\ntags: [\"DoS\"]\nrouting_hints: []\nprompt_chars: 526\n---\n\n# SC10:2025 - Denial Of Service\n\n## Detection prompt\n\n### Output Format\n\nIf NO concrete vulnerability found, output a empty array\n\nOtherwise, follow the format below:\n\n```\n[\n    {\n        \"summary\":  \"summary of the vulnerabilities\",\n        \"vulnerability_details\": {\n            \"function_name\": \"Name of the function\",\n            \"description\": \"a brief description of the vulnerability\"\n        },\n    \n        \"code_snippet\": [\n            \"code snippet in the file\"\n        ],\n    \n        \"recommendation\": \"recommendation of how to fix the vulnerability\"\n    \n    }\n]\n```\n\n## Output schema\n\n```json\n{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"summary\": {\n        \"type\": \"string\",\n        \"description\": \"Brief summary of the vulnerability\"\n      },\n      \"severity\": {\n        \"type\": \"string\",\n        \"items\": {\n          \"type\": \"string\",\n          \"enum\": [\"high\", \"medium\", \"low\"]\n        },\n        \"description\": \"Severity level of the vulnerability\"\n      },\n      \"vulnerability_details\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"function_name\": {\n            \"type\": \"string\",\n            \"description\": \"Function name where the vulnerability is found\"\n          },\n          \"description\": {\n            \"type\": \"string\",\n            \"description\": \"Detailed description of the vulnerability\"\n          }\n        },\n        \"required\": [\"function_name\", \"description\"]\n      },\n      \"code_snippet\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        },\n        \"description\": \"Code snippet showing the vulnerability\",\n        \"default\": []\n      },\n      \"recommendation\": {\n        \"type\": \"string\",\n        \"description\": \"Recommendation to fix the vulnerability\"\n      }\n    },\n    \"required\": [\"summary\", \"severity\", \"vulnerability_details\", \"code_snippet\", \"recommendation\"]\n  },\n  \"additionalProperties\": false\n}\n```\n"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "DoS"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "owasp2025__sc042025_lack_of_input_validation",
+          "level": "warning",
+          "message": {
+            "text": "The setOwner function allows the current owner to set the new owner to address(0), which would permanently lock out administrative functions (authorize, deauthorize, setOwner) since onlyOwner modifier would then require msg.sender == address(0). This is a lack of input validation for the 'who' parameter.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 50,
+                  "endLine": 52
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "5996caa4d3ccbe17"
+          },
+          "properties": {
+            "tag": "Input Validation",
+            "subtag": "Lack of Input Validation",
+            "severity": "Medium",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "setOwner",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The contract uses a single owner model with no multi-signature or timelock protection. The owner can unilaterally transfer ownership to any address, creating a centralization risk where a compromised owner key could permanently transfer control to an attacker.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 139,
+                  "endLine": 143
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "be006bb72b78d16d"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Ownership Transfer",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "transferOwnership",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The owner can unilaterally change the blocklist contract address. A compromised owner could set a malicious blocklist that blocks all users or allows blocked addresses, effectively controlling who can interact with the protocol.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 146,
+                  "endLine": 150
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "a179a38857060baf"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Critical Parameter Change",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "updateBlocklist",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The owner can unilaterally change the penalty recipient address. A compromised owner could redirect all accumulated penalties (from users quitting locks early) to an attacker-controlled address.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 153,
+                  "endLine": 157
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "fa420102a4cc4c0d"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Fund Diversion",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "updatePenaltyRecipient",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The owner can unilaterally set maxPenalty to 0, effectively disabling the penalty mechanism for early withdrawals. This could be used maliciously to allow penalty-free exits or to manipulate the protocol's economic incentives.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 161,
+                  "endLine": 165
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "72f9104b37504035"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Protocol Parameter Change",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "unlock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "warning",
+          "message": {
+            "text": "The blocklist contract (controlled by owner via updateBlocklist) can force undelegation of any user's voting power. This allows centralized control over delegation relationships, which could be used to manipulate governance voting power.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 170,
+                  "endLine": 183
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "e9867346c123bd26"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Delegation Control",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "forceUndelegate",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "warning",
+          "message": {
+            "text": "The collectPenalty function has no access control - anyone can call it to transfer accumulated penalties to the penaltyRecipient. While this doesn't directly allow theft (funds go to penaltyRecipient), combined with updatePenaltyRecipient it enables the owner to drain penalties to any address.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 673,
+                  "endLine": 678
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "89a8cab6682ba84b"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Single Point of Failure - Fund Withdrawal",
+            "severity": "Medium",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "collectPenalty",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "access_control__lack_of_two_step_process_for_contract_ownership_changes",
+          "level": "error",
+          "message": {
+            "text": "The transferOwnership function implements a single-step ownership transfer without a two-step confirmation process. If ownership is accidentally transferred to an incorrect address (e.g., address with lost private key, zero address, or non-whitelisted address), all owner-only functions become permanently inaccessible, including critical functions like updateBlocklist, updatePenaltyRecipient, unlock, and forceUndelegate.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 139,
+                  "endLine": 143
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "aa2e49a92e87b542"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "ownership-transfer",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "transferOwnership",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "access_control__lack_of_access_control",
+          "level": "error",
+          "message": {
+            "text": "The forceUndelegate function only checks that msg.sender == blocklist, but the blocklist address can be changed by the owner via updateBlocklist. If the owner sets blocklist to a malicious address, that address can call forceUndelegate to forcibly undelegate any user's locked tokens, breaking delegation integrity.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 170,
+                  "endLine": 183
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "1902317ea640c9cb"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "Lack of access control",
+            "severity": "High",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "forceUndelegate",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc102025_denial_of_service",
+          "level": "warning",
+          "message": {
+            "text": "The block function does not validate that the input address is not the zero address. Blocking address(0) would waste a storage slot and could cause unexpected behavior in downstream integrations that check isBlocked.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/features/Blocklist.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 23,
+                  "endLine": 28
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "d729c86db6590398"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "missing-input-validation",
+            "severity": "Medium",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "Blocklist",
+            "function": "block",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc102025_denial_of_service",
+          "level": "error",
+          "message": {
+            "text": "The permit function uses a nonce-based replay protection mechanism, but the DOMAIN_SEPARATOR is computed only once in the constructor using the initial name, symbol, and chainId. If the contract is deployed on a chain that later undergoes a chain ID change (e.g., Ethereum mainnet to a fork, or L2 chain ID migration), or if the contract is deployed at the same address on multiple chains with the same name/symbol, the DOMAIN_SEPARATOR will be identical across chains. This allows signatures to be replayed across chains. Additionally, the nonce is incremented after signature verification, but if the same nonce is used with the same domain separator on another chain, the permit can be replayed.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20Permit.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 188,
+                  "endLine": 236
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "45a830b4a9bccb57"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "replay-attack",
+            "severity": "High",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "ERC20Permit",
+            "function": "permit",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "The `+=` operator on `totalSupply` in `_mint` is unchecked. In Solidity >=0.8.0 this will revert on overflow rather than wrap, which is safe behavior, but the pattern is flagged because explicit unchecked arithmetic or SafeMath usage is preferred for clarity and to avoid accidental wrapping in older compiler versions.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20PermitWithMint.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 42,
+                  "endLine": 44
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "ab553ad0a62bdf05"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "arithmetic-overflow",
+            "severity": "Low",
+            "confidence": 0.6,
+            "verdict": "unverified",
+            "contract": "ERC20PermitWithMint",
+            "function": "_mint",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "warning",
+          "message": {
+            "text": "The `penaltyAccumulated += penaltyAmount` operation uses unchecked arithmetic (Solidity 0.8+ built-in overflow checks will revert on overflow, but the pattern of accumulating penalties without a cap or withdrawal mechanism could lead to a denial of service if `penaltyAccumulated` approaches `type(uint256).max`, causing subsequent `quitLock` calls to revert on overflow. While Solidity 0.8+ prevents silent overflow, the lack of a safety check or circuit breaker for extreme accumulation is a design flaw.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 652,
+                  "endLine": 653
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "423a3ab83d0a08f1"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Medium",
+            "confidence": 0.7,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "quitLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "Multiple `+=` operations on `lastPoint.slope`, `lastPoint.bias`, `oldSlopeDelta`, and `newSlopeDelta` within the `_checkpoint` function perform arithmetic on `int128` values without explicit overflow/underflow checks beyond the `if (lastPoint.slope < 0)` guards. While the logic attempts to clamp negative values, the intermediate additions could theoretically overflow `int128` before the check, though the constraints of the system (bounded slopes, time) make this unlikely in practice.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 285,
+                  "endLine": 286
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "774e2abb0407e784"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Low",
+            "confidence": 0.4,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "_checkpoint",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "The `locked_.amount += int128(int256(_value))` and `newLocked.delegated += int128(int256(_value))` operations cast `uint256 _value` to `int128` without validating that `_value <= type(int128).max`. If a token with very high decimals or a malicious token returns a massive balance, this cast could truncate the value, leading to incorrect accounting. The `require(_value > 0)` check is insufficient.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 453,
+                  "endLine": 454
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "73b53890f9bc6ddd"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Low",
+            "confidence": 0.6,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseAmount",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "The `locked_.amount += int128(int256(_value))` and `locked_.delegated += int128(int256(_value))` operations cast `uint256 _value` to `int128` without validating that `_value <= type(int128).max`. Similar to `increaseAmount`, a very large `_value` could cause truncation during the cast, leading to incorrect lock amounts.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 420,
+                  "endLine": 421
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "1cb2f835b00f75dd"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Low",
+            "confidence": 0.6,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "createLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_nftredefinesmint",
+          "level": "error",
+          "message": {
+            "text": "The function uses `token.transferFrom(msg.sender, address(this), _value)` and assumes the full `_value` is received. If the token charges a fee on transfer, the contract will receive less than `_value` but still records `_value` in `locked_.amount` and emits a `Deposit` event with `_value`, causing accounting mismatch and potential loss of funds.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 403,
+                  "endLine": 436
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "1d372ffa5550f828"
+          },
+          "properties": {
+            "tag": "ERC721",
+            "subtag": "Fee-On-Transfer Accounting",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "createLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_nftredefinesmint",
+          "level": "error",
+          "message": {
+            "text": "The function uses `token.transferFrom(msg.sender, address(this), _value)` and assumes the full `_value` is received. If the token charges a fee on transfer, the contract will receive less than `_value` but still increments `locked_.amount` and `locked_.delegated` by `_value`, causing accounting mismatch and potential loss of funds.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 440,
+                  "endLine": 490
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f1142a2b5214894b"
+          },
+          "properties": {
+            "tag": "ERC721",
+            "subtag": "Fee-On-Transfer Accounting",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseAmount",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_nftredefinesmint",
+          "level": "error",
+          "message": {
+            "text": "The function uses `token.transfer(msg.sender, value)` and assumes the full `value` is sent. If the token charges a fee on transfer, the user receives less than `value`, but the contract still reduces `locked_.amount` by `value` and emits a `Withdraw` event with `value`, causing accounting mismatch.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 526,
+                  "endLine": 548
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "58f2632ecaa067dc"
+          },
+          "properties": {
+            "tag": "ERC721",
+            "subtag": "Fee-On-Transfer Accounting",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "withdraw",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_nftredefinesmint",
+          "level": "error",
+          "message": {
+            "text": "The function uses `token.transfer(msg.sender, remainingAmount)` and assumes the full `remainingAmount` is sent. If the token charges a fee on transfer, the user receives less than `remainingAmount`, but the contract still reduces `locked_.amount` by `value` and emits a `Withdraw` event with `value`, causing accounting mismatch.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 632,
+                  "endLine": 659
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "663f4ff2c474c68a"
+          },
+          "properties": {
+            "tag": "ERC721",
+            "subtag": "Fee-On-Transfer Accounting",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "quitLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_nftredefinesmint",
+          "level": "warning",
+          "message": {
+            "text": "The function uses `token.transfer(penaltyRecipient, amount)` and assumes the full `amount` is sent. If the token charges a fee on transfer, the recipient receives less than `amount`, but the contract still resets `penaltyAccumulated` to 0 and emits a `CollectPenalty` event with `amount`, causing accounting mismatch.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 673,
+                  "endLine": 678
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "3b21d256b7d9d686"
+          },
+          "properties": {
+            "tag": "ERC721",
+            "subtag": "Fee-On-Transfer Accounting",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "collectPenalty",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "access_control__lack_of_two_step_process_for_contract_ownership_changes",
+          "level": "error",
+          "message": {
+            "text": "The setOwner function allows immediate ownership transfer without a two-step process. If an incorrect address is provided (e.g., address with lost private key, zero address, or typo), all owner-only functions become permanently inaccessible with no recovery mechanism.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 50,
+                  "endLine": 52
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "62aaebe08c5c227f"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "ownership-transfer",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "setOwner",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc032025_logic_errors",
+          "level": "error",
+          "message": {
+            "text": "The quitLock function applies a penalty to the user's locked tokens but does not transfer the penalty amount to the contract or the penalty recipient. The penalty is only tracked in the penaltyAccumulated variable, but the full token amount (value) is transferred back to the user minus the penalty, leaving the penalty tokens in the contract without a mechanism to ensure they are actually collected. This creates a logic error where the penalty is accounted for but not enforced on-chain.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 632,
+                  "endLine": 659
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "140711a20467522a"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "Logic Errors",
+            "severity": "High",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "quitLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc102025_denial_of_service",
+          "level": "error",
+          "message": {
+            "text": "When increasing amount for a delegated lock, the function checkpoints the delegatee using the delegatee's lock state *after* the sender's amount was increased but *before* the delegatee's delegated amount is increased. This causes the checkpoint to miss the delegation increase, resulting in incorrect voting power accounting for the delegatee.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 440,
+                  "endLine": 490
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f2973f1b3ab999ca"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "Incorrect Checkpoint State",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseAmount",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc102025_denial_of_service",
+          "level": "error",
+          "message": {
+            "text": "When extending lock time for an undelegated lock, the function creates oldLocked as a copy of the *new* state (with updated end time) rather than the original state before the extension. This causes the checkpoint to compare identical states, missing the voting power increase from the longer lock duration.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 493,
+                  "endLine": 523
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "229179952935c1e5"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "Incorrect Checkpoint State",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseUnlockTime",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "warning",
+          "message": {
+            "text": "The external call to IVotingEscrow(ve).forceUndelegate(addr) does not check the return value. If the call fails (e.g., ve is not a contract, reverts, or returns false), the block function will still succeed and set _blocklist[addr] = true, leading to inconsistent state where the address is blocklisted but the forced undelegation did not occur.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/features/Blocklist.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 23,
+                  "endLine": 28
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "25ebe3435f2d1f82"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "Medium",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "Blocklist",
+            "function": "block",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "The `+=` operator is used to increase `balanceOf[recipient]` without an overflow check. In Solidity <0.8.0 this could wrap; in >=0.8.0 it reverts. Since the pragma version is not visible in the provided snippet, the pattern is flagged as a potential unchecked-arithmetic issue.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20Permit.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 124,
+                  "endLine": 124
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "e631ed6ad5e8e714"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Low",
+            "confidence": 0.6,
+            "verdict": "unverified",
+            "contract": "ERC20Permit",
+            "function": "transferFrom",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_gas_addplusequal",
+          "level": "note",
+          "message": {
+            "text": "The `+=` operator is used to increase `balanceOf[account]` without an overflow check. Same version-dependent concern as above.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20Permit.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 140,
+                  "endLine": 140
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "fe5241b4235bc8ca"
+          },
+          "properties": {
+            "tag": "Logic Error",
+            "subtag": "unchecked-arithmetic",
+            "severity": "Low",
+            "confidence": 0.6,
+            "verdict": "unverified",
+            "contract": "ERC20Permit",
+            "function": "_mint",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "denial_of_service__refund_failed",
+          "level": "warning",
+          "message": {
+            "text": "The withdraw function uses token.transfer to refund locked tokens to the user. If the token implements a blacklist (e.g., USDC, USDT) and the user's address is blacklisted, or if the token is an ERC777 that reverts in tokensReceived, the transfer will fail and the user's funds will be permanently locked in the contract. The function has no fallback mechanism (e.g., pull-based withdrawal) to recover from such failures.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 526,
+                  "endLine": 548
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f66446a48d36abfd"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "Refund failed",
+            "severity": "Medium",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "withdraw",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The mint function is restricted to a single owner via onlyOwner modifier, allowing unilateral token supply inflation without multi-sig, timelock, or governance safeguards. If the owner key is compromised, an attacker can mint arbitrary amounts of tokens.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20PermitWithMint.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 29,
+                  "endLine": 31
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "b44f174e0b341c31"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-unrestricted-mint",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "ERC20PermitWithMint",
+            "function": "mint",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The burn function is restricted to a single owner via onlyOwner modifier, allowing unilateral burning of any account's tokens without multi-sig, timelock, or governance safeguards. If the owner key is compromised, an attacker can destroy token holdings.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20PermitWithMint.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 49,
+                  "endLine": 51
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "0f7d9e6e258ad206"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-unrestricted-burn",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "ERC20PermitWithMint",
+            "function": "burn",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The contract initializes a single owner (msg.sender) with no multi-signature, timelock, or governance safeguards. This creates a centralization risk where a single compromised private key can fully control the contract.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 13,
+                  "endLine": 15
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "1e491bcc8fbbbe97"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-no-safeguards",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "constructor",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The onlyOwner modifier grants exclusive control to a single address with no multi-sig, timelock, or quorum requirements. Any function using this modifier (authorize, deauthorize, setOwner) can be unilaterally executed by the owner.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 18,
+                  "endLine": 21
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "45aad5500b407070"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-no-safeguards",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "onlyOwner",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The authorize function allows the single owner to grant privileged authorized status to any address without multi-sig approval or timelock. A compromised owner can authorize malicious addresses.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 38,
+                  "endLine": 40
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "af7d06c1d2f0d9d7"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-no-safeguards",
+            "severity": "High",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "authorize",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The deauthorize function allows the single owner to revoke authorized status from any address without multi-sig approval or timelock. A compromised owner can remove legitimate authorized addresses.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 44,
+                  "endLine": 46
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "75e3a5329b7f7a9f"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-no-safeguards",
+            "severity": "High",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "deauthorize",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The setOwner function allows the single owner to transfer ownership to any address without multi-sig approval, timelock, or two-step ownership transfer (Ownable2Step). A compromised owner can transfer ownership to an attacker.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/Authorizable.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 50,
+                  "endLine": 52
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f599711885b44e37"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-owner-no-safeguards",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Authorizable",
+            "function": "setOwner",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc042025_lack_of_input_validation",
+          "level": "warning",
+          "message": {
+            "text": "The block function does not validate that the input address is not the zero address (address(0)). Blocking address(0) could cause unexpected behavior in downstream logic that relies on the blocklist, and it represents an invalid contract address that should be rejected explicitly.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/features/Blocklist.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 23,
+                  "endLine": 28
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "a97117d08b99c3f4"
+          },
+          "properties": {
+            "tag": "Input Validation",
+            "subtag": "missing-zero-address-validation",
+            "severity": "Medium",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "Blocklist",
+            "function": "block",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "error",
+          "message": {
+            "text": "The external call `token.transferFrom(msg.sender, address(this), _value)` is not checked for a return value. If the token contract does not revert on failure but returns `false`, the function will continue execution and emit a `Deposit` event, incorrectly recording a deposit that never occurred.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 430,
+                  "endLine": 434
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "5817318565896978"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "createLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "error",
+          "message": {
+            "text": "The external call `token.transferFrom(msg.sender, address(this), _value)` is not checked for a return value. If the token contract returns `false` on failure, the function proceeds to emit a `Deposit` event, creating an inconsistent state where voting power is increased without receiving tokens.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 483,
+                  "endLine": 487
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "4c3ec11c93e9841e"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseAmount",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "error",
+          "message": {
+            "text": "The external call `token.transfer(msg.sender, value)` is not checked for a return value. If the token contract returns `false` on failure, the function proceeds to emit a `Withdraw` event and zeros out the user's lock, resulting in permanent loss of funds for the user.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 544,
+                  "endLine": 545
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "d9a22aa94850682f"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "withdraw",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "error",
+          "message": {
+            "text": "The external call `token.transfer(msg.sender, remainingAmount)` is not checked for a return value. If the token contract returns `false` on failure, the function proceeds to emit a `Withdraw` event and zeros out the user's lock, resulting in permanent loss of the remaining tokens after penalty.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 655,
+                  "endLine": 656
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "8a0b480910a5d44e"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "quitLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc062025_unchecked_external_calls",
+          "level": "error",
+          "message": {
+            "text": "The external call `token.transfer(penaltyRecipient, amount)` is not checked for a return value. If the token contract returns `false` on failure, the function proceeds to emit a `CollectPenalty` event and zeros out `penaltyAccumulated`, resulting in permanent loss of accumulated penalties.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 675,
+                  "endLine": 676
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "60653f6985533cf2"
+          },
+          "properties": {
+            "tag": "call / delegatecall",
+            "subtag": "unchecked-external-call",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "collectPenalty",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_centralizationrisk",
+          "level": "error",
+          "message": {
+            "text": "The `block` function is restricted to a single `manager` address with no multi-signature, timelock, or governance oversight. If the manager key is compromised, an attacker can arbitrarily block any contract address and force undelegation of voting power, disrupting protocol operations and potentially censoring users.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/features/Blocklist.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 23,
+                  "endLine": 28
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "bb0167af52d3767c"
+          },
+          "properties": {
+            "tag": "Access Control",
+            "subtag": "single-point-of-failure",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "Blocklist",
+            "function": "block",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc102025_denial_of_service",
+          "level": "error",
+          "message": {
+            "text": "The _burn function decreases totalSupply by the full requested amount even when the account's balance is less than that amount, causing totalSupply to diverge from the sum of balances. This can lead to totalSupply underflow or an invariant violation where totalSupply < sum(balances).\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/libraries/ERC20PermitWithMint.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 56,
+                  "endLine": 69
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "cdc0543700be4ac0"
+          },
+          "properties": {
+            "tag": "DoS",
+            "subtag": "accounting-mismatch",
+            "severity": "High",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "ERC20PermitWithMint",
+            "function": "_burn",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc042025_lack_of_input_validation",
+          "level": "warning",
+          "message": {
+            "text": "The transferOwnership function does not validate that the new owner address is not the zero address. Setting ownership to address(0) would permanently lock administrative functions (updateBlocklist, updatePenaltyRecipient, unlock, etc.) as no valid caller could ever satisfy msg.sender == owner.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 139,
+                  "endLine": 143
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "08a8973a0d6250c2"
+          },
+          "properties": {
+            "tag": "Input Validation",
+            "subtag": "Missing Zero Address Validation",
+            "severity": "Medium",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "transferOwnership",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc042025_lack_of_input_validation",
+          "level": "warning",
+          "message": {
+            "text": "The updateBlocklist function does not validate that the new blocklist address is not the zero address. Setting blocklist to address(0) would cause IBlocklist(blocklist).isBlocked calls to always return false (or revert), effectively disabling the blocklist protection for all users.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 146,
+                  "endLine": 150
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f03224b3e65e7b4f"
+          },
+          "properties": {
+            "tag": "Input Validation",
+            "subtag": "Missing Zero Address Validation",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "updateBlocklist",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc042025_lack_of_input_validation",
+          "level": "warning",
+          "message": {
+            "text": "The updatePenaltyRecipient function does not validate that the new penalty recipient address is not the zero address. Setting penaltyRecipient to address(0) would cause any penalty tokens (from quitLock) to be sent to the zero address, permanently burning those funds.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 153,
+                  "endLine": 157
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "261a13bccee60068"
+          },
+          "properties": {
+            "tag": "Input Validation",
+            "subtag": "Missing Zero Address Validation",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "updatePenaltyRecipient",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc052025_reentrancy",
+          "level": "error",
+          "message": {
+            "text": "The quitLock function updates the user's locked balance and checkpoints before transferring tokens out. If the token is an ERC777 or has a transfer hook, the recipient can reenter quitLock (or other nonReentrant functions) before the penaltyAccumulated state is fully settled. Although nonReentrant prevents reentry into the same function, cross-function reentrancy into withdraw, increaseAmount, delegate, etc. is possible because they share the same ReentrancyGuard. The state changes (locked[msg.sender] = newLocked, _checkpoint) occur before the external call token.transfer, violating checks-effects-interactions.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 632,
+                  "endLine": 659
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "9cfbca32f2612b00"
+          },
+          "properties": {
+            "tag": "Reentrancy",
+            "subtag": "reentrancy",
+            "severity": "High",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "quitLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc052025_reentrancy",
+          "level": "error",
+          "message": {
+            "text": "The withdraw function updates the user's locked balance and checkpoints before transferring tokens out. If the token is an ERC777 or has a transfer hook, the recipient can reenter withdraw (or other nonReentrant functions) before the external call completes. State changes (locked[msg.sender] = newLocked, _checkpoint) occur before the external call token.transfer, violating checks-effects-interactions.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 526,
+                  "endLine": 548
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "8969cb182cbd13a6"
+          },
+          "properties": {
+            "tag": "Reentrancy",
+            "subtag": "reentrancy",
+            "severity": "High",
+            "confidence": 0.85,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "withdraw",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc052025_reentrancy",
+          "level": "warning",
+          "message": {
+            "text": "The createLock function updates the user's locked balance and checkpoints before pulling tokens in via token.transferFrom. If the token is an ERC777 or has a transfer hook, the sender can reenter createLock (or other nonReentrant functions) during the transferFrom call. State changes (locked[msg.sender] = locked_, _checkpoint) occur before the external call token.transferFrom, violating checks-effects-interactions.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 403,
+                  "endLine": 436
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "f7c8809f4f4f29e2"
+          },
+          "properties": {
+            "tag": "Reentrancy",
+            "subtag": "reentrancy",
+            "severity": "Medium",
+            "confidence": 0.75,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "createLock",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "owasp2025__sc052025_reentrancy",
+          "level": "warning",
+          "message": {
+            "text": "The increaseAmount function updates the user's (and possibly delegatee's) locked balances and checkpoints before pulling tokens in via token.transferFrom. If the token is an ERC777 or has a transfer hook, the sender can reenter increaseAmount (or other nonReentrant functions) during the transferFrom call. State changes occur before the external call token.transferFrom, violating checks-effects-interactions.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 440,
+                  "endLine": 490
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "89eb005b19781566"
+          },
+          "properties": {
+            "tag": "Reentrancy",
+            "subtag": "reentrancy",
+            "severity": "Medium",
+            "confidence": 0.75,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "increaseAmount",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_blocknumberl",
+          "level": "warning",
+          "message": {
+            "text": "The constructor initializes the first global checkpoint with `block.number`. On Arbitrum, `block.number` returns the L1 block number, while on Optimism it returns the L2 block number. This inconsistency causes the initial checkpoint's block reference to differ across L2s, breaking cross-chain consistency for voting power calculations and historical queries.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 100,
+                  "endLine": 122
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "80b35db4555a854d"
+          },
+          "properties": {
+            "tag": "Arithmetic",
+            "subtag": "block.number-usage-l2-inconsistency",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "constructor",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_blocknumberl",
+          "level": "warning",
+          "message": {
+            "text": "The `_checkpoint` function records `block.number` in multiple `Point` structs (user checkpoints, global checkpoints, and slope change iterations). It also uses `block.number` to compute `blockSlope` (blocks per second) for extrapolating future block numbers. On Arbitrum, `block.number` advances only when L1 blocks are produced (~12-13s), not per L2 block (~0.25s), causing severe inaccuracies in time-to-block estimations and breaking `balanceOfAt`/`totalSupplyAt` accuracy.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 222,
+                  "endLine": 394
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "bf4dfb1c3a84c918"
+          },
+          "properties": {
+            "tag": "Arithmetic",
+            "subtag": "block.number-usage-l2-inconsistency",
+            "severity": "Medium",
+            "confidence": 0.95,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "_checkpoint",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_blocknumberl",
+          "level": "warning",
+          "message": {
+            "text": "The function requires `_blockNumber <= block.number` and uses `block.number` to compute `dBlock` and `dTime` for the latest epoch. On Arbitrum, `block.number` is the L1 block number, so a caller passing an L2 block number will revert incorrectly, and the time estimation formula `(dTime * (_blockNumber - point0.blk)) / dBlock` produces wrong results due to L1/L2 block rate mismatch.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 770,
+                  "endLine": 819
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "b4f3ab563bab1b26"
+          },
+          "properties": {
+            "tag": "Arithmetic",
+            "subtag": "block.number-usage-l2-inconsistency",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "balanceOfAt",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        },
+        {
+          "ruleId": "4naly3er__4naly3er_m_blocknumberl",
+          "level": "warning",
+          "message": {
+            "text": "Similar to `balanceOfAt`, this function validates `_blockNumber <= block.number` and uses `block.number` in the `dTime` calculation for the current epoch. On Arbitrum, the L1 block number does not correspond to L2 block progression, causing incorrect supply queries and potential reverts for valid L2 block numbers.\n\n(the function was matched against the parsed index, but this line range is the model's own claim and was not verified)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "contracts/VotingEscrow.sol",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 871,
+                  "endLine": 904
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "bastetCcSite/v1": "bc5c6bca8cd4e89d"
+          },
+          "properties": {
+            "tag": "Arithmetic",
+            "subtag": "block.number-usage-l2-inconsistency",
+            "severity": "Medium",
+            "confidence": 0.9,
+            "verdict": "unverified",
+            "contract": "VotingEscrow",
+            "function": "totalSupplyAt",
+            "repo": "e5f8a519b24f",
+            "localisation": "site"
+          }
+        }
+      ],
+      "properties": {
+        "runId": "d1_routed_dev1",
+        "localisation": {
+          "parser": 0,
+          "site": 55,
+          "none": 0
+        },
+        "totalResults": 55
+      }
+    }
+  ]
+}

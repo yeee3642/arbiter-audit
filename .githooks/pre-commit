@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Credential guard. Enable with:  git config core.hooksPath .githooks
+#
+# The repository already leaked a gateway key identifier once, through a probe
+# artefact whose filename matched nothing in .gitignore. Filename rules cannot
+# see inside a value, so this inspects staged *content*.
+#
+# Two severities, because shape-based secret detection has a high false-positive
+# rate on smart-contract source (init-code hashes and TYPEHASHes are 64 hex):
+#
+#   blocking  -- a credential keyword adjacent to a high-entropy value. Refuses
+#                the commit. Override with `git commit --no-verify` only if you
+#                have looked at it.
+#   advisory  -- high entropy with no credential context. Prints and continues.
+#
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+python_bin="${PYTHON:-python}"
+command -v "$python_bin" >/dev/null 2>&1 || python_bin=python3
+
+staged="$(git diff --cached --name-only --diff-filter=ACM)"
+[ -z "$staged" ] && exit 0
+
+# .env is not tracked, but a rename or a -f can still stage one.
+blocked_paths="$(printf '%s\n' "$staged" | grep -E '(^|/)\.env$|\.cookies$|kaggle\.json$' || true)"
+if [ -n "$blocked_paths" ]; then
+    echo "pre-commit: refusing to commit credential files:" >&2
+    printf '  %s\n' $blocked_paths >&2
+    exit 1
+fi
+
+PYTHONPATH="$repo_root/bastet-cc${PYTHONPATH:+:$PYTHONPATH}" \
+"$python_bin" - "$repo_root" <<'PY'
+import subprocess, sys
+from pathlib import Path
+
+try:
+    from bastet_cc.redact import scan
+except ImportError:                       # package not importable: fail open, loudly
+    print("pre-commit: bastet_cc.redact not importable, credential scan SKIPPED",
+          file=sys.stderr)
+    sys.exit(0)
+
+root = Path(sys.argv[1])
+files = subprocess.run(["git", "diff", "--cached", "--name-only",
+                        "--diff-filter=ACM"],
+                       capture_output=True, text=True, cwd=root).stdout.split()
+
+# A file testing the scanner necessarily contains credential-shaped strings, so it
+# would block every commit that touches it and teach everyone to reach for
+# --no-verify -- which disables the guard for the whole commit, including the file
+# that actually leaked. An explicit in-file pragma is narrower and leaves a trace
+# in the diff, so granting it is reviewable. It does NOT excuse a real secret:
+# scan() still runs and its hits are demoted to advisory, not silenced.
+PRAGMA = "pre-commit: allow-credential-fixtures"
+
+blocking, advisory = [], []
+for rel in files:
+    if "/figures/" in rel or rel.endswith((".png", ".svg", ".pdf", ".zip")):
+        continue
+    blob = subprocess.run(["git", "show", f":{rel}"], capture_output=True, cwd=root)
+    if blob.returncode:
+        continue
+    text = blob.stdout.decode("utf-8", errors="replace")
+    exempt = PRAGMA in text
+    for name, sample, is_blocking in scan(text):
+        if exempt:
+            advisory.append((rel, f"{name} (fixture-exempt)", sample))
+        else:
+            (blocking if is_blocking else advisory).append((rel, name, sample))
+
+for rel, name, sample in advisory[:10]:
+    print(f"pre-commit: note  {rel}: high-entropy {name} ({sample}) "
+          f"-- probably a Solidity constant", file=sys.stderr)
+
+if blocking:
+    print("\npre-commit: BLOCKED -- credential-shaped values in staged content:",
+          file=sys.stderr)
+    for rel, name, sample in blocking:
+        print(f"  {rel}: {name} = {sample}", file=sys.stderr)
+    print("\nRun `python bastet-cc/scripts/scrub_artifacts.py --write`, or"
+          " `git commit --no-verify` if this is a false positive.", file=sys.stderr)
+    sys.exit(1)
+PY

@@ -19,7 +19,45 @@ from pathlib import Path
 import tree_sitter_solidity
 from tree_sitter import Language, Parser
 
-_LANGUAGE = Language(tree_sitter_solidity.language())
+
+def _load_language() -> Language:
+    """Bind the Solidity grammar across the tree-sitter ABI transition.
+
+    tree-sitter-solidity 1.2.x returns a raw pointer as a Python int. tree-sitter
+    0.25 accepts that but warns; 0.26 removed int support and raises
+    OverflowError; 0.24 and older reject the grammar's ABI 15 outright. So the
+    working range is exactly 0.25.x, which is what pyproject pins -- but the pin
+    is a floor, not a guarantee, and the failure a reader hits otherwise is an
+    OverflowError from a C binding with no hint about what to do.
+
+    Newer grammar builds are expected to hand back a PyCapsule instead, which
+    every version accepts. Try the value as-is, and if that fails say which pair
+    of versions is installed and what to install instead.
+    """
+    raw = tree_sitter_solidity.language()
+    try:
+        return Language(raw)
+    except (OverflowError, TypeError, ValueError) as exc:
+        import importlib.metadata as md
+
+        def version(pkg: str) -> str:
+            try:
+                return md.version(pkg)
+            except md.PackageNotFoundError:      # pragma: no cover - env dependent
+                return "not installed"
+
+        raise RuntimeError(
+            f"cannot bind the Solidity grammar: {type(exc).__name__}: {exc}\n"
+            f"  tree-sitter          {version('tree-sitter')}\n"
+            f"  tree-sitter-solidity {version('tree-sitter-solidity')}\n"
+            "  This pair is incompatible. tree-sitter-solidity 1.2.x needs\n"
+            "  tree-sitter >=0.25,<0.26 (0.26 dropped int grammar pointers, 0.24\n"
+            "  and older reject its ABI). Fix with:\n"
+            "      pip install 'tree-sitter>=0.25,<0.26'"
+        ) from exc
+
+
+_LANGUAGE = _load_language()
 
 # Vendored dependencies and test scaffolding: real code, but nothing an auditor
 # is being paid to look at. Upstream Bastet globs `**/*.sol` and scans all of it.
@@ -75,10 +113,21 @@ class SolFile:
 
 
 def classify(rel_path: str) -> str:
-    """vendor | nonprod | core -- what kind of file this is, by path alone."""
-    if _VENDOR.search(rel_path):
+    """vendor | nonprod | core -- what kind of file this is, by path alone.
+
+    Both patterns anchor directory names on `/`, so a Windows-style path arrives
+    as one long segment and matches nothing: `contracts\\mocks\\MockERC20.sol`
+    classified as `core`. That failure is silent and it corrupts the experiment
+    rather than crashing it -- the routed arm starts scanning vendored libraries
+    and mocks, its cost advantage evaporates, and the "findings in
+    non-production code" comparison reports zero for the wrong reason.
+    Normalising here rather than at each call site means no caller can reintroduce
+    it.
+    """
+    p = rel_path.replace("\\", "/")
+    if _VENDOR.search(p):
         return "vendor"
-    if _NONPROD.search(rel_path):
+    if _NONPROD.search(p):
         return "nonprod"
     return "core"
 
@@ -129,7 +178,7 @@ def parse_file(path: Path, repo_root: Path) -> SolFile:
     tree = parser.parse(src)
     root = tree.root_node
 
-    rel = str(path.relative_to(repo_root))
+    rel = path.relative_to(repo_root).as_posix()
     contracts: list[str] = []
     imports: list[str] = []
     functions: list[Function] = []
@@ -215,20 +264,31 @@ def read_scope(repo_root: Path) -> set[str] | None:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        out.add(line.lstrip("./"))
+        out.add(line.replace("\\", "/").lstrip("./"))
     return out or None
 
 
 def index_repo(repo_root: Path, use_scope: bool = True) -> dict:
-    """Index one repository, keeping only files worth auditing."""
+    """Index one repository, keeping only files worth auditing.
+
+    A missing directory raises. `rglob` on a path that does not exist yields
+    nothing, so without this the function returns a perfectly well-formed index
+    of zero files -- and then routing plans zero tasks, the scan makes zero
+    calls, and `evaluate` reports zero findings, all with exit status 0. A typo
+    in a repository hash would look exactly like a model that found nothing.
+    """
     repo_root = Path(repo_root)
+    if not repo_root.is_dir():
+        raise NotADirectoryError(
+            f"cannot index {repo_root}: not a directory. Extract the corpus under "
+            f"data/ex/ (see README, 'Install') or pass a path that exists.")
     scope = read_scope(repo_root) if use_scope else None
 
     files: list[SolFile] = []
     skipped = {"vendor": 0, "nonprod": 0, "out_of_scope": 0}
 
     for path in sorted(repo_root.rglob("*.sol")):
-        rel = str(path.relative_to(repo_root))
+        rel = path.relative_to(repo_root).as_posix()
 
         if scope is not None:
             if rel not in scope:

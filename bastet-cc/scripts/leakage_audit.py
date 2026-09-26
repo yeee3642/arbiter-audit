@@ -71,17 +71,94 @@ def scan_text_for_repos(text: str) -> set[str]:
     return set(REPO_RE.findall(text))
 
 
+def _provenance_repos(md_text: str) -> tuple[set[str], str]:
+    """Repositories a synthesised detector was induced from.
+
+    Three sources, in order of directness:
+
+      1. `synth_provenance.train_findings` in the front matter -- finding row ids,
+         mapped back to repositories through train.csv. This is the real answer:
+         it is what S2 read.
+      2. The S2/LORO artefacts under runs/synth/, whose filenames carry the
+         held-out repo hash (`<tag>__loro_<repo>.json`).
+      3. A hash grep over the prompt body.
+
+    (3) alone was the original implementation, and it is **vacuous**: the
+    generator never writes repo hashes into the prompt, so the grep matched
+    nothing in all 23 detectors and the rule passed by construction. A check that
+    cannot fail is not a check, and this one was reporting PASS on the single
+    most leak-prone stage in the pipeline. Returns the source actually used so
+    the report can say which.
+    """
+    import re as _re
+
+    m = _re.search(r"^synth_provenance:\s*(\{.*\})\s*$", md_text, _re.M)
+    if m:
+        try:
+            prov = json.loads(m.group(1))
+            ids = [str(x) for x in (prov.get("train_findings") or [])]
+            if ids:
+                return set(ids), "front_matter_finding_ids"
+            # S2b induces from the tag definition alone, for tags with no
+            # TRAIN-SYN positives at all. No labelled finding was read, so this
+            # is not a leak -- but it is not a clean bill of health either: the
+            # detector has no training material and, for these tags, its only
+            # positive repository lives in TEST. Reported as its own category so
+            # the coverage claim can be honest about it.
+            if prov.get("mode") == "s2b":
+                return set(), "no_training_material"
+        except json.JSONDecodeError:
+            pass
+    return scan_text_for_repos(md_text), "hash_grep_fallback"
+
+
+def _finding_id_to_repo() -> dict[str, str]:
+    """train.csv row id -> repo hash, for resolving front-matter provenance.
+
+    Upstream's `Property` column is the finding id the synthesis pipeline
+    records. Absent that column the mapping degrades to positional index, which
+    is what `train_findings` holds when the pipeline enumerated rows.
+    """
+    import pandas as pd
+
+    df = pd.read_csv(DATA / "train.csv")
+    id_col = "Property" if "Property" in df.columns else None
+    out: dict[str, str] = {}
+    for i, (_, row) in enumerate(df.iterrows()):
+        repo = str(row["repo_path"]).strip()
+        out[str(i)] = repo
+        if id_col is not None:
+            try:
+                out[str(int(row[id_col]))] = repo
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
 def audit_detectors(splits: dict[str, set[str]]) -> list[dict]:
     """Every synthesised detector, and which splits its evidence came from."""
     out = []
     synth_dir = PKG / "detectors_synth"
     if not synth_dir.is_dir():
         return out
+
+    try:
+        id2repo = _finding_id_to_repo()
+    except (OSError, KeyError):
+        id2repo = {}
+
     for md in sorted(synth_dir.glob("*.md")):
-        cited = scan_text_for_repos(md.read_text(errors="ignore"))
+        raw, source = _provenance_repos(md.read_text(errors="ignore"))
+        if source == "front_matter_finding_ids":
+            cited = {id2repo[i] for i in raw if i in id2repo}
+            unresolved = sorted(i for i in raw if i not in id2repo)
+        else:
+            cited, unresolved = raw, []
         out.append({
             "detector": md.stem,
+            "provenance_source": source,
             "cited_repos": len(cited),
+            "unresolved_ids": unresolved,
             "from_train_syn": len(cited & splits["train_syn"]),
             "from_dev": sorted(cited & splits["dev"]),
             "from_test": sorted(cited & splits["test"]),
@@ -112,11 +189,19 @@ def audit_runs(splits: dict[str, set[str]]) -> list[dict]:
     return out
 
 
-def audit_single_repo_tags(splits: dict[str, set[str]]) -> list[tuple[str, int]]:
-    """Tags whose synthesis material comes from too few repositories to generalise."""
+def audit_single_repo_tags(splits: dict[str, set[str]]) -> list[tuple[str, int]] | None:
+    """Tags whose synthesis material comes from too few repositories to generalise.
+
+    Returns None when train.csv is absent. The corpus is deliberately not in the
+    repository, so this section is the one part of the audit a fresh clone cannot
+    run -- and it must degrade rather than take the leakage rules down with it,
+    since those are the part that actually gates the protocol.
+    """
     import pandas as pd
     from bastet_cc.evaluate import normalize_tag, parse_tags
 
+    if not (DATA / "train.csv").exists():
+        return None
     df = pd.read_csv(DATA / "train.csv")
     per_tag: dict[str, set[str]] = {}
     for repo, raw in zip(df["repo_path"], df["tag"]):
@@ -159,14 +244,58 @@ def main() -> int:
         print("  no synthesised detectors on disk yet")
     else:
         bad = [d for d in dets if d["from_dev"] or d["from_test"]]
+        # S2b detectors read no labelled finding, so they cannot leak. They are
+        # reported separately because they also cannot be *validated*: no
+        # training material means no LORO fold, and for these tags the only
+        # positive repository is in TEST.
+        no_material = [d for d in dets
+                       if d["provenance_source"] == "no_training_material"]
+        # Anything else that fails to resolve is genuinely unverifiable. The
+        # original rule counted exactly this case as clean, which is how a
+        # vacuous grep reported PASS on 23 detectors it never inspected.
+        blind = [d for d in dets
+                 if d["provenance_source"] not in
+                 ("front_matter_finding_ids", "no_training_material")]
+        # A detector that declares provenance we could not resolve is unverified,
+        # not clean. Without train.csv every finding id is unresolvable, and
+        # printing OK there would repeat the exact failure this rule was rewritten
+        # to remove -- a check reporting PASS on evidence it never read.
+        unresolved = [d for d in dets
+                      if d["provenance_source"] == "front_matter_finding_ids"
+                      and d["cited_repos"] == 0 and d["unresolved_ids"]]
+
         print(f"  {len(dets)} detectors, "
               f"{sum(d['from_train_syn'] for d in dets)} TRAIN-SYN citations total")
         if bad:
             violations += len(bad)
             for d in bad:
                 print(f"  LEAK {d['detector']}: dev={d['from_dev']} test={d['from_test']}")
-        else:
-            print("  no detector cites DEV or TEST  OK")
+        if blind:
+            violations += len(blind)
+            print(f"  UNVERIFIABLE: {len(blind)} detector(s) expose no resolvable"
+                  f" provenance, so this rule cannot clear them:")
+            for d in blind[:5]:
+                print(f"    {d['detector']}  (source={d['provenance_source']})")
+        if no_material:
+            print(f"  NO TRAINING MATERIAL: {len(no_material)} detector(s) induced"
+                  f" from the tag definition only (S2b) -- not a leak, but they")
+            print(f"  cannot be validated before TEST and should be excluded from"
+                  f" any coverage figure that implies evidence:")
+            for d in no_material:
+                print(f"    {d['detector']}")
+        if unresolved:
+            missing_csv = not (DATA / "train.csv").exists()
+            why = ("data/train.csv absent, so finding ids cannot be mapped to "
+                   "repositories" if missing_csv else
+                   "finding ids are not present in train.csv")
+            print(f"  UNRESOLVED: {len(unresolved)} detector(s) declare provenance "
+                  f"that could not be checked")
+            print(f"    ({why})")
+            print(f"    This rule is INCONCLUSIVE for them -- not a pass. Re-run with"
+                  f" the corpus present before citing it.")
+        if not bad and not blind and not unresolved:
+            n_ok = len(dets) - len(no_material)
+            print(f"  {n_ok} detector(s) resolve to TRAIN-SYN evidence only  OK")
 
     print()
     print("=" * 74)
@@ -198,7 +327,11 @@ def main() -> int:
     print("OVERFITTING -- tags with too little material to generalise")
     print("=" * 74)
     thin = audit_single_repo_tags(splits)
-    if thin:
+    if thin is None:
+        print("  data/train.csv not present -- section skipped (the corpus is not")
+        print("  redistributed; see README). The leakage rules above do not need it.")
+        thin = []
+    elif thin:
         print(f"  {len(thin)} tags have <2 positive repositories in TRAIN-SYN.")
         print("  A detector induced from one repository encodes that repository's naming,")
         print("  not the vulnerability class. These must be reported as such.")
@@ -208,8 +341,21 @@ def main() -> int:
 
     print()
     print("=" * 74)
-    status = "PASS" if violations == 0 and frozen and not overlap else "FAIL"
+    inconclusive = bool(dets) and any(
+        d["provenance_source"] == "front_matter_finding_ids"
+        and d["cited_repos"] == 0 and d["unresolved_ids"] for d in dets)
+    if violations or not frozen or overlap:
+        status = "FAIL"
+    elif inconclusive:
+        # Distinct from PASS on purpose. The rules that ran are clean, but Rule 1
+        # could not read the evidence it exists to check, and a green light there
+        # is what the previous vacuous implementation produced.
+        status = "INCONCLUSIVE"
+    else:
+        status = "PASS"
     print(f"LEAKAGE AUDIT: {status}   ({violations} violation(s))")
+    if status == "INCONCLUSIVE":
+        print("Rule 1 could not resolve detector provenance; rerun with data/train.csv.")
     print("=" * 74)
 
     (PKG / "runs" / "leakage_audit.json").write_text(json.dumps({
@@ -220,8 +366,10 @@ def main() -> int:
         "detectors": dets,
         "runs": runs,
         "thin_tags": [{"tag": t, "n_repos": n} for t, n in thin],
+        "thin_tags_available": bool(thin) or (DATA / "train.csv").exists(),
+        "inconclusive": inconclusive,
     }, indent=2))
-    return 0 if status == "PASS" else 1
+    return 0 if status in ("PASS", "INCONCLUSIVE") else 1
 
 
 if __name__ == "__main__":

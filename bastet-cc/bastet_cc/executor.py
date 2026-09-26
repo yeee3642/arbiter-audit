@@ -75,11 +75,15 @@ async def run_tasks(tasks: list[Task], client: LLMClient, store: RunStore,
         nonlocal completed, latency_sum
         exemplars = exemplar_fn(t) if exemplar_fn is not None else None
         system, user = build_prompt(t, exemplars)
-        result = await client.complete(system, user, schema=OUTPUT_SCHEMA, task_id=tid)
+        result = await client.complete(
+            system, user, schema=OUTPUT_SCHEMA, task_id=tid, stage="detect")
         if result.error in TRANSIENT_ERRORS:
             errors[result.error] += 1  # not persisted: the next resume retries it
         else:
-            found = [to_dict(f) for f in parse_findings(t, result)]
+            found = [
+                to_dict(f) for f in parse_findings(
+                    t, result, resolved_task_id=tid)
+            ]
             # Persist before counting: a crash after this line costs nothing on resume.
             store.append(tid, result, found)
             if result.error:

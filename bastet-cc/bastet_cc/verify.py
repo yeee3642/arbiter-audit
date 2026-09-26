@@ -29,25 +29,43 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 # Same error taxonomy as the detect pass: a transient failure must not be frozen into
 # the resume log, a permanent one must not be retried forever (executor.py).
 from .executor import TRANSIENT_ERRORS
-from .findings import Finding
+from .findings import Finding, finding_key
+from .hermes import EvidencePacket, HermesConfig, build_packet
 from .llm import LLMClient
-from .prompts import DETECTOR_DIRS, VERIFY_SCHEMA, build_verify_prompt, detection_prompt
+from .prompts import (
+    DETECTOR_DIRS,
+    TWINCOURT_SCHEMA,
+    VERIFY_SCHEMA,
+    build_twincourt_prompt,
+    build_verify_prompt,
+    detection_prompt,
+)
 from .runstore import RunStore
+from .twincourt import (
+    OVERLAY_SCHEMA_VERSION,
+    TWINCOURT_PROMPT_VERSION,
+    TWINCOURT_SCHEMA_VERSION,
+    TWINCOURT_TREATMENT,
+    TWINCOURT_VERSION,
+    adjudication_id,
+    normalize_decision,
+)
 
 # Bump on any change to VERIFY_SYSTEM, the context builder or the verdict rules:
 # it is part of the cache key, so a bump re-runs verification instead of serving
 # verdicts formed under different instructions.
-VERIFY_PROMPT_VERSION = "v1"
+VERIFY_PROMPT_VERSION = "v2"
 
 # DESIGN §2.5(1). Enough to see the guard clause a caller placed above the function
 # and the modifier defined below it, small enough that a 40-function file does not
@@ -129,7 +147,7 @@ def load_detector_meta(dirs: tuple[Path, ...] | None = None) -> dict[str, dict]:
         path = Path(d) / "index.json"
         if not path.exists():
             continue
-        for entry in json.loads(path.read_text()):
+        for entry in json.loads(path.read_text(encoding="utf-8")):
             out[entry["id"]] = {
                 "source_workflow": entry.get("source_workflow", ""),
                 "synthesized": bool(entry.get("synthesized")),
@@ -151,7 +169,7 @@ def _tag_definitions(path: str = "") -> dict[str, str]:
     if not md.exists():
         return {}
     out: dict[str, str] = {}
-    for line in md.read_text().splitlines():
+    for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
         m = _TABLE_ROW.match(line.strip())
         if not m:
             continue
@@ -332,13 +350,11 @@ def verify_id(finding: Finding, model: str,
               prompt_version: str = VERIFY_PROMPT_VERSION) -> str:
     """Stable id for one verification, so resume skips completed work.
 
-    Keyed on what the verifier actually sees -- location, claim, detector, model,
-    prompt version -- not on the finding's own task_id: two detectors reporting the
-    same function are two separate arguments to refute.
+    Keyed on the complete immutable finding identity plus model and prompt version.
+    This keeps sibling claims, severity changes, and parser-span changes isolated
+    across restart/resume.
     """
-    parts = [finding.repo, finding.detector_id, finding.tag, finding.path,
-             finding.contract, finding.function, finding.evidence,
-             finding.description, model, prompt_version]
+    parts = [finding_key(finding), model, prompt_version]
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
@@ -368,8 +384,8 @@ class VerifyStore:
     def __init__(self, store: RunStore):
         self.path = Path(store.run_dir) / "verify.jsonl"
 
-    def done(self) -> dict[str, dict]:
-        out: dict[str, dict] = {}
+    def done(self) -> dict[tuple[str, str], dict]:
+        out: dict[tuple[str, str], dict] = {}
         if not self.path.exists():
             return out
         with self.path.open() as fh:
@@ -378,21 +394,58 @@ class VerifyStore:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue  # torn tail from a hard kill; that finding re-verifies
-                if "verify_id" in rec:
-                    out.setdefault(rec["verify_id"], rec)
+                if (
+                    not isinstance(rec, dict)
+                    or rec.get("verdict")
+                    not in (*VALID_VERDICTS, "unverified")
+                ):
+                    continue
+                work_id = rec.get("adjudication_id") or rec.get("verify_id")
+                if not isinstance(work_id, str) or not work_id:
+                    continue
+                if "finding_key" in rec:
+                    key = rec.get("finding_key")
+                    if not isinstance(key, str) or not key:
+                        continue
+                else:
+                    key = ""
+                # The log is append-only and later adjudications supersede earlier
+                # ones for the same exact work/finding identity. This matches the
+                # overlay reader and keeps resume/export views consistent.
+                out[(work_id, key)] = rec
         return out
 
     def append(self, rec: dict) -> None:
         with self.path.open("a") as fh:
             fh.write(json.dumps(rec) + "\n")
             fh.flush()
+            os.fsync(fh.fileno())
+
+
+def _cached_finding(finding: Finding, rec: dict) -> Finding:
+    """Apply the compact durable view of one cached adjudication."""
+    return replace(
+        finding,
+        verdict=str(rec.get("verdict") or finding.verdict),
+        adjudication_id=str(
+            rec.get("adjudication_id") or rec.get("verify_id") or ""),
+        adjudication_reason=str(
+            rec.get("reason_code") or rec.get("reason")
+            or rec.get("reject_reason") or ""),
+        adjudication_version=str(
+            rec.get("adjudication_version") or rec.get("schema_version")
+            or rec.get("prompt_version") or "legacy-v1"),
+    )
 
 
 async def verify_findings(findings: list[Finding], repo_index: dict,
                           client: LLMClient, store: RunStore,
                           policy: VerifyPolicy | None = None,
                           detector_meta: dict[str, dict] | None = None,
-                          pad: int = CONTEXT_PAD_LINES) -> list[Finding]:
+                          pad: int = CONTEXT_PAD_LINES,
+                          treatment: str = "none",
+                          context_chars: int = MAX_CONTEXT_CHARS,
+                          provider_fingerprint: str = "") -> list[Finding]:
     """One refutation call per enabled finding; returns findings with verdicts filled.
 
     Inputs are not mutated -- a copy carries the verdict, so a caller can score the
@@ -402,29 +455,58 @@ async def verify_findings(findings: list[Finding], repo_index: dict,
     `repo_index` is either one repository's index or a {repo: index} mapping, since a
     findings list may span repositories.
     """
+    treatment = treatment.strip().lower()
+    if treatment not in ("none", TWINCOURT_TREATMENT):
+        raise ValueError(
+            f"treatment must be 'none' or {TWINCOURT_TREATMENT!r}")
+    if context_chars <= 0:
+        raise ValueError("context_chars must be positive")
+
     policy = policy or VerifyPolicy()
     meta = detector_meta if detector_meta is not None else load_detector_meta()
     vstore = VerifyStore(store)
     cached = vstore.done()
 
-    plan: list[tuple[int, str, str]] = []   # (index, verify_id, context)
+    # (finding index, cache/work id, legacy context or HERMES packet)
+    plan: list[tuple[int, str, str | EvidencePacket]] = []
     skipped = {"policy": 0, "no_context": 0, "cached": 0}
     out = [replace(f) for f in findings]
+    hermes_config = HermesConfig(max_chars=context_chars)
 
     for i, f in enumerate(out):
         if not policy.enabled(f, meta.get(f.detector_id)):
             skipped["policy"] += 1
             continue
-        vid = verify_id(f, client.model)
-        if vid in cached:
-            out[i] = replace(f, verdict=cached[vid].get("verdict", f.verdict))
+        if treatment == TWINCOURT_TREATMENT:
+            packet = build_packet(f, repo_index, hermes_config)
+            if packet is None:
+                skipped["no_context"] += 1
+                continue
+            work_id = adjudication_id(
+                f,
+                model=client.model,
+                provider_fingerprint=provider_fingerprint,
+                packet_id=packet.id,
+                hermes_version=packet.version,
+                hermes_config=packet.config.payload(),
+            )
+            payload: str | EvidencePacket = packet
+        else:
+            work_id = verify_id(f, client.model)
+            context = function_context(
+                repo_index, f, pad=pad, max_chars=context_chars)
+            if not context:
+                skipped["no_context"] += 1
+                continue
+            payload = context
+        cache_record = cached.get((work_id, finding_key(f)))
+        if cache_record is None:
+            cache_record = cached.get((work_id, ""))
+        if cache_record is not None:
+            out[i] = _cached_finding(f, cache_record)
             skipped["cached"] += 1
             continue
-        ctx = function_context(repo_index, f, pad=pad)
-        if not ctx:
-            skipped["no_context"] += 1
-            continue
-        plan.append((i, vid, ctx))
+        plan.append((i, work_id, payload))
 
     print(f"[verify] {len(findings)} findings, {len(plan)} to verify "
           f"(skipped: {skipped})", flush=True)
@@ -434,20 +516,62 @@ async def verify_findings(findings: list[Finding], repo_index: dict,
     verdicts: dict[str, int] = {}
     t0 = time.monotonic()
 
-    async def one(i: int, vid: str, ctx: str) -> None:
+    async def one(
+        i: int, work_id: str, payload: str | EvidencePacket
+    ) -> None:
         f = out[i]
-        system, user = build_verify_prompt(
-            f, ctx, tag_definition(f.tag), list(detector_checks(f.detector_id)))
-        result = await client.complete(system, user, schema=VERIFY_SCHEMA,
-                                       task_id=vid)
-        verdict, reason = _normalize_verdict(result.parsed)
+        checks = list(detector_checks(f.detector_id))
+        if treatment == TWINCOURT_TREATMENT:
+            packet = payload
+            if not isinstance(packet, EvidencePacket):
+                raise TypeError("TwinCourt requires an EvidencePacket")
+            system, user = build_twincourt_prompt(
+                f, packet, tag_definition(f.tag), checks)
+            result = await client.complete(
+                system,
+                user,
+                schema=TWINCOURT_SCHEMA,
+                task_id=work_id,
+                stage="verify",
+            )
+            decision = normalize_decision(
+                result.parsed, (fragment.id for fragment in packet.fragments))
+            verdict, reason = decision.verdict, decision.reason_code
+        else:
+            context = payload
+            if not isinstance(context, str):
+                raise TypeError("legacy verification requires string context")
+            system, user = build_verify_prompt(
+                f, context, tag_definition(f.tag), checks)
+            result = await client.complete(
+                system,
+                user,
+                schema=VERIFY_SCHEMA,
+                task_id=work_id,
+                stage="verify",
+            )
+            verdict, reason = _normalize_verdict(result.parsed)
         if result.error in TRANSIENT_ERRORS:
             verdicts["transient_error"] = verdicts.get("transient_error", 0) + 1
             return  # not persisted: the next resume gets a fresh attempt
-        out[i] = replace(f, verdict=verdict)
+        adjudication_version = (
+            TWINCOURT_VERSION
+            if treatment == TWINCOURT_TREATMENT
+            else f"legacy-{VERIFY_PROMPT_VERSION}"
+        )
+        out[i] = replace(
+            f,
+            verdict=verdict,
+            adjudication_id=work_id,
+            adjudication_reason=reason,
+            adjudication_version=adjudication_version,
+        )
         verdicts[verdict] = verdicts.get(verdict, 0) + 1
-        vstore.append({
-            "verify_id": vid, "task_id": f.task_id, "repo": f.repo,
+        record: dict[str, Any] = {
+            "finding_key": finding_key(f),
+            "adjudication_id": work_id,
+            "adjudication_version": adjudication_version,
+            "task_id": f.task_id, "repo": f.repo,
             "detector_id": f.detector_id, "tag": f.tag, "path": f.path,
             "contract": f.contract, "function": f.function,
             "verdict": verdict, "reason": reason, "error": result.error,
@@ -456,9 +580,31 @@ async def verify_findings(findings: list[Finding], repo_index: dict,
                       "output_tokens": result.output_tokens,
                       "latency_s": round(result.latency_s, 3),
                       "attempts": result.attempts},
-        })
+        }
+        if treatment == TWINCOURT_TREATMENT:
+            packet = payload
+            assert isinstance(packet, EvidencePacket)
+            record.update({
+                "schema_version": OVERLAY_SCHEMA_VERSION,
+                "treatment": TWINCOURT_TREATMENT,
+                "prompt_version": TWINCOURT_PROMPT_VERSION,
+                "decision_schema_version": TWINCOURT_SCHEMA_VERSION,
+                "hermes_version": packet.version,
+                "provider_fingerprint": provider_fingerprint,
+                "packet": packet.stats(),
+                "reason_code": reason,
+                "decision": decision.to_dict(),
+            })
+        else:
+            record.update({
+                "verify_id": work_id,
+                "schema_version": "verify-overlay-v1",
+                "prompt_version": VERIFY_PROMPT_VERSION,
+            })
+        vstore.append(record)
 
-    await asyncio.gather(*(one(i, vid, ctx) for i, vid, ctx in plan))
+    await asyncio.gather(
+        *(one(i, work_id, payload) for i, work_id, payload in plan))
     print(f"[verify] done in {time.monotonic() - t0:.0f}s: {verdicts}", flush=True)
     return out
 

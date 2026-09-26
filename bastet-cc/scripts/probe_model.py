@@ -25,6 +25,9 @@ from typing import Any
 
 from openai import OpenAI
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bastet_cc.redact import redact_error  # noqa: E402
+
 BASE_URL = os.environ.get("AIS3_BASE_URL", "https://llm-api.zoolab.org/v1")
 API_KEY = os.environ.get("AIS3_API_KEY") or sys.exit("set AIS3_API_KEY")
 MODEL = os.environ.get("AIS3_MODEL", "ais3/nemotron-3-ultra-550b")
@@ -145,8 +148,11 @@ def chat(messages, *, max_tokens=4096, temperature=0.0, response_format=None,
     try:
         r = client.chat.completions.create(**kw)
     except Exception as e:  # noqa: BLE001
+        # The gateway echoes the caller's key identifier inside 429 bodies, and
+        # these strings are persisted verbatim into runs/probe/*.json. Redact at
+        # the point of capture -- a .gitignore cannot see inside a value.
         return Call(False, time.perf_counter() - t0,
-                    error=f"{type(e).__name__}: {str(e)[:400]}")
+                    error=redact_error(f"{type(e).__name__}: {str(e)[:400]}"))
     dt = time.perf_counter() - t0
     ch = r.choices[0]
     msg = ch.message

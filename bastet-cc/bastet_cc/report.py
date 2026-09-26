@@ -82,6 +82,12 @@ PALETTE = {
 
 MODES = ("light", "dark")
 
+# The AIS3 gateway's measured request cap, from the 429 bodies in
+# runs/probe/phase7_sustained_w32.json ("Current limit: 120"). Wall-clock claims
+# divide by this rather than by per-call latency: the cap is what binds, and it is
+# independent of how many workers are in flight.
+GATEWAY_RPM = 120
+
 # Mark specs from the dataviz skill, in points (matplotlib's unit) rather than px.
 BAR_CAP_PT = 18.0       # bars never fill their slot; the leftover band is air
 END_RADIUS_PT = 4.0     # rounded data-end, square at the baseline
@@ -642,8 +648,8 @@ def fig_coverage_gap(counts, covered, *, unreachable_share: float, n_detectors: 
 # ----------------------------------------------------------------- 6. cost ladder
 
 
-def fig_cost_ladder(stages, *, latency_s: float, concurrency: int,
-                    recall_loss: float = 0.0, mode: str = "light",
+def fig_cost_ladder(stages, *, rpm: int, recall_loss: float = 0.0,
+                    mode: str = "light",
                     outdir: Path = FIGURE_DIR) -> list[Path]:
     """Calls and input tokens at each stage of the plan, as two small multiples.
 
@@ -681,17 +687,24 @@ def fig_cost_ladder(stages, *, latency_s: float, concurrency: int,
                     va="center")
         ax.set_xlabel(name, fontsize=11.5, color=c["secondary"], labelpad=8)
 
-    hours = stages[0][1] * latency_s / 3600.0
-    hours_routed = stages[-1][1] * latency_s / 3600.0
+    # Wall clock is set by the gateway's request cap, not by per-call latency and
+    # not by worker count. An earlier version of this caption multiplied a planning
+    # estimate of 1.7 s by the call count and then divided by concurrency, which
+    # assumes throughput scales with workers; runs/probe/phase7_sustained_w32.json
+    # shows it does not -- 32 workers returned HTTP 429 for 104 of 128 calls
+    # against "Current limit: 120". Dividing by the measured cap is the only
+    # figure that survives contact with the endpoint.
+    hours = stages[0][1] / rpm / 60.0
+    hours_routed = stages[-1][1] / rpm / 60.0
     fig.text(0.012, 0.085,
              f"Routing costs {recall_loss:.1%} recall: every (repository, tag) pair "
              "that had a detector still reaches one.",
              fontsize=12, fontweight="600", color=c["good"])
     fig.text(0.012, 0.030,
-             f"At {latency_s:g} s per call, the unrouted plan is ≈{hours:,.0f} h "
-             f"sequential ({hours / (24):.1f} days) — upstream cannot finish its own "
-             f"test set. Routed: ≈{hours_routed:,.0f} h, or ≈"
-             f"{hours_routed / concurrency:.1f} h at {concurrency}-way concurrency.",
+             f"The gateway caps requests at {rpm}/min regardless of concurrency "
+             f"(measured). The unrouted plan therefore needs ≈{hours:,.0f} h "
+             f"({hours / 24:.1f} days) of wall clock — upstream cannot finish its "
+             f"own test set. Routed: ≈{hours_routed:,.1f} h.",
              fontsize=10.5, color=c["secondary"])
 
     _title(fig, c,
@@ -718,15 +731,31 @@ def build_all(outdir: Path = FIGURE_DIR) -> list[Path]:
     audit = load_instrument_audit(runs / "instrument" / "instrument_audit.csv",
                                   "README (github, current)")
     balance = load_balance_sensitivity(runs / "instrument" / "balance_sensitivity.csv")
-    # data/train.csv disappeared from the shared workspace mid-session; upstream's
-    # dataset/dataset.csv carries the identical 497 rows plus two extra columns, so it
-    # is an exact fallback rather than a substitute. Neither file is written here.
-    ground_truth = next(p for p in (
+    # Upstream's dataset/dataset.csv carries the identical 497 rows plus two extra
+    # columns, so it is an exact fallback rather than a substitute. Neither file is
+    # written here, and neither is redistributed with this repository -- so on a
+    # fresh clone both are absent and fig5 (coverage) simply cannot be built.
+    # Every other figure reads committed artefacts, so the driver skips one figure
+    # and says so rather than aborting the whole command: `figures` is documented
+    # as needing no API key, and a bare StopIteration made that false.
+    ground_truth = next((p for p in (
         data / "train.csv",
         REPO_ROOT.parent / "upstream-bastet" / "dataset" / "dataset.csv",
-    ) if p.exists())
-    coverage = load_coverage(ground_truth, REPO_ROOT / "detectors" / "index.json")
+    ) if p.exists()), None)
+    coverage = (load_coverage(ground_truth, REPO_ROOT / "detectors" / "index.json")
+                if ground_truth is not None else None)
     routing = load_routing_summary(runs / "routing_recall" / "summary.json")
+
+    # The re-run F1s were hardcoded here as a four-element list while
+    # runs/upstream_null/runs.jsonl grew to five rows, so the figure and the
+    # summary disagreed about how many draws there were. Read the artefact.
+    null_runs = runs / "upstream_null" / "runs.jsonl"
+    reruns = [
+        rec["f1"] for rec in (
+            json.loads(line) for line in
+            null_runs.read_text().splitlines() if line.strip())
+        if rec.get("f1") is not None
+    ] if null_runs.exists() else []
 
     pub, null = audit["published"], audit["constant yes"]
     metrics = [
@@ -751,26 +780,31 @@ def build_all(outdir: Path = FIGURE_DIR) -> list[Path]:
             perfect, macro_f1=macro["upstream_macro_f1_perfect_predictor"],
             n_seeds=len(macro["seeds"]), mode=mode, outdir=outdir)
         written += fig_floor(
-            published=pub["f1"], reruns=[0.5556, 0.72, 0.6667, 0.72],
+            published=pub["f1"], reruns=reruns,
             null_f1=null["f1"], mode=mode, outdir=outdir)
         written += fig_metric_flip(metrics, mode=mode, outdir=outdir)
         written += fig_balance_sensitivity(balance, mode=mode, outdir=outdir)
-        written += fig_coverage_gap(
-            coverage["counts"], coverage["covered"],
-            unreachable_share=coverage["unreachable_share"],
-            n_detectors=coverage["n_detectors"],
-            headline_share=1 - routing["coverage_ceiling"],
-            headline_note=f"(routed split, {routing['positives']} positives; "
-                          f"{coverage['unreachable_share']:.1%} over all "
-                          f"{coverage['n_pairs']} pairs in the full ground truth)",
-            n_findings=coverage["n_findings"],
-            source_note=f"Sources: {coverage['source'].name}, detectors/index.json, "
-                        "runs/routing_recall/summary.json.",
-            mode=mode, outdir=outdir)
+        if coverage is not None:
+            written += fig_coverage_gap(
+                coverage["counts"], coverage["covered"],
+                unreachable_share=coverage["unreachable_share"],
+                n_detectors=coverage["n_detectors"],
+                headline_share=1 - routing["coverage_ceiling"],
+                headline_note=f"(routed split, {routing['positives']} positives; "
+                              f"{coverage['unreachable_share']:.1%} over all "
+                              f"{coverage['n_pairs']} pairs in the full ground truth)",
+                n_findings=coverage["n_findings"],
+                source_note=f"Sources: {coverage['source'].name}, detectors/index.json, "
+                            "runs/routing_recall/summary.json.",
+                mode=mode, outdir=outdir)
         written += fig_cost_ladder(
-            stages, latency_s=1.7, concurrency=32,
+            stages, rpm=GATEWAY_RPM,
             recall_loss=1.0 - routing["routing_ceiling_given_detector"],
             mode=mode, outdir=outdir)
+
+    if coverage is None:
+        print("skipped fig5_coverage_gap: needs data/train.csv (or upstream's "
+              "dataset/dataset.csv); every other figure was rebuilt.")
     return written
 
 

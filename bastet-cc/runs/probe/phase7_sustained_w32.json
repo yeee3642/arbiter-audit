@@ -10,9 +10,9 @@
     "HTTP429": 104
   },
   "sample_errors": [
-    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}",
-    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}",
-    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}",
+    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}",
+    "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
   ],
   "throughput_rps": 22.288,
   "latency_s": {
@@ -88,7 +88,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 5,
@@ -108,7 +108,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 7,
@@ -178,7 +178,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 14,
@@ -188,7 +188,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 15,
@@ -198,7 +198,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 16,
@@ -208,7 +208,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 17,
@@ -328,7 +328,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 29,
@@ -358,7 +358,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 32,
@@ -368,7 +368,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 33,
@@ -378,7 +378,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 34,
@@ -388,7 +388,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 35,
@@ -398,7 +398,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 36,
@@ -408,7 +408,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 37,
@@ -418,7 +418,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 38,
@@ -428,7 +428,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 39,
@@ -438,7 +438,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 40,
@@ -448,7 +448,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 41,
@@ -458,7 +458,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 42,
@@ -468,7 +468,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 43,
@@ -478,7 +478,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 44,
@@ -488,7 +488,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 45,
@@ -498,7 +498,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 46,
@@ -508,7 +508,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 47,
@@ -518,7 +518,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 48,
@@ -528,7 +528,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 49,
@@ -538,7 +538,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 50,
@@ -548,7 +548,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 51,
@@ -558,7 +558,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 52,
@@ -568,7 +568,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 53,
@@ -578,7 +578,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 54,
@@ -588,7 +588,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 55,
@@ -598,7 +598,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 56,
@@ -608,7 +608,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 57,
@@ -618,7 +618,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 58,
@@ -628,7 +628,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 59,
@@ -638,7 +638,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 60,
@@ -648,7 +648,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 61,
@@ -658,7 +658,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 62,
@@ -668,7 +668,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 63,
@@ -678,7 +678,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 64,
@@ -688,7 +688,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 65,
@@ -698,7 +698,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 66,
@@ -708,7 +708,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 67,
@@ -718,7 +718,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 68,
@@ -728,7 +728,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 69,
@@ -738,7 +738,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:01 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 70,
@@ -748,7 +748,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 71,
@@ -758,7 +758,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 72,
@@ -768,7 +768,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 73,
@@ -778,7 +778,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 74,
@@ -788,7 +788,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 75,
@@ -798,7 +798,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 76,
@@ -808,7 +808,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 77,
@@ -818,7 +818,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 78,
@@ -828,7 +828,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 79,
@@ -838,7 +838,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 80,
@@ -848,7 +848,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 81,
@@ -858,7 +858,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 82,
@@ -868,7 +868,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 83,
@@ -878,7 +878,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 84,
@@ -888,7 +888,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 85,
@@ -898,7 +898,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 86,
@@ -908,7 +908,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 87,
@@ -918,7 +918,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 88,
@@ -928,7 +928,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 89,
@@ -938,7 +938,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 90,
@@ -948,7 +948,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 91,
@@ -958,7 +958,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 92,
@@ -968,7 +968,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 93,
@@ -978,7 +978,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 94,
@@ -988,7 +988,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 95,
@@ -998,7 +998,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 96,
@@ -1008,7 +1008,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 97,
@@ -1018,7 +1018,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 98,
@@ -1028,7 +1028,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 99,
@@ -1038,7 +1038,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 100,
@@ -1048,7 +1048,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 101,
@@ -1058,7 +1058,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 102,
@@ -1068,7 +1068,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 103,
@@ -1078,7 +1078,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 104,
@@ -1088,7 +1088,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 105,
@@ -1098,7 +1098,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 106,
@@ -1108,7 +1108,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 107,
@@ -1118,7 +1118,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 108,
@@ -1128,7 +1128,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 109,
@@ -1138,7 +1138,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 110,
@@ -1148,7 +1148,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 111,
@@ -1158,7 +1158,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 112,
@@ -1168,7 +1168,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 113,
@@ -1178,7 +1178,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 114,
@@ -1188,7 +1188,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 115,
@@ -1198,7 +1198,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 116,
@@ -1208,7 +1208,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 117,
@@ -1218,7 +1218,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 118,
@@ -1228,7 +1228,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 119,
@@ -1238,7 +1238,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 120,
@@ -1248,7 +1248,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 121,
@@ -1258,7 +1258,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 122,
@@ -1268,7 +1268,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 123,
@@ -1278,7 +1278,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 124,
@@ -1288,7 +1288,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 125,
@@ -1298,7 +1298,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 126,
@@ -1308,7 +1308,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     },
     {
       "k": 127,
@@ -1318,7 +1318,7 @@
       "finish_reason": null,
       "completion_tokens": null,
       "prompt_tokens": null,
-      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: ***REDACTED-ROTATED-AIS3-KEY***. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
+      "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit exceeded for api_key: [REDACTED:api_key]. Limit type: requests. Current limit: 120, Remaining: 0. Limit resets at: 2026-07-25 03:12:02 UTC', 'type': 'throttling_error', 'param': None, 'code': '429'}}"
     }
   ]
 }
